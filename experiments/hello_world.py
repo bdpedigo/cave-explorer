@@ -175,3 +175,10 @@ connection_df = connection_df.loc[["PTC", "DTC", "STC", "ITC"]]
 # FIGURE 4C
 fig, ax = plt.subplots(1, 1, figsize=(3, 9))
 sns.heatmap(connection_df.T, annot=True, cmap="viridis", ax=ax, cbar=False)
+
+# %%
+
+client.materialize.query_table("allen_v1_column_types_slanted_ref")
+
+# %%
+query_synapses = client.materialize.synapse_query(pre_ids=column_model_df.index)
