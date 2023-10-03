@@ -28,6 +28,7 @@ lineage = client.chunkedgraph.get_lineage_graph(root_id)
 # %%
 
 links = lineage["links"]
+
 from anytree import Node
 
 nodes = {}
@@ -188,45 +189,44 @@ for leaf in root.leaves:
 
 ax.axis("off")
 
-draw_leaf_skeletons = True
-if draw_leaf_skeletons:
-    for node in root.leaves:
-        if node.name in skeletons:
-            skeleton = skeletons[node.name]
+
+def plot_skeleton(node, position="above"):
+    if node.name in skeletons:
+        skeleton = skeletons[node.name]
+        if position == "above":
             inset_ax = ax.inset_axes(
-                [node.span_position - 0.5, node.depth, 1, 2],
+                [node.span_position - 0.5, node.depth + 0.5, 1, 2],
                 transform=ax.transData,
             )
-            skeleton_plot.plot_tools.plot_skel(
-                skeleton,
-                ax=inset_ax,
-                plot_soma=False,
-                invert_y=True,
-                line_width=0.5,
-                color="black",
+        elif position == "below":
+            inset_ax = ax.inset_axes(
+                [node.span_position - 0.5, node.depth - 2.5, 1, 2],
+                transform=ax.transData,
             )
-            inset_ax.axis("off")
+        skeleton_plot.plot_tools.plot_skel(
+            skeleton,
+            ax=inset_ax,
+            plot_soma=False,
+            invert_y=True,
+            line_width=0.25,
+            color="black",
+        )
+        inset_ax.axis("off")
 
 
-# %%
+draw_skeletons = True
+if draw_skeletons:
+    for node in root.leaves:
+        plot_skeleton(node, position="above")
 
+    for node in PreOrderIter(root):
+        # find split nodes which are then merged
+        if (len(node.children) == 1) and (len(node.parent.children) == 2):
+            plot_skeleton(node, position="below")
 
-fig, axs = plt.subplots(4, 8, figsize=(20, 10), sharex=True, sharey=True)
+    plot_skeleton(root, position="below")
 
-for i, (node_name, skeleton) in enumerate(skeletons.items()):
-    print(i, node_name)
+from pathlib import Path
 
-    ax = axs.flatten()[i]
-    skeleton_plot.plot_tools.plot_skel(
-        skeleton,
-        ax=ax,
-        # pull_radius=True,
-        # pull_compartment_colors=True,
-        plot_soma=False,
-        invert_y=True,
-        line_width=1,
-    )
-    ax.axis("off")
-
-    if i == 31:
-        break
+save_path = Path("cave-explorer/results/figs")
+plt.savefig(save_path / f"lineage_tree_root={root.name}.png", dpi=300)
