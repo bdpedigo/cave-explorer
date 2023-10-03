@@ -5,80 +5,22 @@ import pandas as pd
 import seaborn as sns
 from matplotlib_venn import venn2
 from tqdm.autonotebook import tqdm
-
-# %%
-client = cc.CAVEclient("minnie65_phase3_v1")
-
-# %%
-
-model_preds = client.materialize.query_table("aibs_metamodel_mtypes_v661_v2")
-
-# %%
-cg_client = client.chunkedgraph
-
-root_id = model_preds.iloc[0]["pt_root_id"]
-
-out = cg_client.level2_chunk_graph(root_id)
-
-chunk_graph = pd.DataFrame(out, columns=["source", "target"])
-
-# %%
-from caveclient import CAVEclient
 import pcg_skel
-
-client = CAVEclient("minnie65_phase3_v1")
-root_id = 864691135867734294
-
-
-# %%
-skeleton = pcg_skel.coord_space_skeleton(root_id, client, return_mesh=False)
-
-
-# %%
 from meshparty import trimesh_vtk
 
-skeleton_actor = trimesh_vtk.skeleton_actor(skeleton)
-
-trimesh_vtk.render_actors(
-    [skeleton_actor],
-    filename="my_image.png",
-    do_save=True,
-    video_width=1600,
-    video_height=1200,
-)
-
-# trimesh_vtk.render_actors(
-#     [actor], filename="my_image.png", do_save=True, video_width=1600, video_height=1200
-# )
-
 # %%
 
-require_complete = False
-
-cv = client.info.segmentation_cloudvolume(progress=False)
-
-lvl2_eg = client.chunkedgraph.level2_chunk_graph(root_id)
-
-from pcg_skel import chunk_tools
-
-eg, l2dict_mesh, l2dict_r_mesh, x_ch = chunk_tools.build_spatial_graph(
-    lvl2_eg,
-    cv,
-    client=client,
-    method="service",
-    require_complete=require_complete,
-)
-
-# %%
 root_id = 864691135867734294
-leaves = client.chunkedgraph.get_leaves(root_id, stop_layer=2)
+
+client = cc.CAVEclient("minnie65_phase3_v1")
+
+new_roots = client.chunkedgraph.get_latest_roots(root_id)
+root_id = new_roots[0]
 
 # %%
 
 changelog = client.chunkedgraph.get_change_log(root_id)
-
-# %%
-client.chunkedgraph.get_latest_roots(root_id)
+changelog
 
 # %%
 lineage = client.chunkedgraph.get_lineage_graph(root_id)
@@ -103,10 +45,12 @@ for link in links:
 
 root = nodes[target].root
 
+query_node = nodes[root_id]
+
 # %%
 from anytree import RenderTree
 
-print(RenderTree(nodes[root_id]))
+print(RenderTree(root))
 
 # %%
 
@@ -131,6 +75,158 @@ for node in PreOrderIter(nodes[root_id]):
     if len(node.children) == 1:
         one_count += 1
 print(one_count)
+
 # matches the number of splits!!!
 
+# # %%
+
+# skeleton = pcg_skel.coord_space_skeleton(root_id, client, return_mesh=False)
+
+# # %%
+
+# fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+
+
+# skeleton_plot.plot_tools.plot_skel(
+#     skeleton,
+#     ax=ax,
+#     # pull_radius=True,
+#     # pull_compartment_colors=True,
+#     plot_soma=False,
+#     invert_y=True,
+#     line_width=1,
+# )
+# ax.axis("off")
+
 # %%
+
+from anytree import LevelOrderIter
+
+from requests import HTTPError
+
+skeletons = {}
+for i, node in enumerate(LevelOrderIter(root)):
+    print(i, node.name)
+    try:
+        skeleton = pcg_skel.coord_space_skeleton(node.name, client)
+        skeletons[node.name] = skeleton
+    except HTTPError:
+        print("HTTPError on node", node.name)
+
+
+# %%
+
+import numpy as np
+from anytree import Walker
+from itertools import pairwise
+import skeleton_plot
+
+
+# make the left-hand side of the tree be whatever side has the most children
+for node in PreOrderIter(root):
+    n_descendants = len(node.descendants)
+    node.n_descendants = n_descendants
+
+for node in PreOrderIter(root):
+    children_n_descendants = np.array([child.n_descendants for child in node.children])
+    inds = np.argsort(-children_n_descendants)
+    node.children = [node.children[i] for i in inds]
+
+# set some starting positions for the leaf nodes to anchor everything else
+i = 0
+for node in PreOrderIter(root):
+    if node.is_leaf:
+        node.span_position = i
+        i += 1
+
+# recursively set the span (non-depth position) of each node
+# visually it looks ok to have this just be the mean of the children's span positions
+
+
+def set_span_position(node):
+    if node.is_leaf:
+        return node.span_position
+    else:
+        child_positions = [set_span_position(child) for child in node.children]
+        min_position = np.min(child_positions)
+        max_position = np.max(child_positions)
+        node.span_position = (min_position + max_position) / 2
+        return node.span_position
+
+
+set_span_position(root)
+
+
+fig, ax = plt.subplots(1, 1, figsize=(5, 6))
+
+colors = sns.color_palette("Set1")
+
+palette = dict(zip([0, 1, 2], colors))
+
+# plot dots for the nodes themselves, colored by what process spawned them
+for node in PreOrderIter(root):
+    color = palette[len(node.children)]
+    ax.scatter(node.span_position, node.depth, color=color, s=20, zorder=1)
+
+# plot lines to denote the edit structure, colored by the process (merge/split)
+visited = set()
+for leaf in root.leaves:
+    walker = Walker()
+    path, _, _ = walker.walk(leaf, root)
+    path = list(path) + [root]
+    for source, target in pairwise(path):
+        if (source, target) not in visited:
+            color = palette[len(target.children)]
+            ax.plot(
+                [source.span_position, target.span_position],
+                [source.depth, target.depth],
+                color=color,
+                linewidth=1.5,
+                zorder=0,
+            )
+            visited.add((source, target))
+
+ax.axis("off")
+
+draw_leaf_skeletons = True
+if draw_leaf_skeletons:
+    for node in root.leaves:
+        if node.name in skeletons:
+            skeleton = skeletons[node.name]
+            inset_ax = ax.inset_axes(
+                [node.span_position - 0.5, node.depth, 1, 2],
+                transform=ax.transData,
+            )
+            skeleton_plot.plot_tools.plot_skel(
+                skeleton,
+                ax=inset_ax,
+                plot_soma=False,
+                invert_y=True,
+                line_width=0.5,
+                color="black",
+            )
+            inset_ax.axis("off")
+
+
+# %%
+
+
+fig, axs = plt.subplots(4, 8, figsize=(20, 10), sharex=True, sharey=True)
+
+for i, (node_name, skeleton) in enumerate(skeletons.items()):
+    print(i, node_name)
+
+    ax = axs.flatten()[i]
+    skeleton_plot.plot_tools.plot_skel(
+        skeleton,
+        ax=ax,
+        # pull_radius=True,
+        # pull_compartment_colors=True,
+        plot_soma=False,
+        invert_y=True,
+        line_width=1,
+    )
+    ax.axis("off")
+
+    if i == 31:
+        break
