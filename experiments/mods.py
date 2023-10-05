@@ -166,11 +166,11 @@ edges = detail["added_edges"]
 for edge in edges:
     pre_id, post_id = edge
 
-#%%
+# %%
 pre_root = client.chunkedgraph.get_roots([pre_id])[0]
 post_root = client.chunkedgraph.get_roots([post_id])[0]
 
-#%%
+# %%
 from pcg_skel import chunk_tools
 
 cv = client.info.segmentation_cloudvolume(progress=False)
@@ -183,25 +183,24 @@ eg, l2dict_mesh, l2dict_r_mesh, x_ch = chunk_tools.build_spatial_graph(
     # require_complete=require_complete,
 )
 
-#%%
+# %%
 
 # TODO confusing to me that the l2 ids from the merge are now not in the l2 chunk graph
 
 pre_id in l2dict_mesh
 
 
-#%%
+# %%
 supervoxel_ids = client.chunkedgraph.get_leaves(root_id)
-#%%
+# %%
 client.l2cache.get_l2data(supervoxel_ids[:100])
 
 # %%
 client.chunkedgraph.get_roots([pre_id])
 
 # %%
-from time import sleep
 
-for i in range(10):
-    print(client.l2cache.get_l2data([pre_id, post_id], attributes=["rep_coord_nm"]))
-    # sleep(10)
+client.chunkedgraph.get_children(pre_id)
 
+# %%
+client.chunkedgraph.is_valid_nodes([pre_id])
