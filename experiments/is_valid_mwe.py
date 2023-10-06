@@ -20,7 +20,8 @@ pre_id, post_id = detail["added_edges"][0]
 
 import numpy as np
 import datetime
+
 code = datetime.datetime.utcnow()
 
-#%%
-client.chunkedgraph.is_valid_nodes(np.array([root_id]), end_timestamp=code)
+# %%
+client.chunkedgraph.is_valid_nodes([root_id])
