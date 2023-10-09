@@ -24,4 +24,12 @@ import datetime
 code = datetime.datetime.utcnow()
 
 # %%
-client.chunkedgraph.is_valid_nodes([root_id])
+print([pre_id, post_id])
+print(client.chunkedgraph.is_valid_nodes([pre_id, post_id]))
+assert np.array([True, True]).all()
+# %%
+
+query_nodes = [0, -1]
+out = client.chunkedgraph.is_valid_nodes(query_nodes)
+print(out)
+assert not np.any(out)
