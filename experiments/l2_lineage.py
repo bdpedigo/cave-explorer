@@ -48,6 +48,8 @@ cv = client.info.segmentation_cloudvolume()
 def get_changed_parent(node_id, timestamp):
     if isinstance(timestamp, str):
         timestamp = datetime.fromisoformat(timestamp)
+
+    # TODO make sure that 1 microsecond is a good resolution
     delta = timedelta(microseconds=1)
     pre_operation_time = timestamp - delta
     post_operation_time = timestamp + delta
@@ -72,30 +74,19 @@ for operation_id, row in list(merges.iterrows())[:30]:
     detail = cg.get_operation_details([operation_id])[str(operation_id)]
     timestamp = detail["timestamp"]
 
-    # TODO make sure that 1 microsecond is a good resolution
-    
     source_supervoxel_id = detail["added_edges"][0][0]
     target_supervoxel_id = detail["added_edges"][0][1]
 
-    source_pre_l2_id = cg.get_roots(
-        source_supervoxel_id, timestamp=pre_operation_time, stop_layer=2
-    )[0]
-
-    target_pre_l2_id = cg.get_roots(
-        target_supervoxel_id, timestamp=pre_operation_time, stop_layer=2
-    )[0]
-
-    source_post_l2_id = cg.get_roots(
-        source_supervoxel_id, timestamp=post_operation_time, stop_layer=2
-    )[0]
-
-    target_post_l2_id = cg.get_roots(
-        target_supervoxel_id, timestamp=post_operation_time, stop_layer=2
-    )[0]
+    source_pre_l2_id, source_post_l2_id, source_layer = get_changed_parent(
+        source_supervoxel_id, timestamp
+    )
+    target_pre_l2_id, target_post_l2_id, target_layer = get_changed_parent(
+        target_supervoxel_id, timestamp
+    )
 
     print(f"Operation ID: {operation_id}")
-    print(f"Source: {source_pre_l2_id} -> {source_post_l2_id}")
-    print(f"Target: {target_pre_l2_id} -> {target_post_l2_id}")
+    print(f"Source: {source_pre_l2_id} -> {source_post_l2_id} (Level {source_layer})")
+    print(f"Target: {target_pre_l2_id} -> {target_post_l2_id} (Level {target_layer})")
 
     # g.add_edge(
     #     source_pre_l2_id,
@@ -113,6 +104,34 @@ for operation_id, row in list(merges.iterrows())[:30]:
     # )
 
     print()
+
+# %%
+from anytree import Node
+
+
+def build_tree(root_id):
+    children = cg.get_children(root_id)
+    level = cv.get_chunk_layer(root_id)
+
+    if level == 2:
+        return Node(root_id, supervoxels=children)
+    else:
+        child_nodes = []
+        for child in children:
+            child_node = build_tree(child)
+            child_nodes.append(child_node)
+        root_node = Node(root_id, children=child_nodes)
+        print(level)
+        return root_node
+
+
+# %%
+for operation_id, row in list(merges.iterrows())[:1]:
+    detail = cg.get_operation_details([operation_id])[str(operation_id)]
+    timestamp = detail["timestamp"]
+    before1 = row["before_root_ids"][0]
+    before2 = row["before_root_ids"][1]
+    after = row["after_root_ids"][0]
 
 # %%
 operation_id = 339158
