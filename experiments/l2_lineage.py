@@ -8,6 +8,7 @@ import pandas as pd
 import seaborn as sns
 from matplotlib.collections import LineCollection
 import numpy as np
+import pcg_skel
 
 # %%
 
@@ -52,6 +53,21 @@ details.index = details.index.astype(int)
 details = details.explode("roots")
 
 merges = merges.join(details)
+# %%
+final_meshwork = pcg_skel.coord_space_meshwork(
+    root_id,
+    client=client,
+    # synapses="all",
+    # synapse_table=client.materialize.synapse_table,
+)
+skeleton_nodes = pd.DataFrame(
+    final_meshwork.skeleton.vertices,
+    index=np.arange(len(final_meshwork.skeleton.vertices)),
+    columns=["x", "y", "z"],
+)
+skeleton_edges = pd.DataFrame(
+    final_meshwork.skeleton.edges, columns=["source", "target"]
+)
 
 # %%
 
@@ -148,10 +164,19 @@ def networkplot(
     y,
     node_palette=None,
     node_hue=None,
+    node_color="grey",
+    node_size=20,
+    node_zorder=1,
     edge_palette=None,
     edge_hue=None,
+    edge_color="grey",
+    edge_linewidth=0.5,
+    edge_alpha=1,
+    edge_zorder=0,
     ax=None,
     figsize=(10, 10),
+    scatterplot_kws={},
+    linecollection_kws={},
 ):
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize)
@@ -165,27 +190,38 @@ def networkplot(
     edges["target_x"] = edges["target"].map(nodes[x])
     edges["target_y"] = edges["target"].map(nodes[y])
 
+    if node_hue is None:
+        scatterplot_kws["color"] = node_color
+
     sns.scatterplot(
         data=nodes,
         x=x,
         y=y,
         hue=node_hue,
-        linewidth=0,
-        s=20,
-        ax=ax,
         palette=node_palette,
+        linewidth=0,
+        s=node_size,
+        ax=ax,
+        zorder=node_zorder,
+        **scatterplot_kws,
     )
 
     source_locs = list(zip(edges["source_x"], edges["source_y"]))
     target_locs = list(zip(edges["target_x"], edges["target_y"]))
     segments = list(zip(source_locs, target_locs))
-    edge_colors = edges[edge_hue].map(edge_palette)
+
+    if edge_palette is not None:
+        edge_colors = edges[edge_hue].map(edge_palette)
+    else:
+        edge_colors = edge_color
 
     lc = LineCollection(
         segments,
-        linewidths=0.5,
-        alpha=1,
+        linewidths=edge_linewidth,
+        alpha=edge_alpha,
         color=edge_colors,
+        zorder=edge_zorder,
+        **linecollection_kws,
     )
     ax.add_collection(lc)
 
@@ -197,15 +233,15 @@ sns.set_context("talk", font_scale=0.75)
 for operation_id, row in list(merges.iterrows())[:3]:
     timestamp = row["timestamp"]
 
-    source_supervoxel_id = row["added_edges"][0][0]
-    target_supervoxel_id = row["added_edges"][0][1]
+    # source_supervoxel_id = row["added_edges"][0][0]
+    # target_supervoxel_id = row["added_edges"][0][1]
 
-    source_pre_l2_id, source_post_l2_id = get_pre_post_l2_ids(
-        source_supervoxel_id, timestamp
-    )
-    target_pre_l2_id, target_post_l2_id = get_pre_post_l2_ids(
-        target_supervoxel_id, timestamp
-    )
+    # source_pre_l2_id, source_post_l2_id = get_pre_post_l2_ids(
+    #     source_supervoxel_id, timestamp
+    # )
+    # target_pre_l2_id, target_post_l2_id = get_pre_post_l2_ids(
+    #     target_supervoxel_id, timestamp
+    # )
 
     before1_root_id, before2_root_id = row["before_root_ids"]
     after_root_id = row["after_root_ids"][0]
@@ -239,16 +275,6 @@ for operation_id, row in list(merges.iterrows())[:3]:
     after_l2_edges["is_old"] = (
         after_l2_edges["source_was_before1"] & after_l2_edges["target_was_before1"]
     ) | (after_l2_edges["source_was_before2"] & after_l2_edges["target_was_before2"])
-
-    if source_post_l2_id == target_post_l2_id:
-        is_gap_merge[operation_id] = False
-        print("Not a gap merge")
-    else:
-        is_gap_merge[operation_id] = True
-        print("Gap merge")
-        print(f"Source: {source_pre_l2_id} -> {source_post_l2_id}")
-        print(f"Target: {target_pre_l2_id} -> {target_post_l2_id}")
-        print(after_l2_nodes.query("provenance == 'new'"))
 
     new_edges = after_l2_edges.query("~is_old").copy()
     new_edges["source_x"] = new_edges["source"].map(after_l2_nodes["x"])
@@ -286,6 +312,20 @@ for operation_id, row in list(merges.iterrows())[:3]:
         edge_palette=edge_palette,
         ax=ax,
     )
+    networkplot(
+        skeleton_nodes,
+        skeleton_edges,
+        "x",
+        "y",
+        node_color="grey",
+        edge_color="grey",
+        ax=ax,
+        node_size=1,
+        edge_alpha=0.5,
+        edge_linewidth=0.5,
+        node_zorder=-1,
+        edge_zorder=-2,
+    )
     ax.set_xlim(x_center - gap, x_center + gap)
     ax.set_ylim(y_center - gap, y_center + gap)
 
@@ -305,6 +345,20 @@ for operation_id, row in list(merges.iterrows())[:3]:
         edge_palette=edge_palette,
         ax=ax,
     )
+    networkplot(
+        skeleton_nodes,
+        skeleton_edges,
+        "x",
+        "z",
+        node_color="grey",
+        edge_color="grey",
+        ax=ax,
+        node_size=1,
+        edge_alpha=0.5,
+        edge_linewidth=0.5,
+        node_zorder=-1,
+        edge_zorder=-2,
+    )
     ax.set_xlim(x_center - gap, x_center + gap)
     ax.set_ylim(z_center - gap, z_center + gap)
 
@@ -321,14 +375,23 @@ for operation_id, row in list(merges.iterrows())[:3]:
         edge_palette=edge_palette,
         ax=ax,
     )
+    networkplot(
+        skeleton_nodes,
+        skeleton_edges,
+        "y",
+        "z",
+        node_color="grey",
+        edge_color="grey",
+        ax=ax,
+        node_size=1,
+        edge_alpha=0.5,
+        edge_linewidth=0.5,
+        node_zorder=-1,
+        edge_zorder=-2,
+    )
     ax.set_xlim(y_center - gap, y_center + gap)
     ax.set_ylim(z_center - gap, z_center + gap)
 
-
-# TODO it seems like there are new L2 nodes in the plot even though my logic above
-# was calling many of these a "gap merge" - so there is probably some case we're missing
-
-#
 
 # %%
 

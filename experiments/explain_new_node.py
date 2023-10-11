@@ -6,6 +6,9 @@ import caveclient as cc
 import numpy as np
 import pandas as pd
 
+from tqdm.autonotebook import tqdm
+
+
 # %%
 
 client = cc.CAVEclient("minnie65_phase3_v1")
@@ -89,45 +92,25 @@ def get_changed_ancestor(node_id, timestamp):
 
 
 # %%
-operation_id = 339158
-row = merges.loc[operation_id]
 
-source_supervoxel_id = row["added_edges"][0][0]
-target_supervoxel_id = row["added_edges"][0][1]
-timestamp = row["timestamp"]
+new_nodes_by_operation = {}
+for operation_id, row in tqdm(merges.iterrows(), total=len(merges)):
+    before1_root_id, before2_root_id = row["before_root_ids"]
+    after_root_id = row["after_root_ids"][0]
 
-source_pre_l2_id, source_post_l2_id = get_pre_post_l2_ids(
-    source_supervoxel_id, timestamp
-)
-target_pre_l2_id, target_post_l2_id = get_pre_post_l2_ids(
-    target_supervoxel_id, timestamp
-)
+    before1_nodes = cg.get_leaves(before1_root_id, stop_layer=2)
+    before2_nodes = cg.get_leaves(before2_root_id, stop_layer=2)
+    after_nodes = cg.get_leaves(after_root_id, stop_layer=2)
 
-print(f"Operation ID: {operation_id}")
-print(f"Source: {source_pre_l2_id} -> {source_post_l2_id} (Level 2)")
-print(f"Target: {target_pre_l2_id} -> {target_post_l2_id} (Level 2)")
+    before_union = np.concatenate((before1_nodes, before2_nodes))
+    new_nodes = np.setdiff1d(after_nodes, before_union)
+    new_nodes_by_operation[operation_id] = list(new_nodes)
+
 
 # %%
-source_pre_l2_id, source_post_l2_id, source_layer = get_changed_ancestor(
-    source_supervoxel_id, timestamp
-)
-target_pre_l2_id, target_post_l2_id, target_layer = get_changed_ancestor(
-    target_supervoxel_id, timestamp
-)
+new_nodes_by_operation = pd.Series(new_nodes_by_operation, name="new_l2_nodes")
 
-print(f"Operation ID: {operation_id}")
-print(f"Source: {source_pre_l2_id} -> {source_post_l2_id} (Level {source_layer})")
-print(f"Target: {target_pre_l2_id} -> {target_post_l2_id} (Level {target_layer})")
+merges = merges.join(new_nodes_by_operation)
+merges
 
 # %%
-
-before1_root_id, before2_root_id = row["before_root_ids"]
-after_root_id = row["after_root_ids"][0]
-
-before1_nodes = cg.get_leaves(before1_root_id, stop_layer=2)
-before2_nodes = cg.get_leaves(before2_root_id, stop_layer=2)
-after_nodes = cg.get_leaves(after_root_id, stop_layer=2)
-
-before_union = np.union1d(before1_nodes, before2_nodes)
-
-np.setdiff1d(after_nodes, before_union)
