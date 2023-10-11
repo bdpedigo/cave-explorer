@@ -1,10 +1,10 @@
 # %%
 
-
 import caveclient as cc
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
 from pkg.paths import FIG_PATH
 from pkg.plot import networkplot
 from pkg.utils import get_level2_nodes_edges, get_skeleton_nodes_edges
@@ -23,7 +23,7 @@ meta = meta.sort_values("target_id")
 nuc = client.materialize.query_table("nucleus_detection_v0").set_index("id")
 
 # %%
-i = 1
+i = 5
 target_id = meta.iloc[i]["target_id"]
 root_id = nuc.loc[target_id]["pt_root_id"]
 root_id = client.chunkedgraph.get_latest_roots(root_id)[0]
@@ -37,39 +37,49 @@ change_log.set_index("operation_id", inplace=True)
 change_log.sort_values("timestamp", inplace=True)
 change_log.drop(columns=["timestamp"], inplace=True)
 
-merges = change_log.query("is_merge")
-splits = change_log.query("~is_merge")
 
+merges = change_log.query("is_merge")
 details = cg.get_operation_details(merges.index.to_list())
 details = pd.DataFrame(details).T
 details.index.name = "operation_id"
 details.index = details.index.astype(int)
 details = details.explode("roots")
-
 merges = merges.join(details)
 
+# %%
+splits = change_log.query("~is_merge")
+
+#%%
+details = cg.get_operation_details(splits.index.to_list())
+details = pd.DataFrame(details).T
+details.index.name = "operation_id"
+details.index = details.index.astype(int)
+splits = splits.join(details)
 
 # %%
 
-new_nodes_by_operation = {}
-for operation_id, row in tqdm(merges.iterrows(), total=len(merges)):
-    before1_root_id, before2_root_id = row["before_root_ids"]
-    after_root_id = row["after_root_ids"][0]
+# NOTE: this was helpful conceptually but don't think it's strictly necessary
+# for the analysis going forward
+if False:
+    new_nodes_by_operation = {}
+    for operation_id, row in tqdm(
+        merges.iterrows(), total=len(merges), desc="Finding changed L2 nodes"
+    ):
+        before1_root_id, before2_root_id = row["before_root_ids"]
+        after_root_id = row["after_root_ids"][0]
 
-    before1_nodes = cg.get_leaves(before1_root_id, stop_layer=2)
-    before2_nodes = cg.get_leaves(before2_root_id, stop_layer=2)
-    after_nodes = cg.get_leaves(after_root_id, stop_layer=2)
+        before1_nodes = cg.get_leaves(before1_root_id, stop_layer=2)
+        before2_nodes = cg.get_leaves(before2_root_id, stop_layer=2)
+        after_nodes = cg.get_leaves(after_root_id, stop_layer=2)
 
-    before_union = np.concatenate((before1_nodes, before2_nodes))
-    new_nodes = np.setdiff1d(after_nodes, before_union)
-    new_nodes_by_operation[operation_id] = list(new_nodes)
+        before_union = np.concatenate((before1_nodes, before2_nodes))
+        new_nodes = np.setdiff1d(after_nodes, before_union)
+        new_nodes_by_operation[operation_id] = list(new_nodes)
 
+    new_nodes_by_operation = pd.Series(new_nodes_by_operation, name="new_l2_nodes")
 
-# %%
-new_nodes_by_operation = pd.Series(new_nodes_by_operation, name="new_l2_nodes")
-
-merges = merges.join(new_nodes_by_operation)
-merges
+    merges = merges.join(new_nodes_by_operation)
+    merges
 
 # %%
 
@@ -207,13 +217,13 @@ def editplot(after_nodes, after_edges, skeleton_nodes, skeleton_edges):
     return fig, axs
 
 
-import seaborn as sns
-
 sns.set_context(
     "paper", font_scale=1.5, rc={"axes.spines.right": False, "axes.spines.top": False}
 )
 
-for operation_id, row in list(merges.iterrows())[:2]:
+for operation_id, row in tqdm(
+    list(merges.iterrows())[:20], desc="Plotting changes to spatial graph"
+):
     after_root_id = row["after_root_ids"][0]
     before1_root_id, before2_root_id = row["before_root_ids"]
 
@@ -239,11 +249,55 @@ for operation_id, row in list(merges.iterrows())[:2]:
         after_edges["source_was_before1"] & after_edges["target_was_before1"]
     ) | (after_edges["source_was_before2"] & after_edges["target_was_before2"])
 
-    skeleton_nodes, skeleton_edges = get_skeleton_nodes_edges(after_root_id, client)
+    skeleton_nodes, skeleton_edges = get_skeleton_nodes_edges(root_id, client)
 
     fig, ax = editplot(after_nodes, after_edges, skeleton_nodes, skeleton_edges)
-    fig.suptitle(f"Post root ID: {after_root_id}, Operation ID: {operation_id}")
+    fig.suptitle(f"Final root ID: {root_id}, Operation ID: {operation_id}")
     fig.savefig(
-        FIG_PATH / f"edit_graph/root={after_root_id}-operation={operation_id}.png",
+        FIG_PATH / f"edit_graph/root={root_id}-operation={operation_id}.png",
         dpi=300,
     )
+    plt.close()
+
+# %%
+for operation_id, row in tqdm(
+    list(splits.iterrows())[:20], desc="Plotting changes to spatial graph"
+):
+    before_root_id = row['before_root_ids'][0]
+    after1_root_id, after2_root_id = row['roots']
+
+    # after_root_id = row["after_root_ids"][0]
+    # before1_root_id, before2_root_id = row["before_root_ids"]
+
+    # after_nodes, after_edges = get_level2_nodes_edges(after_root_id, client)
+
+    # before1_nodes = cg.get_leaves(before1_root_id, stop_layer=2)
+    # before2_nodes = cg.get_leaves(before2_root_id, stop_layer=2)
+
+    # after_nodes["provenance"] = "new"
+    # after_nodes.loc[
+    #     after_nodes.index.intersection(before1_nodes), "provenance"
+    # ] = "before object 1"
+    # after_nodes.loc[
+    #     after_nodes.index.intersection(before2_nodes), "provenance"
+    # ] = "before object 2"
+
+    # after_edges["source_was_before1"] = after_edges["source"].isin(before1_nodes)
+    # after_edges["source_was_before2"] = after_edges["source"].isin(before2_nodes)
+    # after_edges["target_was_before1"] = after_edges["target"].isin(before1_nodes)
+    # after_edges["target_was_before2"] = after_edges["target"].isin(before2_nodes)
+
+    # after_edges["is_old"] = (
+    #     after_edges["source_was_before1"] & after_edges["target_was_before1"]
+    # ) | (after_edges["source_was_before2"] & after_edges["target_was_before2"])
+
+    # skeleton_nodes, skeleton_edges = get_skeleton_nodes_edges(root_id, client)
+
+    # fig, ax = editplot(after_nodes, after_edges, skeleton_nodes, skeleton_edges)
+    # fig.suptitle(f"Final root ID: {root_id}, Operation ID: {operation_id}")
+    # fig.savefig(
+    #     FIG_PATH / f"edit_graph/root={root_id}-operation={operation_id}.png",
+    #     dpi=300,
+    # )
+    # plt.close()
+# %%
