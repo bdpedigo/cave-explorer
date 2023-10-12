@@ -23,7 +23,7 @@ meta = meta.sort_values("target_id")
 nuc = client.materialize.query_table("nucleus_detection_v0").set_index("id")
 
 # %%
-i = 5
+i = 7
 target_id = meta.iloc[i]["target_id"]
 root_id = nuc.loc[target_id]["pt_root_id"]
 root_id = client.chunkedgraph.get_latest_roots(root_id)[0]
@@ -37,7 +37,6 @@ change_log.set_index("operation_id", inplace=True)
 change_log.sort_values("timestamp", inplace=True)
 change_log.drop(columns=["timestamp"], inplace=True)
 
-
 merges = change_log.query("is_merge")
 details = cg.get_operation_details(merges.index.to_list())
 details = pd.DataFrame(details).T
@@ -48,8 +47,6 @@ merges = merges.join(details)
 
 # %%
 splits = change_log.query("~is_merge")
-
-# %%
 details = cg.get_operation_details(splits.index.to_list())
 details = pd.DataFrame(details).T
 details.index.name = "operation_id"
@@ -57,29 +54,75 @@ details.index = details.index.astype(int)
 splits = splits.join(details)
 
 # %%
+print("Number of merges:", len(merges))
+print("Number of splits:", len(splits))
 
-# NOTE: this was helpful conceptually but don't think it's strictly necessary
-# for the analysis going forward
-if False:
-    new_nodes_by_operation = {}
-    for operation_id, row in tqdm(
-        merges.iterrows(), total=len(merges), desc="Finding changed L2 nodes"
-    ):
-        before1_root_id, before2_root_id = row["before_root_ids"]
-        after_root_id = row["after_root_ids"][0]
+# %%
 
-        before1_nodes = cg.get_leaves(before1_root_id, stop_layer=2)
-        before2_nodes = cg.get_leaves(before2_root_id, stop_layer=2)
-        after_nodes = cg.get_leaves(after_root_id, stop_layer=2)
+import networkx as nx
 
-        before_union = np.concatenate((before1_nodes, before2_nodes))
-        new_nodes = np.setdiff1d(after_nodes, before_union)
-        new_nodes_by_operation[operation_id] = list(new_nodes)
+edit_lineage_graph = nx.DiGraph()
 
-    new_nodes_by_operation = pd.Series(new_nodes_by_operation, name="new_l2_nodes")
+for operation_id, row in tqdm(
+    merges.iterrows(), total=len(merges), desc="Finding merge lineage relationships"
+):
+    before1_root_id, before2_root_id = row["before_root_ids"]
+    after_root_id = row["after_root_ids"][0]
 
-    merges = merges.join(new_nodes_by_operation)
-    merges
+    before1_nodes = cg.get_leaves(before1_root_id, stop_layer=2)
+    before2_nodes = cg.get_leaves(before2_root_id, stop_layer=2)
+    after_nodes = cg.get_leaves(after_root_id, stop_layer=2)
+
+    before_nodes = np.concatenate((before1_nodes, before2_nodes))
+    removed_nodes = np.setdiff1d(before_nodes, after_nodes)
+    added_nodes = np.setdiff1d(after_nodes, before_nodes)
+    for node1 in removed_nodes:
+        for node2 in added_nodes:
+            edit_lineage_graph.add_edge(
+                node1, node2, operation_id=operation_id, operation_type="merge"
+            )
+# %%
+for operation_id, row in tqdm(
+    splits.iterrows(), total=len(splits), desc="Finding split lineage relationships"
+):
+    before_root_id = row["before_root_ids"][0]
+    after1_root_id, after2_root_id = row["roots"]
+
+    before_nodes = cg.get_leaves(before_root_id, stop_layer=2)
+    after1_nodes = cg.get_leaves(after1_root_id, stop_layer=2)
+    after2_nodes = cg.get_leaves(after2_root_id, stop_layer=2)
+
+    after_nodes = np.concatenate((after1_nodes, after2_nodes))
+    removed_nodes = np.setdiff1d(before_nodes, after_nodes)
+    added_nodes = np.setdiff1d(after_nodes, before_nodes)
+    for node1 in removed_nodes:
+        for node2 in added_nodes:
+            edit_lineage_graph.add_edge(
+                node1, node2, operation_id=operation_id, operation_type="split"
+            )
+
+# %%
+operation_id = 544353
+cg.get_operation_details([operation_id])[str(operation_id)]["roots"]
+
+# %%
+operation_id = 317746
+cg.get_operation_details([operation_id])[str(operation_id)]["roots"]
+
+# %%
+meta_operation_map = {}
+for i, component in enumerate(nx.weakly_connected_components(edit_lineage_graph)):
+    subgraph = edit_lineage_graph.subgraph(component)
+    subgraph_operations = set()
+    for source, target, data in subgraph.edges(data=True):
+        subgraph_operations.add(data["operation_id"])
+    meta_operation_map[i] = subgraph_operations
+
+print("Total operations: ", len(merges) + len(splits))
+print("Number of meta-operations: ", len(meta_operation_map))
+
+
+# %%
 
 # %%
 
@@ -98,31 +141,51 @@ def get_edge_center(nodes, edges):
     return (x_center, y_center, z_center)
 
 
-def editplot(after_nodes, after_edges, skeleton_nodes, skeleton_edges):
+def editplot(nodes, edges, skeleton_nodes, skeleton_edges):
+    sns.set_context(
+        "paper",
+        font_scale=1.5,
+        rc={"axes.spines.right": False, "axes.spines.top": False},
+    )
     gap = 20_000
-    new_edges = after_edges.query("~is_old")
-    x_center, y_center, z_center = get_edge_center(after_nodes, new_edges)
+
+    if "is_old" in edges.columns:
+        new_edges = edges.query("~is_old")
+        x_center, y_center, z_center = get_edge_center(nodes, new_edges)
+        node_palette = {
+            "new": "firebrick",
+            "before object 1": "dodgerblue",
+            "before object 2": "mediumblue",
+        }
+        edge_hue = "is_old"
+        node_hue = "provenance"
+    elif "is_remaining" in edges.columns:
+        removed_edges = edges.query("~is_remaining")
+        x_center, y_center, z_center = get_edge_center(nodes, removed_edges)
+        node_palette = {
+            "removed": "firebrick",
+            "after object 1": "dodgerblue",
+            "after object 2": "mediumblue",
+        }
+        edge_hue = "is_remaining"
+        node_hue = "fate"
 
     fig, axs = plt.subplots(
         2, 2, figsize=(10, 10), constrained_layout=True, sharex="col", sharey="row"
     )
-    node_palette = {
-        "new": "firebrick",
-        "before object 1": "dodgerblue",
-        "before object 2": "mediumblue",
-    }
+
     edge_palette = {True: "royalblue", False: "firebrick"}
 
     # plot in x-y
     ax = axs[0, 0]
     networkplot(
-        after_nodes,
-        after_edges,
+        nodes,
+        edges,
         "x",
         "y",
-        node_hue="provenance",
+        node_hue=node_hue,
         node_palette=node_palette,
-        edge_hue="is_old",
+        edge_hue=edge_hue,
         edge_palette=edge_palette,
         edge_linewidth=1,
         ax=ax,
@@ -150,13 +213,13 @@ def editplot(after_nodes, after_edges, skeleton_nodes, skeleton_edges):
     # plot in x-z
     ax = axs[1, 0]
     networkplot(
-        after_nodes,
-        after_edges,
+        nodes,
+        edges,
         "x",
         "z",
-        node_hue="provenance",
+        node_hue=node_hue,
         node_palette=node_palette,
-        edge_hue="is_old",
+        edge_hue=edge_hue,
         edge_palette=edge_palette,
         edge_linewidth=1,
         ax=ax,
@@ -182,13 +245,13 @@ def editplot(after_nodes, after_edges, skeleton_nodes, skeleton_edges):
     # plot in y-z
     ax = axs[1, 1]
     networkplot(
-        after_nodes,
-        after_edges,
+        nodes,
+        edges,
         "y",
         "z",
-        node_hue="provenance",
+        node_hue=node_hue,
         node_palette=node_palette,
-        edge_hue="is_old",
+        edge_hue=edge_hue,
         edge_palette=edge_palette,
         edge_linewidth=1,
         ax=ax,
@@ -217,148 +280,124 @@ def editplot(after_nodes, after_edges, skeleton_nodes, skeleton_edges):
     return fig, axs
 
 
-sns.set_context(
-    "paper", font_scale=1.5, rc={"axes.spines.right": False, "axes.spines.top": False}
-)
+# these were all for root 864691135518510218
+operation_ids = [244264, 244268, 244270]
+operation_ids = [244259, 244262]
+operation_ids = [267308, 267309]
+operation_ids = [244299, 244300]
+operation_ids = [244284, 244287]
+show_plots = True
+for operation_id in operation_ids:
+    if operation_id in merges.index:
+        operation_type = "merge"
+        row = merges.loc[operation_id]
+    elif operation_id in splits.index:
+        operation_type = "split"
+        row = splits.loc[operation_id]
 
-show_plots = False
+    if operation_type == "merge":
+        after_root_id = row["after_root_ids"][0]
+        before1_root_id, before2_root_id = row["before_root_ids"]
 
-import networkx as nx
+        after_nodes, after_edges = get_level2_nodes_edges(after_root_id, client)
 
-edit_lineage_graph = nx.DiGraph()
+        # find the nodes in the L2 graph that were added/removed
+        before1_nodes = cg.get_leaves(before1_root_id, stop_layer=2)
+        before2_nodes = cg.get_leaves(before2_root_id, stop_layer=2)
+        before_nodes = np.concatenate((before1_nodes, before2_nodes))
+        removed_nodes = np.setdiff1d(before_nodes, after_nodes.index)
+        added_nodes = np.setdiff1d(after_nodes.index, before_nodes)
+        for node1 in removed_nodes:
+            for node2 in added_nodes:
+                edit_lineage_graph.add_edge(
+                    node1, node2, operation_id=operation_id, operation_type="merge"
+                )
 
+        # apply similar logic to the node table
+        after_nodes["provenance"] = "new"
+        after_nodes.loc[
+            after_nodes.index.intersection(before1_nodes), "provenance"
+        ] = "before object 1"
+        after_nodes.loc[
+            after_nodes.index.intersection(before2_nodes), "provenance"
+        ] = "before object 2"
 
-for operation_id, row in tqdm(
-    list(merges.iterrows())[:],
-    desc="Finding (and maybe plotting) changes to spatial graph",
-):
-    after_root_id = row["after_root_ids"][0]
-    before1_root_id, before2_root_id = row["before_root_ids"]
+        # use this information to label each edge
+        after_edges["source_was_before1"] = after_edges["source"].isin(before1_nodes)
+        after_edges["source_was_before2"] = after_edges["source"].isin(before2_nodes)
+        after_edges["target_was_before1"] = after_edges["target"].isin(before1_nodes)
+        after_edges["target_was_before2"] = after_edges["target"].isin(before2_nodes)
 
-    after_nodes, after_edges = get_level2_nodes_edges(after_root_id, client)
+        # old edges are those from B1 to B1 or B2 to B2
+        after_edges["is_old"] = (
+            after_edges["source_was_before1"] & after_edges["target_was_before1"]
+        ) | (after_edges["source_was_before2"] & after_edges["target_was_before2"])
 
-    # find the nodes in the L2 graph that were added/removed
-    before1_nodes = cg.get_leaves(before1_root_id, stop_layer=2)
-    before2_nodes = cg.get_leaves(before2_root_id, stop_layer=2)
-    before_nodes = np.concatenate((before1_nodes, before2_nodes))
-    removed_nodes = np.setdiff1d(before_nodes, after_nodes.index)
-    added_nodes = np.setdiff1d(after_nodes.index, before_nodes)
-    for node1 in removed_nodes:
-        for node2 in added_nodes:
-            edit_lineage_graph.add_edge(
-                node1, node2, operation_id=operation_id, operation_type="merge"
+        if show_plots:
+            skeleton_nodes, skeleton_edges = get_skeleton_nodes_edges(root_id, client)
+
+            fig, ax = editplot(after_nodes, after_edges, skeleton_nodes, skeleton_edges)
+            fig.suptitle(
+                f"Final root ID: {root_id}, Operation ID: {operation_id}, {operation_type.capitalize()}"
             )
-
-    # apply similar logic to the node table
-    after_nodes["provenance"] = "new"
-    after_nodes.loc[
-        after_nodes.index.intersection(before1_nodes), "provenance"
-    ] = "before object 1"
-    after_nodes.loc[
-        after_nodes.index.intersection(before2_nodes), "provenance"
-    ] = "before object 2"
-
-    # use this information to label each edge
-    after_edges["source_was_before1"] = after_edges["source"].isin(before1_nodes)
-    after_edges["source_was_before2"] = after_edges["source"].isin(before2_nodes)
-    after_edges["target_was_before1"] = after_edges["target"].isin(before1_nodes)
-    after_edges["target_was_before2"] = after_edges["target"].isin(before2_nodes)
-
-    # old edges are those from B1 to B1 or B2 to B2
-    after_edges["is_old"] = (
-        after_edges["source_was_before1"] & after_edges["target_was_before1"]
-    ) | (after_edges["source_was_before2"] & after_edges["target_was_before2"])
-
-    if show_plots:
-        skeleton_nodes, skeleton_edges = get_skeleton_nodes_edges(root_id, client)
-
-        fig, ax = editplot(after_nodes, after_edges, skeleton_nodes, skeleton_edges)
-        fig.suptitle(f"Final root ID: {root_id}, Operation ID: {operation_id}")
-        fig.savefig(
-            FIG_PATH / f"edit_graph/root={root_id}-operation={operation_id}.png",
-            dpi=300,
-        )
-        plt.close()
-
-for operation_id, row in tqdm(
-    list(splits.iterrows())[:], desc="Plotting changes to spatial graph"
-):
-    before_root_id = row["before_root_ids"][0]
-    after1_root_id, after2_root_id = row["roots"]
-
-    before_nodes, before_edges = get_level2_nodes_edges(before_root_id, client)
-
-    after1_nodes = cg.get_leaves(after1_root_id, stop_layer=2)
-    after2_nodes = cg.get_leaves(after2_root_id, stop_layer=2)
-
-    # find the nodes in the L2 graph that were added/removed
-    after_nodes = np.concatenate((after1_nodes, after2_nodes))
-    removed_nodes = np.setdiff1d(before_nodes.index, after_nodes)
-    added_nodes = np.setdiff1d(after_nodes, before_nodes.index)
-    for node1 in removed_nodes:
-        for node2 in added_nodes:
-            edit_lineage_graph.add_edge(
-                node1, node2, operation_id=operation_id, operation_type="split"
+            fig.savefig(
+                FIG_PATH / f"edit_graph/root={root_id}-operation={operation_id}.png",
+                dpi=300,
             )
+            plt.close()
 
-    # apply similar logic to the node table
-    before_nodes["fate"] = "removed"
-    before_nodes.loc[
-        before_nodes.index.intersection(after1_nodes), "fate"
-    ] = "after object 1"
-    before_nodes.loc[
-        before_nodes.index.intersection(after2_nodes), "fate"
-    ] = "after object 2"
+    elif operation_type == "split":
+        before_root_id = row["before_root_ids"][0]
+        after1_root_id, after2_root_id = row["roots"]
 
-    # use this information to label each edge
-    before_edges["source_goes_after1"] = before_edges["source"].isin(after1_nodes)
-    before_edges["source_goes_after2"] = before_edges["source"].isin(after2_nodes)
-    before_edges["target_goes_after1"] = before_edges["target"].isin(after1_nodes)
-    before_edges["target_goes_after2"] = before_edges["target"].isin(after2_nodes)
+        before_nodes, before_edges = get_level2_nodes_edges(before_root_id, client)
 
-    # remaining edges are those from A1 to A1 or A2 to A2
-    before_edges["is_remaining"] = (
-        before_edges["source_goes_after1"] & before_edges["target_goes_after1"]
-    ) | (before_edges["source_goes_after2"] & before_edges["target_goes_after2"])
+        after1_nodes = cg.get_leaves(after1_root_id, stop_layer=2)
+        after2_nodes = cg.get_leaves(after2_root_id, stop_layer=2)
 
-    # after_nodes.loc[
-    #     after_nodes.index.intersection(before1_nodes), "provenance"
-    # ] = "before object 1"
-    # after_nodes.loc[
-    #     after_nodes.index.intersection(before2_nodes), "provenance"
-    # ] = "before object 2"
+        # find the nodes in the L2 graph that were added/removed
+        after_nodes = np.concatenate((after1_nodes, after2_nodes))
+        removed_nodes = np.setdiff1d(before_nodes.index, after_nodes)
+        added_nodes = np.setdiff1d(after_nodes, before_nodes.index)
+        for node1 in removed_nodes:
+            for node2 in added_nodes:
+                edit_lineage_graph.add_edge(
+                    node1, node2, operation_id=operation_id, operation_type="split"
+                )
 
-    # after_edges["source_was_before1"] = after_edges["source"].isin(before1_nodes)
-    # after_edges["source_was_before2"] = after_edges["source"].isin(before2_nodes)
-    # after_edges["target_was_before1"] = after_edges["target"].isin(before1_nodes)
-    # after_edges["target_was_before2"] = after_edges["target"].isin(before2_nodes)
+        # apply similar logic to the node table
+        before_nodes["fate"] = "removed"
+        before_nodes.loc[
+            before_nodes.index.intersection(after1_nodes), "fate"
+        ] = "after object 1"
+        before_nodes.loc[
+            before_nodes.index.intersection(after2_nodes), "fate"
+        ] = "after object 2"
 
-    # after_edges["is_old"] = (
-    #     after_edges["source_was_before1"] & after_edges["target_was_before1"]
-    # ) | (after_edges["source_was_before2"] & after_edges["target_was_before2"])
+        # use this information to label each edge
+        before_edges["source_goes_after1"] = before_edges["source"].isin(after1_nodes)
+        before_edges["source_goes_after2"] = before_edges["source"].isin(after2_nodes)
+        before_edges["target_goes_after1"] = before_edges["target"].isin(after1_nodes)
+        before_edges["target_goes_after2"] = before_edges["target"].isin(after2_nodes)
 
-    # skeleton_nodes, skeleton_edges = get_skeleton_nodes_edges(root_id, client)
+        # remaining edges are those from A1 to A1 or A2 to A2
+        before_edges["is_remaining"] = (
+            before_edges["source_goes_after1"] & before_edges["target_goes_after1"]
+        ) | (before_edges["source_goes_after2"] & before_edges["target_goes_after2"])
 
-    # fig, ax = editplot(after_nodes, after_edges, skeleton_nodes, skeleton_edges)
-    # fig.suptitle(f"Final root ID: {root_id}, Operation ID: {operation_id}")
-    # fig.savefig(
-    #     FIG_PATH / f"edit_graph/root={root_id}-operation={operation_id}.png",
-    #     dpi=300,
-    # )
-    # plt.close()
+        if show_plots:
+            skeleton_nodes, skeleton_edges = get_skeleton_nodes_edges(root_id, client)
 
-# %%
-
-len(list(nx.weakly_connected_components(edit_lineage_graph)))
-
-# %%
-
-meta_operation_map = {}
-for i, component in enumerate(nx.weakly_connected_components(edit_lineage_graph)):
-    subgraph = edit_lineage_graph.subgraph(component)
-    subgraph_operations = set()
-    for source, target, data in subgraph.edges(data=True):
-        subgraph_operations.add(data["operation_id"])
-    meta_operation_map[i] = subgraph_operations
+            fig, ax = editplot(
+                before_nodes, before_edges, skeleton_nodes, skeleton_edges
+            )
+            fig.suptitle(
+                f"Final root ID: {root_id}, Operation ID: {operation_id}, {operation_type.capitalize()}"
+            )
+            fig.savefig(
+                FIG_PATH / f"edit_graph/root={root_id}-operation={operation_id}.png",
+                dpi=300,
+            )
+            plt.close()
 
 # %%
