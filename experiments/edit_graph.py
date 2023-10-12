@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from nglui.statebuilder import make_neuron_neuroglancer_link
 from pkg.paths import FIG_PATH
 from pkg.plot import networkplot
 from pkg.utils import get_level2_nodes_edges, get_skeleton_nodes_edges
@@ -17,13 +18,14 @@ client = cc.CAVEclient("minnie65_phase3_v1")
 cg = client.chunkedgraph
 cv = client.info.segmentation_cloudvolume()
 
+
 # %%
 meta = client.materialize.query_table("allen_v1_column_types_slanted_ref")
 meta = meta.sort_values("target_id")
 nuc = client.materialize.query_table("nucleus_detection_v0").set_index("id")
 
 # %%
-i = 7
+i = 9
 target_id = meta.iloc[i]["target_id"]
 root_id = nuc.loc[target_id]["pt_root_id"]
 root_id = client.chunkedgraph.get_latest_roots(root_id)[0]
@@ -59,6 +61,23 @@ print("Number of splits:", len(splits))
 
 # %%
 
+if False:
+    operation_id = 544353
+    row = splits.loc[operation_id]
+    details = cg.get_operation_details([operation_id])[str(operation_id)]
+
+    root_ids = list(row["before_root_ids"]) + list(row["after_root_ids"])
+
+    position = np.array(row["source_coords"][0]) * np.array([2, 2, 1])
+
+    make_neuron_neuroglancer_link(
+        client,
+        root_ids,
+        # view_kws={"position": position},
+    )
+
+# %%
+
 import networkx as nx
 
 edit_lineage_graph = nx.DiGraph()
@@ -81,33 +100,36 @@ for operation_id, row in tqdm(
             edit_lineage_graph.add_edge(
                 node1, node2, operation_id=operation_id, operation_type="merge"
             )
-# %%
+
 for operation_id, row in tqdm(
     splits.iterrows(), total=len(splits), desc="Finding split lineage relationships"
 ):
     before_root_id = row["before_root_ids"][0]
-    after1_root_id, after2_root_id = row["roots"]
+
+    # TODO: this is a hack to get around the fact that some splits have only one after
+    # root ID. This is because sometimes a split is performed but the two objects are
+    # still connected in another place, so they don't become two new roots.
+    # Unsure how to handle this case in terms of tracking edits to replay laters
+
+    # after1_root_id, after2_root_id = row["roots"]
+    after_root_ids = row["roots"]
 
     before_nodes = cg.get_leaves(before_root_id, stop_layer=2)
-    after1_nodes = cg.get_leaves(after1_root_id, stop_layer=2)
-    after2_nodes = cg.get_leaves(after2_root_id, stop_layer=2)
 
-    after_nodes = np.concatenate((after1_nodes, after2_nodes))
+    after_nodes = []
+    for after_root_id in after_root_ids:
+        after_nodes.append(cg.get_leaves(after_root_id, stop_layer=2))
+    after_nodes = np.concatenate(after_nodes)
+
     removed_nodes = np.setdiff1d(before_nodes, after_nodes)
     added_nodes = np.setdiff1d(after_nodes, before_nodes)
+
     for node1 in removed_nodes:
         for node2 in added_nodes:
             edit_lineage_graph.add_edge(
                 node1, node2, operation_id=operation_id, operation_type="split"
             )
 
-# %%
-operation_id = 544353
-cg.get_operation_details([operation_id])[str(operation_id)]["roots"]
-
-# %%
-operation_id = 317746
-cg.get_operation_details([operation_id])[str(operation_id)]["roots"]
 
 # %%
 meta_operation_map = {}
@@ -121,8 +143,6 @@ for i, component in enumerate(nx.weakly_connected_components(edit_lineage_graph)
 print("Total operations: ", len(merges) + len(splits))
 print("Number of meta-operations: ", len(meta_operation_map))
 
-
-# %%
 
 # %%
 
@@ -286,6 +306,18 @@ operation_ids = [244259, 244262]
 operation_ids = [267308, 267309]
 operation_ids = [244299, 244300]
 operation_ids = [244284, 244287]
+
+# these are all for root 864691136066733720
+operation_ids = [544623, 544680, 545977, 545980]
+operation_ids = [544411, 545984, 545986]
+operation_ids = [543546, 543602, 543613, 543633, 543688]
+operation_ids = [544163, 544168, 544181, 544182]
+
+# these are all for root 864691136990628501
+operation_ids = [381703, 381746, 381768, 381769]
+operation_ids = [381229, 381277, 381279, 381297, 381302]
+operation_ids = [381236, 381281, 381310]
+
 show_plots = True
 for operation_id in operation_ids:
     if operation_id in merges.index:
@@ -294,6 +326,8 @@ for operation_id in operation_ids:
     elif operation_id in splits.index:
         operation_type = "split"
         row = splits.loc[operation_id]
+    else:
+        raise ValueError()
 
     if operation_type == "merge":
         after_root_id = row["after_root_ids"][0]
@@ -399,5 +433,20 @@ for operation_id in operation_ids:
                 dpi=300,
             )
             plt.close()
+
+# %%
+
+import caveclient as cc
+from nglui.statebuilder import make_neuron_neuroglancer_link
+
+client = cc.CAVEclient("minnie65_phase3_v1")
+
+root_id = 864691135800418402
+
+make_neuron_neuroglancer_link(client, [root_id], return_as="url")
+
+# print(len(cg.get_leaves(root_id)))
+
+# cg.level2_chunk_graph(root_id)
 
 # %%

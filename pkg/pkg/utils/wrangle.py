@@ -1,10 +1,40 @@
 import pandas as pd
 import pcg_skel
 import numpy as np
+from requests import HTTPError
+from time import sleep
 
 
-def get_level2_nodes_edges(root_id, client):
-    edgelist = client.chunkedgraph.level2_chunk_graph(root_id)
+def get_positions(nodelist, client, n_retries=2, retry_delay=5):
+    l2stats = client.l2cache.get_l2data(nodelist, attributes=["rep_coord_nm"])
+    nodes = pd.DataFrame(l2stats).T
+    positions = pt_to_xyz(nodes["rep_coord_nm"])
+    nodes = pd.concat([nodes, positions], axis=1)
+    nodes.index = nodes.index.astype(int)
+    nodes.index.name = "l2_id"
+
+    if nodes.isna().any().any():
+        print(
+            f"Missing positions for some L2 nodes, retrying ({n_retries} attempts left)"
+        )
+        sleep(retry_delay)
+        return get_positions(nodelist, client, n_retries - 1)
+
+    return nodes
+
+
+def get_level2_nodes_edges(root_id, client, positions=True):
+    try:
+        edgelist = client.chunkedgraph.level2_chunk_graph(root_id)
+    except HTTPError:
+        # REF: https://github.com/seung-lab/PyChunkedGraph/issues/404
+        nodelist = client.chunkedgraph.get_leaves(root_id, stop_layer=2)
+        if len(nodelist) != 1:
+            raise HTTPError(
+                f"HTTPError: level 2 chunk graph not found for root_id: {root_id}"
+            )
+        else:
+            edgelist = np.empty((0, 2), dtype=int)
 
     nodelist = set()
     for edge in edgelist:
@@ -12,12 +42,10 @@ def get_level2_nodes_edges(root_id, client):
             nodelist.add(node)
     nodelist = list(nodelist)
 
-    l2stats = client.l2cache.get_l2data(nodelist, attributes=["rep_coord_nm"])
-    nodes = pd.DataFrame(l2stats).T
-    positions = pt_to_xyz(nodes["rep_coord_nm"])
-    nodes = pd.concat([nodes, positions], axis=1)
-    nodes.index = nodes.index.astype(int)
-    nodes.index.name = "l2_id"
+    if positions:
+        nodes = get_positions(nodelist, client)
+    else:
+        nodes = pd.DataFrame(index=nodelist)
 
     edges = pd.DataFrame(edgelist)
     edges.columns = ["source", "target"]

@@ -1665,6 +1665,21 @@ extra = ["lxml (>=4.6)", "pydot (>=1.4.2)", "pygraphviz (>=1.9)", "sympy (>=1.10
 test = ["codecov (>=2.1)", "pytest (>=7.2)", "pytest-cov (>=4.0)"]
 
 [[package]]
+name = "nglui"
+version = "2.14.3"
+description = "Framework for data-driven generation of neuroglancer states."
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.dependencies]
+ipython = "*"
+numpy = ">=1.11.0"
+pandas = ">=1.0.0"
+six = "*"
+webcolors = "*"
+
+[[package]]
 name = "notebook"
 version = "6.5.4"
 description = "A web-based notebook environment for interactive computing"
@@ -3004,6 +3019,18 @@ optional = false
 python-versions = "*"
 
 [[package]]
+name = "webcolors"
+version = "1.13"
+description = "A library for working with the color formats defined by HTML and CSS."
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[package.extras]
+docs = ["furo", "sphinx", "sphinx-copybutton", "sphinx-inline-tabs", "sphinx-notfound-page", "sphinxext-opengraph"]
+tests = ["pytest", "pytest-cov"]
+
+[[package]]
 name = "webencodings"
 version = "0.5.1"
 description = "Character encoding aliases for legacy web content"
@@ -3107,7 +3134,7 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "1.1"
 python-versions = "3.11.*"
-content-hash = "9db7f23562b830cf68284a8152c8cd8e8215e01f96c29688e21c3d53eb190037"
+content-hash = "f070fac1f342166ccffa2b89b7ce14014c381d2f5c5fef88ddc400670b81bc90"
 
 [metadata.files]
 anyio = [
@@ -4923,6 +4950,9 @@ networkx = [
     {file = "networkx-2.8.8-py3-none-any.whl", hash = "sha256:e435dfa75b1d7195c7b8378c3859f0445cd88c6b0375c181ed66823a9ceb7524"},
     {file = "networkx-2.8.8.tar.gz", hash = "sha256:230d388117af870fce5647a3c52401fcf753e94720e6ea6b4197a5355648885e"},
 ]
+nglui = [
+    {file = "nglui-2.14.3.tar.gz", hash = "sha256:2c555f2d3a7b1ad991b17f126e68387339260d688291b2a2046c3ee93511d8a8"},
+]
 notebook = [
     {file = "notebook-6.5.4-py3-none-any.whl", hash = "sha256:dd17e78aefe64c768737b32bf171c1c766666a21cc79a44d37a1700771cab56f"},
     {file = "notebook-6.5.4.tar.gz", hash = "sha256:517209568bd47261e2def27a140e97d49070602eea0d226a696f42a7f16c9a4e"},
@@ -6140,6 +6170,10 @@ vtk = [
 wcwidth = [
     {file = "wcwidth-0.2.7-py2.py3-none-any.whl", hash = "sha256:fabf3e32999d9b0dab7d19d845149f326f04fe29bac67709ee071dbd92640a36"},
     {file = "wcwidth-0.2.7.tar.gz", hash = "sha256:1b6d30a98ddd5ce9bbdb33658191fd2423fc9da203fe3ef1855407dcb7ee4e26"},
+]
+webcolors = [
+    {file = "webcolors-1.13-py3-none-any.whl", hash = "sha256:29bc7e8752c0a1bd4a1f03c14d6e6a72e93d82193738fa860cbff59d0fcc11bf"},
+    {file = "webcolors-1.13.tar.gz", hash = "sha256:c225b674c83fa923be93d235330ce0300373d02885cef23238813b0d5668304a"},
 ]
 webencodings = [
     {file = "webencodings-0.5.1-py2.py3-none-any.whl", hash = "sha256:a0af1213f3c2226497a97e2b3aa01a7e4bee4f403f95be16fc9acd2947514a78"},
