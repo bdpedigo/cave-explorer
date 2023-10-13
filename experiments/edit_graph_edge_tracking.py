@@ -10,6 +10,8 @@ from pkg.paths import FIG_PATH
 from pkg.plot import networkplot
 from pkg.utils import get_level2_nodes_edges, get_skeleton_nodes_edges
 from tqdm.autonotebook import tqdm
+import networkx as nx
+import time
 
 # %%
 
@@ -59,26 +61,9 @@ splits = splits.join(details)
 print("Number of merges:", len(merges))
 print("Number of splits:", len(splits))
 
-# %%
-
-if False:
-    operation_id = 544353
-    row = splits.loc[operation_id]
-    details = cg.get_operation_details([operation_id])[str(operation_id)]
-
-    root_ids = list(row["before_root_ids"]) + list(row["after_root_ids"])
-
-    position = np.array(row["source_coords"][0]) * np.array([2, 2, 1])
-
-    make_neuron_neuroglancer_link(
-        client,
-        root_ids,
-        # view_kws={"position": position},
-    )
 
 # %%
 
-import networkx as nx
 
 edit_lineage_graph = nx.DiGraph()
 
@@ -178,7 +163,6 @@ def get_changed_edges(befores, afters):
 
 # %%
 
-import time
 
 old_time = 0
 new_time = 0
@@ -314,9 +298,9 @@ for operation_id in tqdm(splits.index[:1]):
 
 
 def get_changed_edges(before_edges, after_edges):
-    before_edges[["source", "target"]].drop_duplicates()
+    before_edges.drop_duplicates()
     before_edges["is_before"] = True
-    after_edges[["source", "target"]].drop_duplicates()
+    after_edges.drop_duplicates()
     after_edges["is_before"] = False
     delta_edges = pd.concat([before_edges, after_edges]).drop_duplicates(
         ["source", "target"], keep=False
@@ -326,11 +310,22 @@ def get_changed_edges(before_edges, after_edges):
     return removed_edges, added_edges
 
 
-# TODO re-write using one for-loop over operations
+def get_all_nodes_edges(root_ids, client):
+    all_nodes = []
+    all_edges = []
+    for root_id in root_ids:
+        nodes, edges = get_level2_nodes_edges(root_id, client, positions=False)
+        nodes["root_id"] = root_id
+        edges["root_id"] = root_id
+        all_nodes.append(nodes)
+        all_edges.append(edges)
+    all_nodes = pd.concat(all_nodes, axis=0)
+    all_edges = pd.concat(all_edges, axis=0, ignore_index=True)
+    return all_nodes, all_edges
+
 
 changes_by_operation = {}
-
-for operation_id in tqdm(change_log.index[:]):
+for operation_id in tqdm(change_log.index[:1]):
     is_merge = change_log.loc[operation_id]["is_merge"]
     if is_merge:
         row = merges.loc[operation_id]
@@ -342,46 +337,113 @@ for operation_id in tqdm(change_log.index[:]):
         # "after_root_ids" doesn't have both children
         after_root_ids = row["roots"]
 
-    before_nodes = []
-    before_edges = []
-    for before_root_id in before_root_ids:
-        before_node, before_edge = get_level2_nodes_edges(
-            before_root_id, client, positions=False
+    all_before_nodes, all_before_edges = get_all_nodes_edges(before_root_ids, client)
+    all_after_nodes, all_after_edges = get_all_nodes_edges(after_root_ids, client)
+
+    added_nodes_index = all_after_nodes.index.difference(all_before_nodes.index)
+    added_nodes = all_after_nodes.loc[added_nodes_index]
+    removed_nodes_index = all_before_nodes.index.difference(all_after_nodes.index)
+    removed_nodes = all_before_nodes.loc[removed_nodes_index]
+
+    removed_edges, added_edges = get_changed_edges(all_before_edges, all_after_edges)
+
+    all_root_ids = np.concatenate((before_root_ids, after_root_ids))
+
+    changes_by_root_id = {}
+    for root_id in all_root_ids:
+        these_removed_nodes = removed_nodes.query("root_id == @root_id").drop(
+            columns=["root_id"]
         )
-        before_nodes.append(before_node)
-        before_edges.append(before_edge)
-    before_nodes = pd.concat(before_nodes, axis=0)
-    before_edges = pd.concat(before_edges, axis=0, ignore_index=True)
-
-    after_nodes = []
-    after_edges = []
-    for after_root_id in after_root_ids:
-        after_node, after_edge = get_level2_nodes_edges(
-            after_root_id, client, positions=False
+        these_removed_edges = removed_edges.query("root_id == @root_id").drop(
+            columns=["root_id"]
         )
-        after_nodes.append(after_node)
-        after_edges.append(after_edge)
-    after_nodes = pd.concat(after_nodes, axis=0)
-    after_edges = pd.concat(after_edges, axis=0, ignore_index=True)
+        these_added_edges = added_edges.query("root_id == @root_id").drop(
+            columns=["root_id"]
+        )
+        these_added_nodes = added_nodes.query("root_id == @root_id").drop(
+            columns=["root_id"]
+        )
+        changes = {
+            "layer2_removed_nodes": these_removed_nodes.index,
+            "layer2_removed_edges": these_removed_edges,
+            "layer2_added_nodes": these_added_nodes,
+            "layer2_added_edges": these_added_edges,
+        }
+        changes_by_root_id[root_id] = changes
 
-    added_nodes = after_nodes.index.difference(before_nodes.index)
-    removed_nodes = before_nodes.index.difference(after_nodes.index)
-
-    removed_edges, added_edges = get_changed_edges(before_edges, after_edges)
-
-    changes_by_operation[operation_id] = {
-        "layer2_added_edges": added_edges[["source", "target"]].values.tolist(),
-        "layer2_added_nodes": added_nodes.to_list(),
-        "layer2_removed_nodes": removed_nodes.to_list(),
-        "layer2_removed_edges": removed_edges[["source", "target"]].values.tolist(),
-        **row.to_dict(),
-    }
-
-changes_by_operation = pd.DataFrame(changes_by_operation).T
+    changes_by_operation[operation_id] = changes_by_root_id
 
 # %%
 
-changes_by_operation
+
+def do_remove_edges(before_edges, removed_edges):
+    before_edges = pd.MultiIndex.from_frame(before_edges)
+    removed_edges = pd.MultiIndex.from_frame(removed_edges)
+    return before_edges.difference(removed_edges).to_frame().reset_index(drop=True)
+
+
+pieces = {}
+
+for operation_id in tqdm(change_log.index[:1]):
+    is_merge = change_log.loc[operation_id, "is_merge"]
+    if is_merge:
+        row = merges.loc[operation_id]
+        before_root_ids = row["before_root_ids"]
+        after_root_ids = row["after_root_ids"]
+    else:
+        row = splits.loc[operation_id]
+        before_root_ids = row["before_root_ids"]
+        # "after_root_ids" doesn't have both children
+        after_root_ids = row["roots"]
+
+    # get the operation details
+    added_edges = pd.DataFrame(row["layer2_added_edges"], columns=["source", "target"])
+    added_nodes = pd.DataFrame(index=row["layer2_added_nodes"])
+    removed_edges = pd.DataFrame(
+        row["layer2_removed_edges"], columns=["source", "target"]
+    )
+    removed_nodes = row["layer2_removed_nodes"]
+
+    print("Before root IDs:", before_root_ids)
+    print("After root IDs:", after_root_ids)
+
+    all_before_nodes = []
+    all_before_edges = []
+    for before_root_id in before_root_ids:
+        if before_root_id not in pieces:
+            before_nodes, before_edges = get_level2_nodes_edges(
+                before_root_id, client, positions=False
+            )
+            all_before_nodes.append(before_nodes)
+            all_before_edges.append(before_edges)
+
+        # before_nodes = pd.concat(before_nodes, axis=0)
+        # before_edges = pd.concat(before_edges, axis=0, ignore_index=True)
+
+        after_nodes = before_nodes.copy()
+        after_nodes = after_nodes.drop(index=removed_nodes)
+        after_nodes = pd.concat([after_nodes, added_nodes], axis=0)
+
+        after_edges = do_remove_edges(before_edges, removed_edges)
+
+        pieces[after_root_ids[0]] = (after_nodes, after_edges)
+
+# pieces[root_id]
+
+# %%
+for operation_id, row in tqdm(list(operations.iterrows())[:1]):
+    print(row)
+# %%
+test_nodes, test_edges = get_level2_nodes_edges(after_root_ids[0], client)
+
+# %%
+test_nodes
+
+# %%
+final_nodes, final_edges = get_level2_nodes_edges(root_id, client, positions=False)
+
+# %%
+len(final_nodes)
 
 # %%
 # TODO start from the graph at t_0, then apply the changes in order
@@ -401,3 +463,17 @@ len(lineage_graph_dict["links"])
 
 # %%
 pd.DataFrame(lineage_graph_dict["nodes"][1:]).set_index("operation_id")  # first is root
+
+
+# %%
+
+root_id = 864691136990628501
+
+cg.get_tabular_change_log(root_id, filtered=False)[root_id]
+
+# %%
+
+lg = cg.get_lineage_graph(root_id)
+len(lg["nodes"])
+
+# %%
