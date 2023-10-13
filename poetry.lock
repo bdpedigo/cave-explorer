@@ -425,7 +425,7 @@ python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*,>=2.7
 name = "comm"
 version = "0.1.4"
 description = "Jupyter Python Comm implementation, for usage in ipykernel, xeus-python etc."
-category = "dev"
+category = "main"
 optional = false
 python-versions = ">=3.6"
 
@@ -533,7 +533,7 @@ python-versions = "*"
 name = "debugpy"
 version = "1.8.0"
 description = "An implementation of the Debug Adapter Protocol for Python"
-category = "dev"
+category = "main"
 optional = false
 python-versions = ">=3.8"
 
@@ -982,7 +982,7 @@ python-versions = ">=3.7"
 name = "ipykernel"
 version = "6.25.2"
 description = "IPython Kernel for Jupyter"
-category = "dev"
+category = "main"
 optional = false
 python-versions = ">=3.8"
 
@@ -1010,7 +1010,7 @@ test = ["flaky", "ipyparallel", "pre-commit", "pytest (>=7.0)", "pytest-asyncio"
 
 [[package]]
 name = "ipython"
-version = "8.16.0"
+version = "8.16.1"
 description = "IPython: Productive Interactive Computing"
 category = "main"
 optional = false
@@ -1165,7 +1165,7 @@ qtconsole = "*"
 name = "jupyter-client"
 version = "8.3.1"
 description = "Jupyter protocol implementation and client libraries"
-category = "dev"
+category = "main"
 optional = false
 python-versions = ">=3.8"
 
@@ -1205,7 +1205,7 @@ test = ["flaky", "pexpect", "pytest"]
 name = "jupyter-core"
 version = "5.3.2"
 description = "Jupyter core package. A base package on which Jupyter projects rely."
-category = "dev"
+category = "main"
 optional = false
 python-versions = ">=3.8"
 
@@ -1502,6 +1502,14 @@ optional = false
 python-versions = "*"
 
 [[package]]
+name = "mkdocs-material-extensions"
+version = "1.2"
+description = "Extension pack for Python Markdown and MkDocs Material."
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[[package]]
 name = "msgpack"
 version = "1.0.7"
 description = "MessagePack serializer"
@@ -1645,7 +1653,7 @@ test = ["pep440", "pre-commit", "pytest", "testpath"]
 name = "nest-asyncio"
 version = "1.5.8"
 description = "Patch asyncio to allow nested event loops"
-category = "dev"
+category = "main"
 optional = false
 python-versions = ">=3.5"
 
@@ -1663,6 +1671,34 @@ developer = ["mypy (>=0.982)", "pre-commit (>=2.20)"]
 doc = ["nb2plots (>=0.6)", "numpydoc (>=1.5)", "pillow (>=9.2)", "pydata-sphinx-theme (>=0.11)", "sphinx (>=5.2)", "sphinx-gallery (>=0.11)", "texext (>=0.6.6)"]
 extra = ["lxml (>=4.6)", "pydot (>=1.4.2)", "pygraphviz (>=1.9)", "sympy (>=1.10)"]
 test = ["codecov (>=2.1)", "pytest (>=7.2)", "pytest-cov (>=4.0)"]
+
+[[package]]
+name = "neuropull"
+version = "0.2.0"
+description = "A lightweight tool for pulling connectome networks and metadata."
+category = "main"
+optional = false
+python-versions = ">=3.8.0,<3.12"
+develop = true
+
+[package.dependencies]
+beartype = ">=0.11.0"
+Jinja2 = "^3.1.2"
+mkdocs-material-extensions = "^1.1.1"
+networkx = ">=2.8.6"
+numpy = ">=1.23.0"
+pandas = "^2.0.0"
+scipy = "^1.9.2"
+
+[package.extras]
+data = ["graspologic (>=2.0.0,<3.0.0)", "ipykernel (>=6.15.3,<7.0.0)", "python-catmaid (>=2.1.1,<3.0.0)"]
+dev = ["bump2version (>=1.0.1,<2.0.0)", "pre-commit (>=2.12.0,<3.0.0)", "toml (>=0.10.2,<0.11.0)", "tox (>=3.20.1,<4.0.0)", "twine (>=3.3.0,<4.0.0)", "virtualenv (>=20.2.2,<21.0.0)"]
+doc = ["mkdocs (>=1.4.2,<2.0.0)", "mkdocs-autorefs (>=0.4.1,<0.5.0)", "mkdocs-include-markdown-plugin (>=4.0.0,<5.0.0)", "mkdocs-jupyter (>=0.22.0,<0.23.0)", "mkdocs-material (>=8.5.11,<9.0.0)", "mkdocstrings[python] (>=0.19.0,<0.20.0)", "mknotebooks (>=0.7.1,<0.8.0)"]
+test = ["black (>=22.3.0,<23.0.0)", "flake8 (>=3.9.2,<4.0.0)", "flake8-docstrings (>=1.6.0,<2.0.0)", "isort (>=5.8.0,<6.0.0)", "mypy (>=0.900,<0.901)", "pytest (>=6.2.4,<7.0.0)", "pytest-cov (>=2.12.0,<3.0.0)"]
+
+[package.source]
+type = "directory"
+url = "../neuropull"
 
 [[package]]
 name = "nglui"
@@ -2425,7 +2461,7 @@ jupyter = ["ipywidgets", "jupyter-server-proxy", "nest-asyncio", "trame (>=2.5.2
 name = "pywin32"
 version = "306"
 description = "Python for Window Extensions"
-category = "dev"
+category = "main"
 optional = false
 python-versions = "*"
 
@@ -2449,7 +2485,7 @@ python-versions = ">=3.6"
 name = "pyzmq"
 version = "25.1.1"
 description = "Python bindings for 0MQ"
-category = "dev"
+category = "main"
 optional = false
 python-versions = ">=3.6"
 
@@ -2892,7 +2928,7 @@ python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
 name = "tornado"
 version = "6.3.3"
 description = "Tornado is a Python web framework and asynchronous networking library, originally developed at FriendFeed."
-category = "dev"
+category = "main"
 optional = false
 python-versions = ">= 3.8"
 
@@ -3134,7 +3170,7 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "1.1"
 python-versions = "3.11.*"
-content-hash = "f070fac1f342166ccffa2b89b7ce14014c381d2f5c5fef88ddc400670b81bc90"
+content-hash = "85d4d1ae8c7a7977165cb84c7d61f51bf373f4693ee0e3dca3283010ef0955cf"
 
 [metadata.files]
 anyio = [
@@ -4429,8 +4465,8 @@ ipykernel = [
     {file = "ipykernel-6.25.2.tar.gz", hash = "sha256:f468ddd1f17acb48c8ce67fcfa49ba6d46d4f9ac0438c1f441be7c3d1372230b"},
 ]
 ipython = [
-    {file = "ipython-8.16.0-py3-none-any.whl", hash = "sha256:dba644376826a532e362da945a672865be7efda76ecf999219e6021bda85d702"},
-    {file = "ipython-8.16.0.tar.gz", hash = "sha256:7a1b2e1e6a3ec5baa466163c451335081f31859883889ff0289c6b21f7a095e2"},
+    {file = "ipython-8.16.1-py3-none-any.whl", hash = "sha256:0852469d4d579d9cd613c220af7bf0c9cc251813e12be647cb9d463939db9b1e"},
+    {file = "ipython-8.16.1.tar.gz", hash = "sha256:ad52f58fca8f9f848e256c629eff888efc0528c12fe0f8ec14f33205f23ef938"},
 ]
 ipython_genutils = [
     {file = "ipython_genutils-0.2.0-py2.py3-none-any.whl", hash = "sha256:72dd37233799e619666c9f639a9da83c34013a73e8bbc79a7a6348d93c61fab8"},
@@ -4843,6 +4879,10 @@ mistune = [
     {file = "mistune-0.8.4-py2.py3-none-any.whl", hash = "sha256:88a1051873018da288eee8538d476dffe1262495144b33ecb586c4ab266bb8d4"},
     {file = "mistune-0.8.4.tar.gz", hash = "sha256:59a3429db53c50b5c6bcc8a07f8848cb00d7dc8bdb431a4ab41920d201d4756e"},
 ]
+mkdocs-material-extensions = [
+    {file = "mkdocs_material_extensions-1.2-py3-none-any.whl", hash = "sha256:c767bd6d6305f6420a50f0b541b0c9966d52068839af97029be14443849fb8a1"},
+    {file = "mkdocs_material_extensions-1.2.tar.gz", hash = "sha256:27e2d1ed2d031426a6e10d5ea06989d67e90bb02acd588bc5673106b5ee5eedf"},
+]
 msgpack = [
     {file = "msgpack-1.0.7-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:04ad6069c86e531682f9e1e71b71c1c3937d6014a7c3e9edd2aa81ad58842862"},
     {file = "msgpack-1.0.7-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:cca1b62fe70d761a282496b96a5e51c44c213e410a964bdffe0928e611368329"},
@@ -4950,6 +4990,7 @@ networkx = [
     {file = "networkx-2.8.8-py3-none-any.whl", hash = "sha256:e435dfa75b1d7195c7b8378c3859f0445cd88c6b0375c181ed66823a9ceb7524"},
     {file = "networkx-2.8.8.tar.gz", hash = "sha256:230d388117af870fce5647a3c52401fcf753e94720e6ea6b4197a5355648885e"},
 ]
+neuropull = []
 nglui = [
     {file = "nglui-2.14.3.tar.gz", hash = "sha256:2c555f2d3a7b1ad991b17f126e68387339260d688291b2a2046c3ee93511d8a8"},
 ]

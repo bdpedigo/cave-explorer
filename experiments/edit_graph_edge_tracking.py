@@ -323,6 +323,8 @@ def get_all_nodes_edges(root_ids, client):
     all_edges = pd.concat(all_edges, axis=0, ignore_index=True)
     return all_nodes, all_edges
 
+class NetworkFrame
+
 
 changes_by_operation = {}
 for operation_id in tqdm(change_log.index[:1]):
