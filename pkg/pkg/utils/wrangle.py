@@ -26,6 +26,37 @@ def get_positions(nodelist, client, n_retries=2, retry_delay=5):
 def get_level2_nodes_edges(root_id, client, positions=True):
     try:
         edgelist = client.chunkedgraph.level2_chunk_graph(root_id)
+        nodelist = set()
+        for edge in edgelist:
+            for node in edge:
+                nodelist.add(node)
+        nodelist = list(nodelist)
+    except HTTPError:
+        # REF: https://github.com/seung-lab/PyChunkedGraph/issues/404
+        nodelist = client.chunkedgraph.get_leaves(root_id, stop_layer=2)
+        if len(nodelist) != 1:
+            raise HTTPError(
+                f"HTTPError: level 2 chunk graph not found for root_id: {root_id}"
+            )
+        else:
+            edgelist = np.empty((0, 2), dtype=int)
+
+    if positions:
+        nodes = get_positions(nodelist, client)
+    else:
+        nodes = pd.DataFrame(index=nodelist)
+
+    edges = pd.DataFrame(edgelist)
+    edges.columns = ["source", "target"]
+
+    edges = edges.drop_duplicates(keep="first")
+
+    return nodes, edges
+
+
+def __get_level2_nodes_edges(root_id, client, positions=True):
+    try:
+        edgelist = client.chunkedgraph.level2_chunk_graph(root_id)
     except HTTPError:
         # REF: https://github.com/seung-lab/PyChunkedGraph/issues/404
         nodelist = client.chunkedgraph.get_leaves(root_id, stop_layer=2)
@@ -40,6 +71,43 @@ def get_level2_nodes_edges(root_id, client, positions=True):
     for edge in edgelist:
         for node in edge:
             nodelist.add(node)
+    nodelist = list(nodelist)
+
+    if positions:
+        nodes = get_positions(nodelist, client)
+    else:
+        nodes = pd.DataFrame(index=nodelist)
+
+    edges = pd.DataFrame(edgelist)
+    edges.columns = ["source", "target"]
+
+    edges = edges.drop_duplicates(keep="first")
+
+    return nodes, edges
+
+
+def _get_level2_nodes_edges(root_id, client, positions=True):
+    try:
+        edgelist = client.chunkedgraph.level2_chunk_graph(root_id)
+        _nodelist = None
+    except HTTPError:
+        # REF: https://github.com/seung-lab/PyChunkedGraph/issues/404
+        _nodelist = client.chunkedgraph.get_leaves(root_id, stop_layer=2)
+        if len(_nodelist) != 1:
+            raise HTTPError(
+                f"HTTPError: level 2 chunk graph not found for root_id: {root_id}"
+            )
+        else:
+            edgelist = np.empty((0, 2), dtype=int)
+
+    if _nodelist is None:
+        nodelist = set()
+        for edge in edgelist:
+            for node in edge:
+                nodelist.add(node)
+    else:
+        nodelist = _nodelist
+
     nodelist = list(nodelist)
 
     if positions:
