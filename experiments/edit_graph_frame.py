@@ -22,7 +22,7 @@ meta = meta.sort_values("target_id")
 nuc = client.materialize.query_table("nucleus_detection_v0").set_index("id")
 
 # %%
-i = 0
+i = 1
 target_id = meta.iloc[i]["target_id"]
 root_id = nuc.loc[target_id]["pt_root_id"]
 root_id = client.chunkedgraph.get_latest_roots(root_id)[0]
@@ -209,8 +209,6 @@ for operation_id in tqdm(change_log.index[:], disable=verbose):
 
     if verbose:
         print()
-
-# %%
 
 
 # %%
