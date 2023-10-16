@@ -160,3 +160,15 @@ def pt_to_xyz(pts):
     positions = positions.pivot(index=idx_name, columns="axis", values=name)
 
     return positions
+
+
+def get_all_nodes_edges(root_ids, client):
+    all_nodes = []
+    all_edges = []
+    for root_id in root_ids:
+        nodes, edges = get_level2_nodes_edges(root_id, client, positions=False)
+        all_nodes.append(nodes)
+        all_edges.append(edges)
+    all_nodes = pd.concat(all_nodes, axis=0)
+    all_edges = pd.concat(all_edges, axis=0, ignore_index=True)
+    return all_nodes, all_edges
