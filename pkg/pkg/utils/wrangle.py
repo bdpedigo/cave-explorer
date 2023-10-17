@@ -1,11 +1,14 @@
-import pandas as pd
-import pcg_skel
-import numpy as np
-from requests import HTTPError
 from time import sleep
 
+import numpy as np
+import pandas as pd
+from anytree import Node, PreOrderIter
+from requests import HTTPError
 
-def get_positions(nodelist, client, n_retries=2, retry_delay=5):
+import pcg_skel
+
+
+def get_positions(nodelist, client, n_retries=2, retry_delay=10):
     l2stats = client.l2cache.get_l2data(nodelist, attributes=["rep_coord_nm"])
     nodes = pd.DataFrame(l2stats).T
     positions = pt_to_xyz(nodes["rep_coord_nm"])
@@ -13,12 +16,20 @@ def get_positions(nodelist, client, n_retries=2, retry_delay=5):
     nodes.index = nodes.index.astype(int)
     nodes.index.name = "l2_id"
 
-    if nodes.isna().any().any():
+    if nodes.isna().any().any() and n_retries != 0:
         print(
             f"Missing positions for some L2 nodes, retrying ({n_retries} attempts left)"
         )
         sleep(retry_delay)
-        return get_positions(nodelist, client, n_retries - 1)
+        return get_positions(
+            nodelist, client, n_retries=n_retries - 1, retry_delay=retry_delay
+        )
+
+    if nodes.isna().any().any():
+        missing = nodes.loc[nodes.isna().any(axis=1)]
+        raise HTTPError(
+            f"Missing positions for some L2 nodes, for instance: {missing.index[:5].to_list()}"
+        )
 
     return nodes
 
@@ -40,75 +51,6 @@ def get_level2_nodes_edges(root_id, client, positions=True):
             )
         else:
             edgelist = np.empty((0, 2), dtype=int)
-
-    if positions:
-        nodes = get_positions(nodelist, client)
-    else:
-        nodes = pd.DataFrame(index=nodelist)
-
-    edges = pd.DataFrame(edgelist)
-    edges.columns = ["source", "target"]
-
-    edges = edges.drop_duplicates(keep="first")
-
-    return nodes, edges
-
-
-def __get_level2_nodes_edges(root_id, client, positions=True):
-    try:
-        edgelist = client.chunkedgraph.level2_chunk_graph(root_id)
-    except HTTPError:
-        # REF: https://github.com/seung-lab/PyChunkedGraph/issues/404
-        nodelist = client.chunkedgraph.get_leaves(root_id, stop_layer=2)
-        if len(nodelist) != 1:
-            raise HTTPError(
-                f"HTTPError: level 2 chunk graph not found for root_id: {root_id}"
-            )
-        else:
-            edgelist = np.empty((0, 2), dtype=int)
-
-    nodelist = set()
-    for edge in edgelist:
-        for node in edge:
-            nodelist.add(node)
-    nodelist = list(nodelist)
-
-    if positions:
-        nodes = get_positions(nodelist, client)
-    else:
-        nodes = pd.DataFrame(index=nodelist)
-
-    edges = pd.DataFrame(edgelist)
-    edges.columns = ["source", "target"]
-
-    edges = edges.drop_duplicates(keep="first")
-
-    return nodes, edges
-
-
-def _get_level2_nodes_edges(root_id, client, positions=True):
-    try:
-        edgelist = client.chunkedgraph.level2_chunk_graph(root_id)
-        _nodelist = None
-    except HTTPError:
-        # REF: https://github.com/seung-lab/PyChunkedGraph/issues/404
-        _nodelist = client.chunkedgraph.get_leaves(root_id, stop_layer=2)
-        if len(_nodelist) != 1:
-            raise HTTPError(
-                f"HTTPError: level 2 chunk graph not found for root_id: {root_id}"
-            )
-        else:
-            edgelist = np.empty((0, 2), dtype=int)
-
-    if _nodelist is None:
-        nodelist = set()
-        for edge in edgelist:
-            for node in edge:
-                nodelist.add(node)
-    else:
-        nodelist = _nodelist
-
-    nodelist = list(nodelist)
 
     if positions:
         nodes = get_positions(nodelist, client)
@@ -172,3 +114,50 @@ def get_all_nodes_edges(root_ids, client):
     all_nodes = pd.concat(all_nodes, axis=0)
     all_edges = pd.concat(all_edges, axis=0, ignore_index=True)
     return all_nodes, all_edges
+
+
+def get_lineage_tree(root_id, client, flip=True, order=None):
+    cg = client.chunkedgraph
+    lineage_graph_dict = cg.get_lineage_graph(root_id)
+    links = lineage_graph_dict["links"]
+
+    lineage_nodes = {}
+    for link in links:
+        source = link["source"]
+        target = link["target"]
+        if source not in lineage_nodes:
+            lineage_nodes[source] = Node(source)
+        if target not in lineage_nodes:
+            lineage_nodes[target] = Node(target)
+
+        # flip means `root_id` is the root of this tree
+        # not flip means `root_id` is the leaf of this tree, and parent is the one
+        # or two objects that merged/split to form this leaf
+        if flip:
+            lineage_nodes[source].parent = lineage_nodes[target]
+        else:
+            lineage_nodes[target].parent = lineage_nodes[source]
+
+    root = lineage_nodes[root_id].root
+
+    if order is not None:
+        for node in PreOrderIter(root):
+            # make the left-hand side of the tree be whatever side has the most children
+            if order == "edits":
+                node._order_value = len(node.descendants)
+            elif order == "l2_size":
+                node._order_value = len(
+                    client.chunkedgraph.get_leaves(node.name, stop_layer=2)
+                )
+            else:
+                raise ValueError(f"Unknown order: {order}")
+
+        # reorder the children of each node by the values
+        for node in PreOrderIter(root):
+            children_order_value = np.array(
+                [child._order_value for child in node.children]
+            )
+            inds = np.argsort(-children_order_value)
+            node.children = [node.children[i] for i in inds]
+
+    return lineage_nodes[root_id]
