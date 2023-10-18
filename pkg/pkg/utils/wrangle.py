@@ -8,9 +8,11 @@ from requests import HTTPError
 import pcg_skel
 
 
-def get_positions(nodelist, client, n_retries=2, retry_delay=10):
+def get_positions(nodelist, client, n_retries=1, retry_delay=5):
     l2stats = client.l2cache.get_l2data(nodelist, attributes=["rep_coord_nm"])
     nodes = pd.DataFrame(l2stats).T
+    if "rep_coord_nm" not in nodes.columns:
+        nodes["rep_coord_nm"] = np.nan
     positions = pt_to_xyz(nodes["rep_coord_nm"])
     nodes = pd.concat([nodes, positions], axis=1)
     nodes.index = nodes.index.astype(int)
@@ -53,7 +55,10 @@ def get_level2_nodes_edges(root_id, client, positions=True):
             edgelist = np.empty((0, 2), dtype=int)
 
     if positions:
-        nodes = get_positions(nodelist, client)
+        if positions == "lazy":
+            nodes = get_positions(nodelist, client, n_retries=0)
+        else:
+            nodes = get_positions(nodelist, client)
     else:
         nodes = pd.DataFrame(index=nodelist)
 

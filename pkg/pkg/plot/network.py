@@ -10,6 +10,7 @@ def networkplot(
     y,
     node_palette=None,
     node_hue=None,
+    node_hue_norm=None,
     node_color="grey",
     node_size=20,
     node_zorder=1,
@@ -21,6 +22,7 @@ def networkplot(
     edge_zorder=0,
     ax=None,
     figsize=(10, 10),
+    clean_axis=True,
     scatterplot_kws={},
     linecollection_kws={},
 ):
@@ -44,6 +46,7 @@ def networkplot(
         x=x,
         y=y,
         hue=node_hue,
+        hue_norm=node_hue_norm,
         palette=node_palette,
         linewidth=0,
         s=node_size,
@@ -70,4 +73,12 @@ def networkplot(
         **linecollection_kws,
     )
     ax.add_collection(lc)
+
+    if clean_axis:
+        ax.spines[["left", "right", "top", "bottom"]].set_visible(False)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_xlabel("")
+        ax.set_ylabel("")
+
     return ax

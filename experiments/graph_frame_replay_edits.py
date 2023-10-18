@@ -1,7 +1,5 @@
 # %%
 
-from datetime import datetime, timedelta
-
 import caveclient as cc
 import networkx as nx
 import pandas as pd
@@ -24,7 +22,8 @@ meta = meta.sort_values("target_id")
 nuc = client.materialize.query_table("nucleus_detection_v0").set_index("id")
 
 # %%
-i = 2
+# i = 2#
+i = 6
 target_id = meta.iloc[i]["target_id"]
 root_id = nuc.loc[target_id]["pt_root_id"]
 root_id = client.chunkedgraph.get_latest_roots(root_id)[0]
@@ -34,8 +33,6 @@ print("Root ID:", root_id)
 # %%
 
 change_log = get_detailed_change_log(root_id, client, filtered=False)
-
-# %%
 print("Number of merges:", change_log["is_merge"].sum())
 print("Number of splits:", (~change_log["is_merge"]).sum())
 
@@ -51,17 +48,6 @@ class NetworkDelta:
         self.added_nodes = added_nodes
         self.removed_edges = removed_edges
         self.added_edges = added_edges
-
-    # def __add__(self, other):
-    #     # define a new NetworkDelta that is the composition of two deltas
-    #     total_added_nodes = pd.concat(
-    #         [self.added_nodes, other.added_nodes], verify_integrity=True
-    #     )
-    #     total_removed_nodes = pd.concat(
-    #         [self.removed_nodes, other.removed_nodes], verify_integrity=True
-    #     )
-    #     later_removed = total_removed_nodes.index.intersection(total_added_nodes.index)
-    #     total_added_nodes = total_added_nodes.drop(index=later_removed)
 
 
 def combine_deltas(deltas):
@@ -90,14 +76,6 @@ def combine_deltas(deltas):
     return NetworkDelta(
         total_removed_nodes, total_added_nodes, total_removed_edges, total_added_edges
     )
-
-
-#     later_removed = total_removed_edges.index.intersection(total_added_edges.index)
-#     total_added_edges = total_added_edges.drop(index=later_removed)
-
-#     return NetworkDelta(
-#         total_removed_nodes, total_added_nodes, total_removed_edges, total_added_edges
-#     )
 
 
 # %%
@@ -158,12 +136,17 @@ for meta_operation_id, operation_ids in meta_operation_map.items():
 
 # %%
 
-from pkg.utils import get_lineage_tree
-import numpy as np
-from datetime import datetime
-
+x
 root = get_lineage_tree(root_id, client, flip=True)
 
+for leaf in root.leaves:
+    new_root = get_lineage_tree(leaf.name, client)
+    if not new_root.is_leaf:
+        print(new_root.name)
+        print(cg.get_root_timestamps(new_root.name))
+
+
+# %%
 leaves = root.leaves
 leaf_ids = np.array([leaf.name for leaf in leaves])
 
@@ -323,7 +306,10 @@ for node_id, timestamp in zip(node_ids, timestamps):
 # %%
 
 ax = treeplot(
-    root, hue="timescale", palette="RdBu", scatterplot_kws=dict(hue_norm=(0, 1))
+    root,
+    node_hue="timescale",
+    node_palette="RdBu",
+    node_hue_norm=(0, 1),
 )
 query_node = 864691135132881568
 timestamp = cg.get_root_timestamps(query_node)[0]
@@ -352,53 +338,104 @@ for node in root.leaves:
 
 root = get_lineage_tree(root_id, client, flip=True, order="edits")
 
-
-# def check_leaf(node_id):
-#     out = cg.get_lineage_graph(node_id)
+from requests.exceptions import HTTPError
 
 
 all_nodes = []
 all_edges = []
-for leaf in tqdm(root.leaves):
+for i, leaf in enumerate(tqdm(root.leaves)):
     new_root = get_lineage_tree(leaf.name, client)
-    if not new_root.is_leaf:
-        print(new_root.name)
-    if new_root.is_leaf:
+    try:
         nodes, edges = get_level2_nodes_edges(leaf.name, client, positions=True)
         nodes["leaf"] = leaf.name
+        nodes["is_leaf"] = new_root.is_leaf
         all_nodes.append(nodes)
         all_edges.append(edges)
+    except HTTPError:
+        print(f"missing data for {leaf.name}")
+        continue
 
 
 all_nodes = pd.concat(all_nodes, axis=0)
 all_edges = pd.concat(all_edges, axis=0, ignore_index=True)
 
 # %%
+nodes, edges = get_level2_nodes_edges(leaf.name, client, positions=True)
+
+# %%
 
 from pkg.plot import networkplot
+import seaborn as sns
+from random import shuffle
+import matplotlib.pyplot as plt
 
-networkplot(all_nodes, all_edges, x="x", y="y", node_hue="leaf")
-
+colors = sns.color_palette("husl", len(root.leaves))
+shuffle(colors)
+node_palette = dict(zip([node.name for node in root.leaves], colors))
+valid_all_nodes = all_nodes.query("is_leaf")
+valid_all_edges = all_edges.query(
+    "source.isin(@valid_all_nodes.index) & target.isin(@valid_all_nodes.index)"
+)
+invalid_all_nodes = all_nodes.query("~is_leaf")
+invalid_all_edges = all_edges.query(
+    "source.isin(@invalid_all_nodes.index) & target.isin(@invalid_all_nodes.index)"
+)
+fig, ax = plt.subplots(1, 1, figsize=(20, 20))
+ax = networkplot(
+    valid_all_nodes,
+    valid_all_edges,
+    x="x",
+    y="y",
+    node_hue="leaf",
+    node_palette=node_palette,
+    node_size=0.3,
+    edge_linewidth=0.3,
+    clean_axis=False,
+    ax=ax,
+)
+ax = networkplot(
+    invalid_all_nodes,
+    invalid_all_edges,
+    x="x",
+    y="y",
+    node_color="black",
+    node_size=0.6,
+    edge_linewidth=0.6,
+    node_zorder=0,
+    edge_zorder=-1,
+    ax=ax,
+    clean_axis=False,
+)
+ax.legend().remove()
+# %%
+fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+ax = networkplot(
+    valid_all_nodes,
+    valid_all_edges,
+    x="x",
+    y="y",
+    node_size=0.0,
+    node_color="darkred",
+    edge_color="darkred",
+    edge_linewidth=0.5,
+    clean_axis=True,
+    ax=ax,
+)
+ax = networkplot(
+    invalid_all_nodes,
+    invalid_all_edges,
+    x="x",
+    y="y",
+    node_color="dodgerblue",
+    edge_color="dodgerblue",
+    node_size=0,
+    edge_linewidth=3,
+    node_zorder=0,
+    edge_zorder=-1,
+    ax=ax,
+    clean_axis=True,
+)
+ax.legend().remove()
+ax.set(xlim=(0.6e6, 0.8e6), ylim=(300_000, 500_000))
 
 # %%
-cg.get_lineage_graph(864691132360346984)
-
-# %%
-leaf = root.leaves[0]
-leaf_root = get_lineage_tree(leaf.name, client)
-leaf_root.is_leaf
-
-# %%
-
-treeplot(leaf_root)
-
-# %%
-
-leaf_id = 864691136112914108
-
-edges = client.chunkedgraph.level2_chunk_graph(leaf_id)
-nodelist = np.unique(edges)
-
-l2data = client.l2cache.get_l2data(nodelist, attributes=["rep_coord_nm"])
-l2data = pd.DataFrame(l2data).T
-l2data.loc[l2data.isna().any(axis=1)]
