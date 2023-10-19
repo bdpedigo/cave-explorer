@@ -1,3 +1,4 @@
+from datetime import datetime
 from time import sleep
 
 import numpy as np
@@ -126,14 +127,28 @@ def get_lineage_tree(root_id, client, flip=True, order=None):
     lineage_graph_dict = cg.get_lineage_graph(root_id)
     links = lineage_graph_dict["links"]
 
+    node_map = {}
+    for node in lineage_graph_dict["nodes"]:
+        if "operation_id" not in node:
+            operation_id = None
+        else:
+            operation_id = node["operation_id"]
+        timestamp = node["timestamp"]
+        timestamp = datetime.utcfromtimestamp(timestamp)
+        timestamp = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+        node_map[node["id"]] = {
+            "timestamp": timestamp,
+            "child_operation_id": operation_id,
+        }
+
     lineage_nodes = {}
     for link in links:
         source = link["source"]
         target = link["target"]
         if source not in lineage_nodes:
-            lineage_nodes[source] = Node(source)
+            lineage_nodes[source] = Node(source, **node_map[source])
         if target not in lineage_nodes:
-            lineage_nodes[target] = Node(target)
+            lineage_nodes[target] = Node(target, **node_map[target])
 
         # flip means `root_id` is the root of this tree
         # not flip means `root_id` is the leaf of this tree, and parent is the one

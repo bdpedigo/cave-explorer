@@ -36,8 +36,8 @@ nuc = client.materialize.query_table("nucleus_detection_v0").set_index("id")
 
 # %%
 # i = 2#
-# i = 6 # this one works
-i = 14
+i = 6  # this one works
+# i = 14
 target_id = meta.iloc[i]["target_id"]
 root_id = nuc.loc[target_id]["pt_root_id"]
 root_id = client.chunkedgraph.get_latest_roots(root_id)[0]
@@ -280,90 +280,3 @@ print()
 delta = datetime.timedelta(seconds=time.time() - t0)
 print("Time elapsed: ", delta)
 print()
-
-
-# %%
-# detective stuff
-
-weird_df
-lineage_root
-search_index = weird_df["leaf_id"].values
-
-rows = []
-for node in PreOrderIter(lineage_root):
-    descendants = [descendant.name for descendant in node.descendants]
-    if np.isin(search_index, descendants).all():
-        rows.append({"node_id": node.name, "depth": node.depth})
-
-search_df = pd.DataFrame(rows).set_index("node_id")
-search_df.sort_values("depth", inplace=True)
-nca_id = search_df["depth"].idxmax()
-nca_root = find_by_attr(lineage_root, nca_id)
-
-# %%
-ax = treeplot(
-    nca_root,
-    node_size=40,
-    figsize=(10, 10),
-    node_palette=palette,
-    node_hue="status",
-    edge_linewidth=1,
-)
-for node in PreOrderIter(nca_root):
-    ax.text(node._span_position + 0.05, node.depth, node.name, fontsize=12)
-
-plt.savefig(
-    FIG_PATH / "graph_frame_replay_edits" / f"nca_tree_root={root_id}.png",
-    dpi=300,
-    bbox_inches="tight",
-)
-
-# %%
-all_nodes = []
-for node in PreOrderIter(nca_root):
-    node_id = node.name
-    try:
-        nodes, edges = get_level2_nodes_edges(node_id, client, positions="lazy")
-    except HTTPError:
-        pass
-    nodes["root_id"] = node_id
-    all_nodes.append(nodes)
-all_nodes = pd.concat(all_nodes, axis=0)
-
-# %%
-all_nodes.index.value_counts()
-
-# %%
-
-
-def apply_node_statuses(root):
-    for node in PreOrderIter(root):
-        node.status = "internal"
-    for leaf in root.leaves:
-        leaf.status = "leaf"
-        new_root = get_lineage_tree(leaf.name, client)
-        if not new_root.is_leaf:
-            leaf.status = "weird leaf"
-    return root
-
-
-for node in nca_root.leaves:
-    name = node.name
-    new_root = get_lineage_tree(name, client, flip=True, order="edits")
-    if not new_root.is_leaf:
-        apply_node_statuses(new_root)
-        ax = treeplot(
-            new_root,
-            node_size=30,
-            figsize=(10, 10),
-            node_palette=palette,
-            node_hue="status",
-            edge_linewidth=1,
-        )
-        plt.savefig(
-            FIG_PATH
-            / "graph_frame_replay_edits"
-            / f"leaf={name}_tree_root={root_id}.png",
-            dpi=300,
-            bbox_inches="tight",
-        )

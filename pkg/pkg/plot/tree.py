@@ -4,19 +4,20 @@ from anytree import PreOrderIter
 from .network import networkplot
 
 
-def set_span_position(node):
+def initialize_leaf_spans(node):
     # set some starting positions for the leaf nodes to anchor everything else
-    if node.is_root:
-        i = 0
-        for _node in PreOrderIter(node):
-            if _node.is_leaf:
-                _node._span_position = i
-                i += 1
+    i = 0
+    for _node in PreOrderIter(node):
+        if _node.is_leaf:
+            _node._span_position = i
+            i += 1
 
+
+def set_spans(node):
     if node.is_leaf:
         return node._span_position
     else:
-        child_positions = [set_span_position(child) for child in node.children]
+        child_positions = [set_spans(child) for child in node.children]
         min_position = np.min(child_positions)
         max_position = np.max(child_positions)
         node._span_position = (min_position + max_position) / 2
@@ -44,15 +45,17 @@ def treeplot(
     scatterplot_kws={},
     linecollection_kws={},
 ):
-    set_span_position(root)
+    initialize_leaf_spans(root)
+    set_spans(root)
 
     node_df = {}
     for node in PreOrderIter(root):
         node_df[node.name] = {
             "span_position": node._span_position,
             "depth": node.depth,
-            node_hue: node.__getattribute__(node_hue),
         }
+        if node_hue is not None:
+            node_df[node.name][node_hue] = node.__getattribute__(node_hue)
     node_df = pd.DataFrame(node_df).T
 
     edge_df = []

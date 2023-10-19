@@ -5,4 +5,4 @@ RESULTS_PATH = RESULTS_PATH / "results"
 
 FIG_PATH = RESULTS_PATH / "figs"
 
-OUT_PATH = RESULTS_PATH / "outputs"
+OUT_PATH = RESULTS_PATH / "outs"
