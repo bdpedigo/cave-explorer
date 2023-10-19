@@ -1,8 +1,12 @@
 import networkx as nx
 import pandas as pd
-import tqdm
+from requests import HTTPError
+from tqdm import tqdm
 
-from ..utils import get_all_nodes_edges
+from neuropull.graph import NetworkFrame
+
+from ..utils import get_all_nodes_edges, get_level2_nodes_edges
+from .lineage import get_lineage_tree
 
 
 def get_changed_edges(before_edges, after_edges):
@@ -74,12 +78,16 @@ def combine_deltas(deltas):
     )
 
 
-def get_network_changes(root_id, client, filtered=True):
+def get_network_edits(root_id, client, filtered=True, verbose=True):
     change_log = get_detailed_change_log(root_id, client, filtered=filtered)
 
     edit_lineage_graph = nx.DiGraph()
     networkdeltas_by_operation = {}
-    for operation_id in tqdm(change_log.index):
+    for operation_id in tqdm(
+        change_log.index,
+        desc="Finding network changes for each edit",
+        disable=not verbose,
+    ):
         row = change_log.loc[operation_id]
         is_merge = row["is_merge"]
         before_root_ids = row["before_root_ids"]
@@ -120,7 +128,7 @@ def get_network_changes(root_id, client, filtered=True):
     return networkdeltas_by_operation, edit_lineage_graph
 
 
-def get_network_metachanges(networkdeltas_by_operation, edit_lineage_graph):
+def get_network_metaedits(networkdeltas_by_operation, edit_lineage_graph):
     meta_operation_map = {}
     for i, component in enumerate(nx.weakly_connected_components(edit_lineage_graph)):
         subgraph = edit_lineage_graph.subgraph(component)
@@ -137,3 +145,33 @@ def get_network_metachanges(networkdeltas_by_operation, edit_lineage_graph):
         networkdeltas_by_meta_operation[meta_operation_id] = meta_networkdelta
 
     return networkdeltas_by_meta_operation, meta_operation_map
+
+
+def find_supervoxel_component(supervoxel: int, nf: NetworkFrame, client):
+    supervoxel_l2_id = client.chunkedgraph.get_root_id(supervoxel, level2=True)
+    for component in nf.connected_components():
+        if supervoxel_l2_id in component.nodes.index:
+            return component
+    return None
+
+
+def get_initial_network(root_id, client, positions=False):
+    lineage_root = get_lineage_tree(root_id, client, flip=True, order="edits")
+    all_nodes = []
+    all_edges = []
+    for leaf in tqdm(
+        lineage_root.leaves, desc="Finding all L2 components for lineage leaves"
+    ):
+        leaf_id = leaf.name
+        try:
+            nodes, edges = get_level2_nodes_edges(leaf_id, client, positions=positions)
+        except HTTPError:
+            print("HTTPError on node", leaf_id)
+            continue
+        all_nodes.append(nodes)
+        all_edges.append(edges)
+    all_nodes = pd.concat(all_nodes, axis=0)
+    all_edges = pd.concat(all_edges, axis=0, ignore_index=True)
+
+    nf = NetworkFrame(all_nodes, all_edges)
+    return nf
