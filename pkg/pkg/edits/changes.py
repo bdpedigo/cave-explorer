@@ -30,7 +30,20 @@ def get_detailed_change_log(root_id, client, filtered=True):
     change_log.sort_values("timestamp", inplace=True)
     change_log.drop(columns=["timestamp"], inplace=True)
 
-    details = cg.get_operation_details(change_log.index.to_list())
+    try:
+        chunk_size = 500  # not sure exactly what the limit is
+        details = {}
+        for i in range(0, len(change_log), chunk_size):
+            sub_details = cg.get_operation_details(
+                change_log.index[i : i + chunk_size].to_list()
+            )
+            details.update(sub_details)
+        assert len(details) == len(change_log)
+        # details = cg.get_operation_details(change_log.index.to_list())
+    except HTTPError:
+        raise HTTPError(
+            f"Oopsies, requested details for {chunk_size} operations at once and failed :("
+        )
     details = pd.DataFrame(details).T
     details.index.name = "operation_id"
     details.index = details.index.astype(int)

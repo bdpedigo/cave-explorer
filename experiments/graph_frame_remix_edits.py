@@ -4,7 +4,7 @@ import time
 
 t0 = time.time()
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import caveclient as cc
 import numpy as np
@@ -35,6 +35,8 @@ nuc = client.materialize.query_table("nucleus_detection_v0").set_index("id")
 # i = 14
 
 i = 6  # this one works
+# 18 breaks on link too big
+i = 18
 
 target_id = meta.iloc[i]["target_id"]
 root_id = nuc.loc[target_id]["pt_root_id"]
@@ -58,23 +60,25 @@ print()
 
 # %%
 
-
+print("Pulling initial state of the network")
 nf = get_initial_network(root_id, client, positions=False)
+print()
+print()
 
 metaedit_ids = np.array(list(networkdeltas_by_meta_operation.keys()))
 random_metaedit_ids = np.random.permutation(metaedit_ids)
-
 for metaedit_id in tqdm(random_metaedit_ids, desc="Playing meta-edits in random order"):
     delta = networkdeltas_by_meta_operation[metaedit_id]
     nf.add_nodes(delta.added_nodes, inplace=True)
     nf.add_edges(delta.added_edges, inplace=True)
     nf.remove_nodes(delta.removed_nodes, inplace=True)
     nf.remove_edges(delta.removed_edges, inplace=True)
+print()
 
 # %%
+
 print("Finding final fragment with nucleus attached")
 nuc_supervoxel = nuc.loc[target_id, "pt_supervoxel_id"]
-
 
 nuc_nf = find_supervoxel_component(nuc_supervoxel, nf, client)
 print()
@@ -89,6 +93,6 @@ print("L2 graphs match?", root_nf == nuc_nf)
 print()
 
 # %%
-delta = datetime.timedelta(seconds=time.time() - t0)
+delta = timedelta(seconds=time.time() - t0)
 print("Time elapsed: ", delta)
 print()
