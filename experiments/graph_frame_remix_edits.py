@@ -4,7 +4,7 @@ import time
 
 t0 = time.time()
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import caveclient as cc
 import numpy as np
@@ -34,9 +34,8 @@ nuc = client.materialize.query_table("nucleus_detection_v0").set_index("id")
 # i = 2#
 # i = 14
 
+# i = 23
 i = 6  # this one works
-# 18 breaks on link too big
-i = 18
 
 target_id = meta.iloc[i]["target_id"]
 root_id = nuc.loc[target_id]["pt_root_id"]
