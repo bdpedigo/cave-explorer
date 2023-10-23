@@ -23,6 +23,8 @@ nglui = "^2.14.3"
 ipython = ">8.16.0"
 neuropull = {path = "../neuropull", develop = true}
 ipykernel = "^6.25.2"
+navis = "^1.5.0"
+nbformat = ">=4.2.0"
 
 [tool.poetry.group.dev]
 optional = true

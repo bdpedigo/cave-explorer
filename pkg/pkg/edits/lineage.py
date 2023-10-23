@@ -3,7 +3,15 @@ import numpy as np
 from datetime import datetime
 
 
-def get_lineage_tree(root_id, client, flip=True, order=None):
+def get_lineage_tree(
+    root_id,
+    client,
+    flip=True,
+    order=None,
+    recurse=False,
+    timestamps=False,
+    labels=False,
+):
     cg = client.chunkedgraph
     lineage_graph_dict = cg.get_lineage_graph(root_id)
     links = lineage_graph_dict["links"]
@@ -40,6 +48,41 @@ def get_lineage_tree(root_id, client, flip=True, order=None):
             lineage_nodes[target].parent = lineage_nodes[source]
 
     root = lineage_nodes[root_id].root
+
+    for node in PreOrderIter(root):
+        if labels:
+            node.status = "internal"
+        if timestamps:
+            timestamp = cg.get_root_timestamps(node.name)[0]
+            pretty_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            node.timestamp = pretty_time
+
+    for node in root.leaves:
+        if labels:
+            node.status = "leaf"
+        if labels or recurse:
+            new_node = get_lineage_tree(
+                node.name, client, flip=flip, order=order, recurse=False, labels=False
+            )
+            if not new_node.is_leaf:
+                if labels:
+                    node.status = "truncation"
+                if recurse:
+                    # may need to go deeper if this node is not a leaf
+                    new_node = get_lineage_tree(
+                        node.name,
+                        client,
+                        flip=flip,
+                        order=order,
+                        labels=labels,
+                        recurse=True,
+                    )
+                    if flip:
+                        # replace children of this node with the children of the new node
+                        node.children = new_node.children
+                    else:
+                        # replace parent of this node with the parent of the new node
+                        node.parent = new_node.parent
 
     if order is not None:
         for node in PreOrderIter(root):

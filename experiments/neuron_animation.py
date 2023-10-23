@@ -58,8 +58,39 @@ root_id = client.chunkedgraph.get_latest_roots(root_id)[0]
 
 skeleton = pcg_skel.coord_space_skeleton(root_id, client)
 
+# %%
+skeleton.vertices
 
-#%%
+# %%
+skeleton.edges
+
+# %%
+skeleton.root
+
+# %%
+f = "test.swc"
+skeleton.export_to_swc(f)
+swc = pd.read_csv(f, sep=" ", header=None)
+swc.columns = ["node_id", "structure", "x", "y", "z", "radius", "parent_id"]
+
+# %%
+
+import navis
+
+tn = navis.TreeNeuron(swc)
+
+fig = navis.plot3d(tn, soma=False, inline=False)
+fig.update_layout(
+    template="plotly_white",
+    plot_bgcolor="rgba(1,1,0.5,0)",
+    scene=dict(
+        xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False)
+    ),
+)
+fig.show()
+
+
+# %%
 sk_actor = trimesh_vtk.skeleton_actor(skeleton, color=(0, 0, 0), line_width=5)
 
 # %%

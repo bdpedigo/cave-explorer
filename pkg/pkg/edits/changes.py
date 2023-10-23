@@ -1,4 +1,5 @@
 import networkx as nx
+import numpy as np
 import pandas as pd
 from requests import HTTPError
 from tqdm import tqdm
@@ -169,13 +170,13 @@ def find_supervoxel_component(supervoxel: int, nf: NetworkFrame, client):
 
 
 def get_initial_network(root_id, client, positions=False):
-    lineage_root = get_lineage_tree(root_id, client, flip=True, order="edits")
+    lineage_root = get_lineage_tree(
+        root_id, client, flip=True, order=None, recurse=True
+    )
+    leaves = np.unique([leaf.name for leaf in lineage_root.leaves])
     all_nodes = []
     all_edges = []
-    for leaf in tqdm(
-        lineage_root.leaves, desc="Finding all L2 components for lineage leaves"
-    ):
-        leaf_id = leaf.name
+    for leaf_id in tqdm(leaves, desc="Finding all L2 components for lineage leaves"):
         try:
             nodes, edges = get_level2_nodes_edges(leaf_id, client, positions=positions)
         except HTTPError:

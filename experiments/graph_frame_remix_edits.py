@@ -35,7 +35,8 @@ nuc = client.materialize.query_table("nucleus_detection_v0").set_index("id")
 # i = 14
 
 # i = 23
-i = 6  # this one works
+# i = 6  # this one works
+i = 4
 
 target_id = meta.iloc[i]["target_id"]
 root_id = nuc.loc[target_id]["pt_root_id"]
