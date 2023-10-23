@@ -1,3 +1,5 @@
+import json
+
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -55,13 +57,53 @@ def get_detailed_change_log(root_id, client, filtered=True):
 
 
 class NetworkDelta:
-    # TODO this is silly right now
-    # but would like to add logic for the composition of multiple deltas
-    def __init__(self, removed_nodes, added_nodes, removed_edges, added_edges):
+    def __init__(
+        self, removed_nodes, added_nodes, removed_edges, added_edges, metadata={}
+    ):
         self.removed_nodes = removed_nodes
         self.added_nodes = added_nodes
         self.removed_edges = removed_edges
         self.added_edges = added_edges
+        self.metadata = metadata
+
+    def __repr__(self):
+        rep = f"NetworkDelta(removed_nodes={self.removed_nodes.shape[0]}, "
+        rep += f"added_nodes={self.added_nodes.shape[0]}, "
+        rep += f"removed_edges={self.removed_edges.shape[0]}, "
+        rep += f"added_edges={self.added_edges.shape[0]}, "
+        rep += f"metadata={self.metadata}"
+        rep += ")"
+        return rep
+
+    def to_dict(self):
+        out = dict(
+            removed_nodes=self.removed_nodes.index.to_list(),
+            added_nodes=self.added_nodes.index.to_list(),
+            removed_edges=self.removed_edges.values.tolist(),
+            added_edges=self.added_edges.values.tolist(),
+            metadata=self.metadata,
+        )
+        return out
+
+    def to_json(self):
+        return json.dumps(self.to_dict())
+
+    @classmethod
+    def from_dict(cls, input):
+        removed_nodes = pd.DataFrame(index=input["removed_nodes"])
+        added_nodes = pd.DataFrame(index=input["added_nodes"])
+        removed_edges = pd.DataFrame(
+            input["removed_edges"], columns=["source", "target"]
+        )
+        added_edges = pd.DataFrame(input["added_edges"], columns=["source", "target"])
+        metadata = input["metadata"]
+        return cls(
+            removed_nodes, added_nodes, removed_edges, added_edges, metadata=metadata
+        )
+
+    @classmethod
+    def from_json(cls, input):
+        return cls.from_dict(json.loads(input))
 
 
 def combine_deltas(deltas):
@@ -128,8 +170,15 @@ def get_network_edits(root_id, client, filtered=True, verbose=True):
         )
 
         # keep track of what changed
+        metadata = dict(
+            operation_id=operation_id,
+            is_merge=bool(is_merge),
+            before_root_ids=before_root_ids,
+            after_root_ids=after_root_ids,
+            timestamp=row["timestamp"],
+        )
         networkdeltas_by_operation[operation_id] = NetworkDelta(
-            removed_nodes, added_nodes, removed_edges, added_edges
+            removed_nodes, added_nodes, removed_edges, added_edges, metadata=metadata
         )
 
         # summarize in edit lineage for L2 level
@@ -149,12 +198,16 @@ def get_network_metaedits(networkdeltas_by_operation, edit_lineage_graph):
         subgraph_operations = set()
         for _, _, data in subgraph.edges(data=True):
             subgraph_operations.add(data["operation_id"])
-        meta_operation_map[i] = subgraph_operations
+        meta_operation_map[i] = list(subgraph_operations)
 
     networkdeltas_by_meta_operation = {}
     for meta_operation_id, operation_ids in meta_operation_map.items():
         meta_networkdelta = combine_deltas(
             [networkdeltas_by_operation[operation_id] for operation_id in operation_ids]
+        )
+        meta_networkdelta.metadata = dict(
+            meta_operation_id=meta_operation_id,
+            operation_ids=operation_ids,
         )
         networkdeltas_by_meta_operation[meta_operation_id] = meta_networkdelta
 
@@ -169,14 +222,25 @@ def find_supervoxel_component(supervoxel: int, nf: NetworkFrame, client):
     return None
 
 
+def get_initial_node_ids(root_id, client):
+    lineage_g = client.chunkedgraph.get_lineage_graph(root_id, as_nx_graph=True)
+    node_in_degree = pd.Series(dict(lineage_g.in_degree()))
+    original_node_ids = node_in_degree[node_in_degree == 0].index
+    return original_node_ids
+
+
+# def get_initial_node_ids(root_id, client):
+#     root = get_lineage_tree(root_id, client, flip=True, recurse=True, labels=False)
+
+
 def get_initial_network(root_id, client, positions=False):
-    lineage_root = get_lineage_tree(
-        root_id, client, flip=True, order=None, recurse=True
-    )
-    leaves = np.unique([leaf.name for leaf in lineage_root.leaves])
+    original_node_ids = get_initial_node_ids(root_id, client)
+
     all_nodes = []
     all_edges = []
-    for leaf_id in tqdm(leaves, desc="Finding all L2 components for lineage leaves"):
+    for leaf_id in tqdm(
+        original_node_ids, desc="Finding L2 graphs for original segmentation objects"
+    ):
         try:
             nodes, edges = get_level2_nodes_edges(leaf_id, client, positions=positions)
         except HTTPError:
