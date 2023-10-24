@@ -44,29 +44,6 @@ target_id = meta.iloc[i]["target_id"]
 root_id = nuc.loc[target_id]["pt_root_id"]
 root_id = client.chunkedgraph.get_latest_roots(root_id)[0]
 
-# %%
-print("Pulling initial state of the network")
-nf = get_initial_network(root_id, client, positions=False)
-print()
-print()
-
-# %%
-from pkg.edits import get_lineage_tree, get_initial_node_ids
-
-initial_nodes1 = get_initial_node_ids(root_id, client)
-
-lintree = get_lineage_tree(
-    root_id, client, flip=True, recurse=False, labels=False, verbose=True
-)
-initial_nodes2 = np.unique([node.name for node in lintree.leaves])
-
-# %%
-union = np.union1d(initial_nodes1, initial_nodes2)
-intersection = np.intersect1d(initial_nodes1, initial_nodes2)
-len(intersection) / len(union)
-
-# %%
-initial_nodes1
 
 # %%
 
@@ -137,7 +114,14 @@ def apply_edit(network_frame, network_delta):
     network_frame.remove_edges(network_delta.removed_edges, inplace=True)
 
 
+print("Pulling initial state of the network")
+nf = get_initial_network(root_id, client, positions=False)
+print()
+print()
+
+
 metaedit_ids = np.array(list(networkdeltas_by_meta_operation.keys()))
+np.random.seed(1)
 random_metaedit_ids = np.random.permutation(metaedit_ids)
 for metaedit_id in tqdm(random_metaedit_ids, desc="Playing meta-edits in random order"):
     metaedit = networkdeltas_by_meta_operation[metaedit_id]
@@ -161,18 +145,6 @@ root_nf = NetworkFrame(root_nodes, root_edges)
 print("L2 graphs match?", root_nf == nuc_nf)
 print()
 
-# %%
-
-nuc_nf.edges
-
-# %%
-root_nf.edges
-
-# %%
-nuc_nf.nodes
-
-# %%
-root_nf.nodes
 
 # %%
 
