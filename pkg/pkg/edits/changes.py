@@ -191,7 +191,65 @@ def get_network_edits(root_id, client, filtered=True, verbose=True):
     return networkdeltas_by_operation, edit_lineage_graph
 
 
-def get_network_metaedits(networkdeltas_by_operation, edit_lineage_graph):
+def get_network_metaedits(networkdeltas_by_operation):
+    # find the nodes that are modified in any way by each operation
+    mod_sets = {}
+    for edit_id, delta in networkdeltas_by_operation.items():
+        mod_set = []
+        mod_set += delta.added_nodes.index.tolist()
+        mod_set += delta.removed_nodes.index.tolist()
+        mod_set += delta.added_edges["source"].tolist()
+        mod_set += delta.added_edges["target"].tolist()
+        mod_set += delta.removed_edges["source"].tolist()
+        mod_set += delta.removed_edges["target"].tolist()
+        mod_set = np.unique(mod_set)
+        mod_sets[edit_id] = mod_set
+
+    # make an incidence matrix of which nodes are modified by which operations
+    index = np.unique(np.concatenate(list(mod_sets.values())))
+    node_edit_indicators = pd.DataFrame(
+        index=index, columns=networkdeltas_by_operation.keys(), data=False
+    )
+    for edit_id, mod_set in mod_sets.items():
+        node_edit_indicators.loc[mod_set, edit_id] = True
+
+    # this inner product matrix tells us which operations are connected with at least
+    # one overlapping node in common
+    X = node_edit_indicators.values.astype(int)
+    product = X.T @ X
+    product = pd.DataFrame(
+        index=node_edit_indicators.columns,
+        columns=node_edit_indicators.columns,
+        data=product,
+    )
+
+    # meta-operations are connected components according to the above graph
+    from scipy.sparse.csgraph import connected_components
+
+    _, labels = connected_components(product.values, directed=False)
+
+    meta_operation_map = {}
+    for label in np.unique(labels):
+        meta_operation_map[label] = node_edit_indicators.columns[
+            labels == label
+        ].tolist()
+
+    # for each meta-operation, combine the deltas of the operations that make it up
+    networkdeltas_by_meta_operation = {}
+    for meta_operation_id, operation_ids in meta_operation_map.items():
+        meta_networkdelta = combine_deltas(
+            [networkdeltas_by_operation[operation_id] for operation_id in operation_ids]
+        )
+        meta_networkdelta.metadata = dict(
+            meta_operation_id=meta_operation_id,
+            operation_ids=operation_ids,
+        )
+        networkdeltas_by_meta_operation[meta_operation_id] = meta_networkdelta
+
+    return networkdeltas_by_meta_operation, meta_operation_map
+
+
+def _get_network_metaedits(networkdeltas_by_operation, edit_lineage_graph):
     meta_operation_map = {}
     for i, component in enumerate(nx.weakly_connected_components(edit_lineage_graph)):
         subgraph = edit_lineage_graph.subgraph(component)
