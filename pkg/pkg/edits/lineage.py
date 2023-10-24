@@ -1,6 +1,7 @@
 from anytree import Node, PreOrderIter
 import numpy as np
 from datetime import datetime
+from tqdm import tqdm
 
 
 def get_lineage_tree(
@@ -11,6 +12,7 @@ def get_lineage_tree(
     recurse=False,
     timestamps=False,
     labels=False,
+    verbose=False,
 ):
     cg = client.chunkedgraph
     lineage_graph_dict = cg.get_lineage_graph(root_id)
@@ -57,7 +59,11 @@ def get_lineage_tree(
             pretty_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
             node.timestamp = pretty_time
 
-    for node in root.leaves:
+    for node in tqdm(
+        root.leaves,
+        desc="Checking leaf nodes for truncation",
+        disable=(not verbose) or (not labels and not recurse),
+    ):
         if labels:
             node.status = "leaf"
         if labels or recurse:
