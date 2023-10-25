@@ -137,7 +137,6 @@ def combine_deltas(deltas):
 def get_network_edits(root_id, client, filtered=True, verbose=True):
     change_log = get_detailed_change_log(root_id, client, filtered=filtered)
 
-    edit_lineage_graph = nx.DiGraph()
     networkdeltas_by_operation = {}
     for operation_id in tqdm(
         change_log.index,
@@ -181,14 +180,7 @@ def get_network_edits(root_id, client, filtered=True, verbose=True):
             removed_nodes, added_nodes, removed_edges, added_edges, metadata=metadata
         )
 
-        # summarize in edit lineage for L2 level
-        for node1 in removed_nodes.index:
-            for node2 in added_nodes.index:
-                edit_lineage_graph.add_edge(
-                    node1, node2, operation_id=operation_id, is_merge=is_merge
-                )
-
-    return networkdeltas_by_operation, edit_lineage_graph
+    return networkdeltas_by_operation
 
 
 def get_network_metaedits(networkdeltas_by_operation):
@@ -285,10 +277,6 @@ def get_initial_node_ids(root_id, client):
     node_in_degree = pd.Series(dict(lineage_g.in_degree()))
     original_node_ids = node_in_degree[node_in_degree == 0].index
     return original_node_ids
-
-
-# def get_initial_node_ids(root_id, client):
-#     root = get_lineage_tree(root_id, client, flip=True, recurse=True, labels=False)
 
 
 def get_initial_network(root_id, client, positions=False):
