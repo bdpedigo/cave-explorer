@@ -4,11 +4,13 @@ import time
 
 t0 = time.time()
 
-from datetime import timedelta
-
 import caveclient as cc
+import navis
 import numpy as np
+import pandas as pd
+import plotly.graph_objs as go
 from cloudfiles import CloudFiles
+from meshparty import skeletonize, trimesh_io
 from pkg.edits import (
     NetworkDelta,
     find_supervoxel_component,
@@ -16,11 +18,12 @@ from pkg.edits import (
     get_network_edits,
     get_network_metaedits,
 )
-from pkg.paths import OUT_PATH
-from pkg.utils import get_level2_nodes_edges
+from pkg.paths import OUT_PATH, FIG_PATH
+from plotly.subplots import make_subplots
 from tqdm.autonotebook import tqdm
 
-from neuropull.graph import NetworkFrame
+import pcg_skel.skel_utils as sk_utils
+from pcg_skel.chunk_tools import build_spatial_graph
 
 # %%
 recompute = False
@@ -38,7 +41,7 @@ meta = meta.sort_values("target_id")
 nuc = client.materialize.query_table("nucleus_detection_v0").set_index("id")
 
 # %%
-i = 6
+i = 8
 target_id = meta.iloc[i]["target_id"]
 root_id = nuc.loc[target_id]["pt_root_id"]
 root_id = client.chunkedgraph.get_latest_roots(root_id)[0]
@@ -119,13 +122,6 @@ nf = get_initial_network(root_id, client, positions=False)
 print()
 
 # %%
-import pandas as pd
-from pcg_skel.chunk_tools import build_spatial_graph
-import pcg_skel.skel_utils as sk_utils
-from meshparty import trimesh_io
-from meshparty import skeletonize
-import navis
-from tqdm import tqdm
 
 metaedit_ids = pd.Series(list(networkdeltas_by_meta_operation.keys()))
 nuc_supervoxel = nuc.loc[target_id, "pt_supervoxel_id"]
@@ -171,13 +167,20 @@ def skeleton_to_treeneuron(skeleton):
 
 skeleton_samples = {}
 treeneuron_samples = {}
-n_samples = 3
+n_samples = 15
 n_steps = 4
-edit_proportions = np.linspace(0, 1, n_steps + 2)[1:-1]
-n_total = n_samples * n_steps
+edit_proportions = np.round(np.linspace(0, 1, n_steps + 2)[1:-1], 2)
+edit_proportions = list(edit_proportions) + [1]
+
+use_cc = True
+n_total = n_samples * n_steps + 1
 with tqdm(total=n_total, desc="Sampling skeletonized fragments") as pbar:
     for edit_proportion in edit_proportions:
-        for i in range(n_samples):
+        if edit_proportion == 1:
+            n_samples_ = 1
+        else:
+            n_samples_ = n_samples
+        for i in range(n_samples_):
             selected_edits = metaedit_ids.sample(frac=edit_proportion, replace=False)
 
             # do the editing
@@ -187,22 +190,28 @@ with tqdm(total=n_total, desc="Sampling skeletonized fragments") as pbar:
                 apply_edit(this_nf, metaedit)
 
             # deal with the result
-            nuc_nf = find_supervoxel_component(nuc_supervoxel, this_nf, client)
+            if use_cc:
+                largest_cc = None
+                largest_cc_size = 0
+                for component in this_nf.connected_components():
+                    if len(component.nodes) > largest_cc_size:
+                        largest_cc = component
+                        largest_cc_size = len(component.nodes)
+                nuc_nf = largest_cc
+            else:
+                nuc_nf = find_supervoxel_component(nuc_supervoxel, this_nf, client)
             skeleton = skeletonize_networkframe(nuc_nf)
             skeleton_samples[(edit_proportion, i)] = skeleton
             treeneuron = skeleton_to_treeneuron(skeleton)
             treeneuron_samples[(edit_proportion, i)] = treeneuron
-            print(treeneuron.n_nodes)
             pbar.update(1)
+
 
 # %%
 
-import plotly.graph_objs as go
-from plotly.subplots import make_subplots
 
-
-n_rows = n_samples
-n_cols = len(edit_proportions)
+n_rows = 3
+n_cols = len(edit_proportions) - 1
 specs = n_rows * [n_cols * [{"type": "scene"}]]
 fig = make_subplots(
     rows=n_rows,
@@ -218,8 +227,8 @@ fig = make_subplots(
     y_title="Sample",
 )
 
-for i, edit_proportion in enumerate(edit_proportions):
-    for j in range(n_samples):
+for i, edit_proportion in enumerate(edit_proportions[:-1]):
+    for j in range(n_rows):
         treeneuron = treeneuron_samples[(edit_proportion, j)]
         fake_fig = go.Figure()
         navis.plot3d(treeneuron, fig=fake_fig, soma=False, inline=False)
@@ -230,7 +239,6 @@ fig.update_layout(
     showlegend=False,
     template="plotly_white",
     plot_bgcolor="rgba(1,1,1,0)",
-
 )
 
 fig.update_scenes(
@@ -242,25 +250,106 @@ fig.update_scenes(
 )
 
 fig.show()
+fig.write_html(
+    FIG_PATH
+    / "replay_some_edits"
+    / f"skeleton_samples_root_id={root_id}_use_cc={use_cc}.html"
+)
 
 # %%
 
+# TODO add soma to the computations in order to easily get some of the other features
+# described in the Gouwens et al 2019 paper (supplemental table 2).
+
+# TODO will also somehow need to get axon dendrite stuff in there
+
+# TODO also think about the logic for only "clean" neurons
+
+
+def compute_height(treeneuron):
+    return treeneuron.extents[1]
+
+
+def compute_width(treeneuron):
+    return treeneuron.extents[0]
+
+
+def compute_n_branches(treeneuron):
+    return len(treeneuron.branch_points)
+
+
+def compute_total_length(treeneuron):
+    return treeneuron.cable_length
+
+
+def compute_features(treeneuron):
+    out = {
+        "height": compute_height(treeneuron),
+        "width": compute_width(treeneuron),
+        "n_branches": compute_n_branches(treeneuron),
+        "total_length": compute_total_length(treeneuron),
+    }
+    return pd.Series(out)
+
+
+feature_df = []
+for edit_proportion in edit_proportions:
+    if edit_proportion == 1:
+        n_samples_ = 1
+    else:
+        n_samples_ = n_samples
+    for i in range(n_samples_):
+        treeneuron = treeneuron_samples[(edit_proportion, i)]
+        features = compute_features(treeneuron)
+        features["edit_proportion"] = edit_proportion
+        features["sample"] = i
+        feature_df.append(features)
+feature_df = pd.DataFrame(feature_df)
+feature_df
 
 # %%
-random_metaedit_ids = np.random.permutation(metaedit_ids)
-for metaedit_id in tqdm(random_metaedit_ids, desc="Playing meta-edits in random order"):
-    metaedit = networkdeltas_by_meta_operation[metaedit_id]
-    apply_edit(nf, metaedit)
-print()
+import seaborn as sns
+import matplotlib.pyplot as plt
+import seaborn.objects as so
 
-print("Finding final fragment with nucleus attached")
-nuc_supervoxel = nuc.loc[target_id, "pt_supervoxel_id"]
 
-nuc_nf = find_supervoxel_component(nuc_supervoxel, nf, client)
-print()
+def nice_labeler(x):
+    x = str.capitalize(x)
+    x = x.replace("_", " ")
+    x = x.replace("N ", "# ")
+    return x
 
-root_nodes, root_edges = get_level2_nodes_edges(root_id, client, positions=False)
-root_nf = NetworkFrame(root_nodes, root_edges)
 
-assert root_nf == nuc_nf
-print()
+sns.set_context("talk", font_scale=1)
+fig, axs = plt.subplots(2, 2, figsize=(10, 10), constrained_layout=True)
+sns.despine(fig, offset=25)
+
+vars = ["height", "width", "n_branches", "total_length"]
+
+for i, var in enumerate(vars):
+    plot = (
+        so.Plot(
+            data=feature_df,
+            x="edit_proportion",
+            y=var,
+            color="edit_proportion",
+        )
+        .on(axs.flat[i])
+        .add(so.Dots(fill=True, fillalpha=1), so.Jitter(0.3))
+        .add(so.Dash(width=0.5, linewidth=3), so.Agg(np.mean))
+        .scale(color="flare", x=so.Nominal())
+        .label(x=nice_labeler, y=nice_labeler)
+        .share(x=True)
+    )
+    plot.plot()
+
+
+[fig.legends[i].set_visible(False) for i in range(4)]
+
+
+plt.savefig(
+    FIG_PATH
+    / "replay_some_edits"
+    / f"feature_samples_root_id={root_id}_use_cc={use_cc}.png",
+    dpi=300,
+)
