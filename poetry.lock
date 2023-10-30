@@ -3626,7 +3626,7 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "1.1"
 python-versions = "3.11.*"
-content-hash = "a51eabb7c78ccbd412d74321a7fe3405daf417a8fe66330caed31e39459eebc9"
+content-hash = "1a65b1c6ae1f445a761adcce4d1f7b55b0bbcf774c6e896869854cc6259b9d6f"
 
 [metadata.files]
 alabaster = [
