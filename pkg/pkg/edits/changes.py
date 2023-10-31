@@ -299,3 +299,39 @@ def get_initial_network(root_id, client, positions=False):
 
     nf = NetworkFrame(all_nodes, all_edges)
     return nf
+
+
+def get_supervoxel_level2_map(root_id, networkdeltas_by_operation, client):
+    ever_referenced_level2_ids = []
+
+    nf = get_initial_network(root_id, client, positions=False)
+    ever_referenced_level2_ids.extend(nf.nodes.index)
+
+    for edit in networkdeltas_by_operation.values():
+        ever_referenced_level2_ids.extend(edit.added_nodes)
+
+    supervoxel_map = []
+    for l2_id in tqdm(
+        ever_referenced_level2_ids, desc="Getting supervoxel -> level 2 map"
+    ):
+        supervoxels = client.chunkedgraph.get_children(l2_id)
+        this_map = pd.Series(index=supervoxels, data=l2_id)
+        supervoxel_map.append(this_map)
+    supervoxel_map = pd.concat(supervoxel_map)
+
+    if supervoxel_map.index.duplicated().any():
+        raise UserWarning("WARNING: supervoxel -> level 2 map has duplicates")
+
+    return supervoxel_map
+
+
+def apply_edit(network_frame, network_delta):
+    network_frame.add_nodes(network_delta.added_nodes, inplace=True)
+    network_frame.add_edges(network_delta.added_edges, inplace=True)
+    network_frame.remove_nodes(network_delta.removed_nodes, inplace=True)
+    network_frame.remove_edges(network_delta.removed_edges, inplace=True)
+
+
+def apply_additions(network_frame, network_delta):
+    network_frame.add_nodes(network_delta.added_nodes, inplace=True)
+    network_frame.add_edges(network_delta.added_edges, inplace=True)

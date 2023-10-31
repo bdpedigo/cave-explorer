@@ -123,3 +123,9 @@ def get_all_nodes_edges(root_ids, client, positions=False):
     return all_nodes, all_edges
 
 
+def integerize_dict_keys(dictionary):
+    return {int(k): v for k, v in dictionary.items()}
+
+
+def stringize_dict_keys(dictionary):
+    return {str(k): v for k, v in dictionary.items()}
