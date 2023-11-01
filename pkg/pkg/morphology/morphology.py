@@ -52,6 +52,15 @@ def skeleton_to_treeneuron(skeleton: Skeleton):
     return tn
 
 
+def get_soma_row(
+    object_id, client, nuc_table="nucleus_detection_lookup_v1", id_col="pt_root_id"
+):
+    row = client.materialize.query_view(
+        nuc_table, filter_equal_dict={id_col: object_id}
+    )
+    return row
+
+
 def get_soma_point(
     object_id,
     client,
@@ -59,9 +68,7 @@ def get_soma_point(
     id_col="pt_root_id",
     soma_point_resolution=[4, 4, 40],
 ):
-    row = client.materialize.query_view(
-        nuc_table, filter_equal_dict={id_col: object_id}
-    )
+    row = get_soma_row(object_id, client, nuc_table, id_col)
     soma_point = row["pt_position"].values[0]
     soma_point_resolution = np.array(soma_point_resolution)
     soma_point = np.array(soma_point) * soma_point_resolution

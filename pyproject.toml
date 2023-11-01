@@ -6,7 +6,7 @@ authors = ["Ben Pedigo <ben.pedigo@alleninstitute.org>"]
 
 [tool.poetry.dependencies]
 python = "3.11.*"
-scikit-learn = "^1.3.1"
+scikit-learn = "1.2.2"
 caveclient = "^5.11.0"
 graspologic = "^3.3.0"
 matplotlib-venn = "^0.11.9"
@@ -14,7 +14,7 @@ urllib3 = "^1.26.17"
 brotlicffi = "^1.1.0.0"
 cloud-volume = "^8.27.0"
 meshparty = "^1.16.14"
-pcg-skel = "^0.3.4"
+pcg-skel = {path = "../pcg_skel", develop = true}
 skeleton-plot = {path = "../skeleton_plot", develop = true}
 graphviz = "^0.20.1"
 Jinja2 = ">=3.1.2"
@@ -27,6 +27,9 @@ navis = "^1.5.0"
 nbformat = ">=4.2.0"
 sphinx-rtd-theme = "^1.3.0"
 POT = "^0.9.1"
+axon-id = {path = "../axon_id", develop = true}
+apical-classifier = {path = "../apical_classifier", develop = true}
+Cython = "<3.0.0"
 
 [tool.poetry.group.dev]
 optional = true

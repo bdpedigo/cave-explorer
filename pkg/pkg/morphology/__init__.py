@@ -1,2 +1,7 @@
-from .morphology import skeletonize_networkframe, skeleton_to_treeneuron, get_soma_point
-from .synapses import get_pre_post_synapses, map_synapses, apply_synapses_to_meshwork
+from .morphology import (
+    get_soma_point,
+    get_soma_row,
+    skeleton_to_treeneuron,
+    skeletonize_networkframe,
+)
+from .synapses import apply_synapses_to_meshwork, get_pre_post_synapses, map_synapses
