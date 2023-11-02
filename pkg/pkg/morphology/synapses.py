@@ -45,7 +45,7 @@ def map_synapses(pre_synapses, post_synapses, supervoxel_map, l2dict_mesh):
     return tuple(outs)
 
 
-def apply_synapses_to_meshwork(meshwork, pre_synapses, post_synapses, overwrite=True):
+def apply_synapses(meshwork, pre_synapses, post_synapses, overwrite=True):
     # apply these synapse -> mesh index mappings to the meshwork
     for side, synapses in zip(["pre", "post"], [pre_synapses, post_synapses]):
         meshwork.anno.add_annotations(
