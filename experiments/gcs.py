@@ -1,12 +1,20 @@
+# %%
+from cloudfiles import CloudFiles
 from google.cloud import storage
-from google.cloud.exceptions import NotFound, Forbidden
+from google.cloud.exceptions import Forbidden, NotFound
+
+out_path = "allen-minnie-phase3/edit_info"
+cf = CloudFiles("gs://" + out_path)
+
+test_json = {"test": "hello world"}
+cf.put_json("test.json", test_json)
 
 
+# %%
 def test_storage_permissions():
     # Replace 'your-project-id' and 'your-bucket-name' with your actual project ID and bucket name
     project_id = "em-270621"
     bucket_name = "allen-minnie-phase3"
-    
 
     # Create a storage client
     storage_client = storage.Client(project=project_id)
