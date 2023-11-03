@@ -9,7 +9,6 @@ from tqdm import tqdm
 from neuropull.graph import NetworkFrame
 
 from ..utils import get_all_nodes_edges, get_level2_nodes_edges
-from .lineage import get_lineage_tree
 
 
 def get_changed_edges(before_edges, after_edges):
@@ -325,7 +324,7 @@ def get_supervoxel_level2_map(root_id, networkdeltas_by_operation, client):
     return supervoxel_map
 
 
-def apply_edit(network_frame, network_delta):
+def apply_edit(network_frame: NetworkFrame, network_delta):
     network_frame.add_nodes(network_delta.added_nodes, inplace=True)
     network_frame.add_edges(network_delta.added_edges, inplace=True)
     network_frame.remove_nodes(network_delta.removed_nodes, inplace=True)
@@ -335,3 +334,23 @@ def apply_edit(network_frame, network_delta):
 def apply_additions(network_frame, network_delta):
     network_frame.add_nodes(network_delta.added_nodes, inplace=True)
     network_frame.add_edges(network_delta.added_edges, inplace=True)
+
+
+def get_level2_lineage_components(networkdeltas_by_operation):
+    graph = nx.DiGraph()
+
+    for operation_id, delta in networkdeltas_by_operation.items():
+        for node1 in delta.removed_nodes.index:
+            for node2 in delta.added_nodes.index:
+                graph.add_edge(node1, node2, operation_id=operation_id)
+
+    level2_lineage_components = list(nx.weakly_connected_components(graph))
+
+    level2_lineage_component_map = {}
+    for i, component in enumerate(level2_lineage_components):
+        for node in component:
+            level2_lineage_component_map[node] = i
+
+    level2_lineage_component_map = pd.Series(level2_lineage_component_map)
+
+    return level2_lineage_component_map

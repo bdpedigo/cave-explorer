@@ -11,7 +11,6 @@ from pkg.edits import (
     apply_edit,
     get_initial_network,
     lazy_load_network_edits,
-    lazy_load_supervoxel_level2_map,
 )
 from pkg.morphology import (
     apply_compartments,
@@ -59,9 +58,9 @@ networkdeltas_by_operation, networkdeltas_by_meta_operation = lazy_load_network_
 # %%
 
 
-nf = get_initial_network(root_id, client, positions="lazy")
+nf = get_initial_network(root_id, client, positions=True)
 
-#%%
+# %%
 for metaedit_id, metaedit in tqdm(
     networkdeltas_by_meta_operation.items(), desc="Playing meta-edits"
 ):
@@ -73,21 +72,67 @@ skeleton, mesh, l2dict_mesh, l2dict_r_mesh = skeletonize_networkframe(
     nf, client, soma_pt=soma_point
 )
 
-
 nrn = meshwork.Meshwork(mesh, seg_id=root_id, skeleton=skeleton)
 features.add_lvl2_ids(nrn, l2dict_mesh)
 
-
 plot_mw_skel(nrn, plot_postsyn=False, plot_presyn=False, plot_soma=True)
 
+# %%
 
-supervoxel_level2_map = lazy_load_supervoxel_level2_map(
-    root_id, networkdeltas_by_operation, client
-)
+from pkg.edits.changes import get_level2_lineage_components
+from pkg.morphology.synapses import map_synapse_level2_ids
 
 pre_synapses, post_synapses = get_pre_post_synapses(root_id, client)
+
+level2_lineage_component_map = get_level2_lineage_components(networkdeltas_by_operation)
+
+# %%
+import pandas as pd
+
+synapses = post_synapses
+side = "post"
+verbose = True
+
+
+
+# %%
+for idx, row in pre_synapses.iterrows():
+    current_l2 = row["pre_pt_current_level2_id"]
+
+    # this means that that level2 node was never part of a merge or split
+    # therefore we can safely keep the current mapping from supervoxel to level2 ID
+    if current_l2 in level2_lineage_component_map:
+        print(idx)
+        break
+
+# %%
+
+side = "pre"
+idx = 36
+supervoxel = pre_synapses.loc[idx][f"{side}_pt_supervoxel_id"]
+current_l2 = client.chunkedgraph.get_roots([supervoxel], stop_layer=2)[0]
+current_l2 in level2_lineage_component_map.index
+component = level2_lineage_component_map[current_l2]
+
+candidate_level2_ids = level2_lineage_component_map[
+    level2_lineage_component_map == component
+].index
+
+candidate_level2_ids = candidate_level2_ids[candidate_level2_ids.isin(nf.nodes.index)]
+
+winning_level2_id = None
+for candidate_level2_id in candidate_level2_ids:
+    candidate_supervoxels = client.chunkedgraph.get_children(candidate_level2_id)
+    if supervoxel in candidate_supervoxels:
+        winning_level2_id = candidate_level2_id
+        break
+
+# %%
+map_synapse_level2_ids(pre_synapses, level2_lineage_component_map, "pre", client)
+
+# %%
 pre_synapses, post_synapses = map_synapses(
-    pre_synapses, post_synapses, supervoxel_level2_map, l2dict_mesh
+    pre_synapses, post_synapses, networkdeltas_by_operation, l2dict_mesh, client
 )
 apply_synapses(nrn, pre_synapses, post_synapses)
 
@@ -132,3 +177,5 @@ axs[0].plot(
 
 axs[0].set_title("Before compartment\nlabeling/masking")
 axs[1].set_title("After compartment\nlabeling/masking")
+
+# %%
