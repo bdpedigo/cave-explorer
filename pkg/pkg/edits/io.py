@@ -3,7 +3,14 @@ import os
 import pandas as pd
 from cloudfiles import CloudFiles
 
-from ..edits import NetworkDelta, get_network_edits, get_network_metaedits
+from neuropull.graph import NetworkFrame
+
+from ..edits import (
+    NetworkDelta,
+    get_initial_network,
+    get_network_edits,
+    get_network_metaedits,
+)
 from ..paths import OUT_PATH
 from .changes import get_supervoxel_level2_map
 
@@ -75,6 +82,22 @@ def lazy_load_network_edits(root_id, client):
         meta_operation_map[int(meta_operation_id)] = operation_ids
 
     return networkdeltas_by_operation, networkdeltas_by_meta_operation
+
+
+def lazy_load_initial_network(root_id, client, positions=True):
+    cloud, recompute = get_environment_variables()
+    cf = get_cloud_paths(cloud)
+
+    out_file = f"{root_id}_initial_network.json"
+    if not cf.exists(out_file) or recompute:
+        initial_network = get_initial_network(root_id, client, positions=positions)
+
+        cf.put_json(out_file, initial_network.to_dict())
+
+    initial_network_dict = cf.get_json(out_file)
+    initial_network = NetworkFrame.from_dict(initial_network_dict)
+
+    return initial_network
 
 
 def lazy_load_supervoxel_level2_map(root_id, networkdeltas_by_operation, client):

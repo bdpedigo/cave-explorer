@@ -9,7 +9,7 @@ import os
 import matplotlib.pyplot as plt
 from pkg.edits import (
     apply_edit,
-    get_initial_network,
+    lazy_load_initial_network,
     lazy_load_network_edits,
 )
 from pkg.morphology import (
@@ -41,11 +41,11 @@ synapse_table = client.info.get_datastack_info()["synapse_table"]
 
 # %%
 
-os.environ["SKEDITS_USE_CLOUD"] = "False"
+os.environ["SKEDITS_USE_CLOUD"] = "True"
 os.environ["SKEDITS_RECOMPUTE"] = "False"
 
 # %%
-i = 7
+i = 6
 target_id = meta.iloc[i]["target_id"]
 root_id = nuc.loc[target_id]["pt_root_id"]
 root_id = client.chunkedgraph.get_latest_roots(root_id)[0]
@@ -57,14 +57,15 @@ networkdeltas_by_operation, networkdeltas_by_meta_operation = lazy_load_network_
 
 # %%
 
+nf = lazy_load_initial_network(root_id, client, positions=True)
 
-nf = get_initial_network(root_id, client, positions=True)
 
 # %%
 for metaedit_id, metaedit in tqdm(
     networkdeltas_by_meta_operation.items(), desc="Playing meta-edits"
 ):
     apply_edit(nf, metaedit)
+
 
 
 soma_point = get_soma_point(root_id, client)
@@ -87,12 +88,10 @@ pre_synapses, post_synapses = get_pre_post_synapses(root_id, client)
 level2_lineage_component_map = get_level2_lineage_components(networkdeltas_by_operation)
 
 # %%
-import pandas as pd
 
 synapses = post_synapses
 side = "post"
 verbose = True
-
 
 
 # %%
@@ -136,7 +135,7 @@ pre_synapses, post_synapses = map_synapses(
 )
 apply_synapses(nrn, pre_synapses, post_synapses)
 
-
+# %%
 fig, axs = plt.subplots(
     1,
     2,

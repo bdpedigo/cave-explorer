@@ -1,7 +1,6 @@
 import time
 
 import pandas as pd
-from tqdm import tqdm
 
 from ..edits import get_level2_lineage_components
 
@@ -117,6 +116,10 @@ def map_synapse_level2_ids(
                 winning_level2_id = candidate_level2_id
                 synapses.loc[idx, f"{side}_pt_level2_id"] = winning_level2_id
                 break
+
+    assert synapses[f"{side}_pt_level2_id"].isna().sum() == 0
+
+    synapses[f"{side}_pt_level2_id"] = synapses[f"{side}_pt_level2_id"].astype(int)
 
 
 def map_synapses(

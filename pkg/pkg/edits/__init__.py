@@ -12,5 +12,9 @@ from .changes import (
     get_network_metaedits,
     get_supervoxel_level2_map,
 )
-from .io import lazy_load_network_edits, lazy_load_supervoxel_level2_map
+from .io import (
+    lazy_load_initial_network,
+    lazy_load_network_edits,
+    lazy_load_supervoxel_level2_map,
+)
 from .lineage import get_lineage_tree
