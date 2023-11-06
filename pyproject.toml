@@ -31,6 +31,7 @@ axon-id = {path = "../axon_id", develop = true}
 apical-classifier = {path = "../apical_classifier", develop = true}
 Cython = "<3.0.0"
 task-queue = "^2.13.0"
+tables = {git = "https://github.com/PyTables/PyTables"}
 
 [tool.poetry.group.dev]
 optional = true
