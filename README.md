@@ -1,2 +1,2 @@
-# cave-explorer
-Messing around with the CAVEclient for accessing connectome data.
+# skedits
+Examining the effect of proofreading on inferences in connectomics
