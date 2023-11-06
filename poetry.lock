@@ -2223,6 +2223,14 @@ six = "*"
 test = ["pytest", "pytest-cov", "scipy"]
 
 [[package]]
+name = "pbr"
+version = "5.11.1"
+description = "Python Build Reasonableness"
+category = "main"
+optional = false
+python-versions = ">=2.6"
+
+[[package]]
 name = "pcg-skel"
 version = "0.3.4"
 description = "Skeletonization using the pychunkedgraph"
@@ -3337,6 +3345,28 @@ py-cpuinfo = "*"
 doc = ["ipython", "numpydoc", "sphinx (>=1.1)", "sphinx-rtd-theme"]
 
 [[package]]
+name = "task-queue"
+version = "2.13.0"
+description = "Multithreaded cloud queue client."
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.dependencies]
+boto3 = "*"
+click = "*"
+gevent = "*"
+google-auth = ">=1.10.0"
+google-cloud-core = ">=1.1.0"
+numpy = ">=1.13.1"
+orjson = "*"
+pathos = "*"
+pbr = "*"
+requests = ">2,<3"
+tenacity = ">=8.0.1"
+tqdm = "*"
+
+[[package]]
 name = "tenacity"
 version = "8.2.3"
 description = "Retry code until it succeeds"
@@ -3669,7 +3699,7 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "1.1"
 python-versions = "3.11.*"
-content-hash = "75be4142aeea973abfe6301f511b35476bcfbca9a5fd80e1b8e2f5387ec4f6c5"
+content-hash = "19dc0353a0105bdbacb072a776da22cc7334eb078d554650a94cbd818ac74299"
 
 [metadata.files]
 alabaster = [
@@ -5782,6 +5812,10 @@ patsy = [
     {file = "patsy-0.5.3-py2.py3-none-any.whl", hash = "sha256:7eb5349754ed6aa982af81f636479b1b8db9d5b1a6e957a6016ec0534b5c86b7"},
     {file = "patsy-0.5.3.tar.gz", hash = "sha256:bdc18001875e319bc91c812c1eb6a10be4bb13cb81eb763f466179dca3b67277"},
 ]
+pbr = [
+    {file = "pbr-5.11.1-py2.py3-none-any.whl", hash = "sha256:567f09558bae2b3ab53cb3c1e2e33e726ff3338e7bae3db5dc954b3a44eef12b"},
+    {file = "pbr-5.11.1.tar.gz", hash = "sha256:aefc51675b0b533d56bb5fd1c8c6c0522fe31896679882e1c4c63d5e4a0fccb3"},
+]
 pcg-skel = []
 pexpect = [
     {file = "pexpect-4.8.0-py2.py3-none-any.whl", hash = "sha256:0b48a55dcb3c05f3329815901ea4fc1537514d6ba867a152b581d69ae3710937"},
@@ -6750,6 +6784,10 @@ tables = [
     {file = "tables-3.8.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:da3c96456c473fb977cf6dbca9e889710ac020df1fa5b9ebb7f676e83996337d"},
     {file = "tables-3.8.0-cp39-cp39-win_amd64.whl", hash = "sha256:72da9404094ef8277bf62fce8873e8dc141cee9a8763ec8e7080b2d0de206094"},
     {file = "tables-3.8.0.tar.gz", hash = "sha256:34f3fa2366ce20b18f1df573a77c1d27306ce1f2a41d9f9eff621b5192ea8788"},
+]
+task-queue = [
+    {file = "task-queue-2.13.0.tar.gz", hash = "sha256:bf10bc3c381ae9e6d015c9a267ea8f95a5248ef0625a81f411ed4ec41cd99e0a"},
+    {file = "task_queue-2.13.0-py3-none-any.whl", hash = "sha256:f115b8fb7e393eabfabf996790fbe44bc83366f502b3572c611b345b05cc25ac"},
 ]
 tenacity = [
     {file = "tenacity-8.2.3-py3-none-any.whl", hash = "sha256:ce510e327a630c9e1beaf17d42e6ffacc88185044ad85cf74c0a8887c6a0f88c"},
