@@ -29,7 +29,6 @@ sphinx-rtd-theme = "^1.3.0"
 POT = "^0.9.1"
 axon-id = {path = "../axon_id", develop = true}
 apical-classifier = {path = "../apical_classifier", develop = true}
-Cython = "<3.0.0"
 task-queue = "^2.13.0"
 tables = {git = "https://github.com/PyTables/PyTables"}
 

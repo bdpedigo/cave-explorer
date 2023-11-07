@@ -15,7 +15,7 @@ splits = change_log.query("~is_merge")
 
 splits["after_root_ids"].head()
 
-#%%
+# %%
 details = cg.get_operation_details(splits.index.to_list())
 details = pd.DataFrame(details).T
 details["roots"].head()

@@ -7,6 +7,7 @@ import pcg_skel
 
 client = cc.CAVEclient("minnie65_phase3_v1")
 
+# %%
 root_id = 864691135510015497
 
 change_log = client.chunkedgraph.get_change_log(root_id)
