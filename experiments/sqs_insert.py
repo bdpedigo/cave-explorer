@@ -12,6 +12,7 @@ def print_task(txt):
 
 
 tasks = (partial(print_task, i) for i in range(10))
+tasks = list(range(10))
 
 tq = TaskQueue("https://sqs.us-west-2.amazonaws.com/629034007606/ben-skedit")
 

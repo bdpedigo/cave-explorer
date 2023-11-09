@@ -9,7 +9,7 @@ from requests import HTTPError
 import pcg_skel
 
 
-def get_positions(nodelist, client, n_retries=1, retry_delay=5):
+def get_positions(nodelist, client, n_retries=2, retry_delay=10):
     nodelist = list(nodelist)
     l2stats = client.l2cache.get_l2data(nodelist, attributes=["rep_coord_nm"])
     nodes = pd.DataFrame(l2stats).T
