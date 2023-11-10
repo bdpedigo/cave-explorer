@@ -3,10 +3,9 @@ import json
 import networkx as nx
 import numpy as np
 import pandas as pd
+from neuropull.graph import NetworkFrame
 from requests import HTTPError
 from tqdm import tqdm
-
-from neuropull.graph import NetworkFrame
 
 from ..utils import get_all_nodes_edges, get_level2_nodes_edges
 
@@ -283,16 +282,19 @@ def get_initial_network(root_id, client, positions=False):
 
     all_nodes = []
     all_edges = []
+    had_error = False
     for leaf_id in tqdm(
         original_node_ids, desc="Finding L2 graphs for original segmentation objects"
     ):
         try:
             nodes, edges = get_level2_nodes_edges(leaf_id, client, positions=positions)
+            all_nodes.append(nodes)
+            all_edges.append(edges)
         except HTTPError:
-            print("HTTPError on node", leaf_id)
+            had_error = True
             continue
-        all_nodes.append(nodes)
-        all_edges.append(edges)
+    if had_error:
+        print("HTTPError on at least one leaf node, continuing...")
     all_nodes = pd.concat(all_nodes, axis=0)
     all_edges = pd.concat(all_edges, axis=0, ignore_index=True)
 
