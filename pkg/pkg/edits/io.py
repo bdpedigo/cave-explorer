@@ -2,7 +2,6 @@ import os
 
 import pandas as pd
 from cloudfiles import CloudFiles
-
 from neuropull.graph import NetworkFrame
 
 from ..edits import (
@@ -45,6 +44,7 @@ def lazy_load_network_edits(root_id, client):
             networkdelta_dicts[operation_id] = delta.to_dict()
 
         _ = cf.put_json(out_file, networkdelta_dicts)
+        assert cf.exists(out_file)
 
     networkdelta_dicts = cf.get_json(out_file)
     networkdeltas_by_operation = {}
@@ -67,7 +67,9 @@ def lazy_load_network_edits(root_id, client):
             out_meta_operation_map[str(meta_operation_id)] = operation_ids
 
         _ = cf.put_json(out_file, networkdelta_dicts)
+        assert cf.exists(out_file)
         _ = cf.put_json(f"{root_id}_meta_operation_map.json", out_meta_operation_map)
+        assert cf.exists(f"{root_id}_meta_operation_map.json")
 
     networkdelta_dicts = cf.get_json(out_file)
 
