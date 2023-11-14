@@ -277,7 +277,7 @@ def get_initial_node_ids(root_id, client):
     return original_node_ids
 
 
-def get_initial_network(root_id, client, positions=False):
+def get_initial_network(root_id, client, positions=False, verbose=True):
     original_node_ids = get_initial_node_ids(root_id, client)
 
     all_nodes = []
@@ -286,7 +286,7 @@ def get_initial_network(root_id, client, positions=False):
     for leaf_id in tqdm(
         original_node_ids,
         desc="Finding L2 graphs for original segmentation objects",
-        disable=True,
+        disable=not verbose,
     ):
         try:
             nodes, edges = get_level2_nodes_edges(leaf_id, client, positions=positions)

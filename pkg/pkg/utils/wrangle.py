@@ -3,10 +3,11 @@ from time import sleep
 import numpy as np
 import pandas as pd
 import pcg_skel
+from caveclient import CAVEclient
 from requests import HTTPError
 
 
-def get_positions(nodelist, client, n_retries=2, retry_delay=10):
+def get_positions(nodelist, client: CAVEclient, n_retries=2, retry_delay=10):
     nodelist = list(nodelist)
     l2stats = client.l2cache.get_l2data(nodelist, attributes=["rep_coord_nm"])
     nodes = pd.DataFrame(l2stats).T
@@ -35,7 +36,7 @@ def get_positions(nodelist, client, n_retries=2, retry_delay=10):
     return nodes
 
 
-def get_level2_nodes_edges(root_id, client, positions=True):
+def get_level2_nodes_edges(root_id: int, client: CAVEclient, positions=True):
     try:
         edgelist = client.chunkedgraph.level2_chunk_graph(root_id)
         nodelist = set()
@@ -69,7 +70,7 @@ def get_level2_nodes_edges(root_id, client, positions=True):
     return nodes, edges
 
 
-def get_skeleton_nodes_edges(root_id, client):
+def get_skeleton_nodes_edges(root_id: int, client: CAVEclient):
     final_meshwork = pcg_skel.coord_space_meshwork(
         root_id,
         client=client,
@@ -108,7 +109,7 @@ def pt_to_xyz(pts):
     return positions
 
 
-def get_all_nodes_edges(root_ids, client, positions=False):
+def get_all_nodes_edges(root_ids, client: CAVEclient, positions=False):
     all_nodes = []
     all_edges = []
     for root_id in root_ids:

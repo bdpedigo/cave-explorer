@@ -1,6 +1,7 @@
 import os
 
 import pandas as pd
+from caveclient import CAVEclient
 from cloudfiles import CloudFiles
 from neuropull.graph import NetworkFrame
 
@@ -30,7 +31,7 @@ def get_cloud_paths(cloud):
     return cf
 
 
-def lazy_load_network_edits(root_id, client):
+def lazy_load_network_edits(root_id: int, client: CAVEclient):
     cloud, recompute = get_environment_variables()
     cf = get_cloud_paths(cloud)
 
@@ -86,7 +87,9 @@ def lazy_load_network_edits(root_id, client):
     return networkdeltas_by_operation, networkdeltas_by_meta_operation
 
 
-def load_network_edits(root_id, client):
+def load_network_edits(
+    root_id: int
+) -> tuple[dict[int, NetworkDelta], dict[int, NetworkDelta]]:
     cloud, _ = get_environment_variables()
     cf = get_cloud_paths(cloud)
 

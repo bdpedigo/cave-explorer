@@ -144,6 +144,9 @@ from pkg.edits import apply_edit
 
 root_id = query_neurons["pt_root_id"].iloc[2]
 
+os.environ["SKEDITS_USE_CLOUD"] = "False"
+os.environ["SKEDITS_RECOMPUTE"] = "True"
+
 nf = lazy_load_initial_network(root_id, client=client)
 
 networkdeltas_by_operation, networkdeltas_by_metaoperation = lazy_load_network_edits(
@@ -158,5 +161,42 @@ nodes, edges = get_level2_nodes_edges(root_id, client=client)
 server_nf = NetworkFrame(nodes, edges)
 
 assert nf == server_nf
+
+# %%
+
+client = cc.CAVEclient("minnie65_phase3_v1")
+
+os.environ["SKEDITS_USE_CLOUD"] = "False"
+os.environ["SKEDITS_RECOMPUTE"] = "True"
+
+networkdeltas_by_operation, networkdeltas_by_metaoperation = lazy_load_network_edits(
+    root_id, client=client
+)
+
+# %%
+
+client = cc.CAVEclient("minnie65_phase3_v1")
+
+nf = lazy_load_initial_network(root_id, client=client)
+
+for edit in tqdm(networkdeltas_by_operation.values()):
+    apply_edit(nf, edit)
+
+nodes, edges = get_level2_nodes_edges(root_id, client=client)
+
+server_nf = NetworkFrame(nodes, edges)
+
+assert nf == server_nf
+
+# %%
+
+from pkg.morphology import find_supervoxel_component
+
+nuc = client.materialize.query_table(
+    "nucleus_detection_v0", select_columns=["pt_supervoxel_id", "pt_root_id"]
+).set_index("pt_root_id")
+nuc_supervoxel = nuc.loc[root_id, "pt_supervoxel_id"]
+
+nuc_nf = find_supervoxel_component(nuc_supervoxel, nf, client)
 
 # %%
