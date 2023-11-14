@@ -1,12 +1,9 @@
-from datetime import datetime
 from time import sleep
 
 import numpy as np
 import pandas as pd
-from anytree import Node, PreOrderIter
-from requests import HTTPError
-
 import pcg_skel
+from requests import HTTPError
 
 
 def get_positions(nodelist, client, n_retries=2, retry_delay=10):

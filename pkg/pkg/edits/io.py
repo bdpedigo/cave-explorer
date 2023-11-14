@@ -86,6 +86,39 @@ def lazy_load_network_edits(root_id, client):
     return networkdeltas_by_operation, networkdeltas_by_meta_operation
 
 
+def load_network_edits(root_id, client):
+    cloud, _ = get_environment_variables()
+    cf = get_cloud_paths(cloud)
+
+    out_file = f"{root_id}_operations.json"
+    if not cf.exists(out_file):
+        raise ValueError(f"File does not exist: {out_file}")
+    else:
+        networkdelta_dicts = cf.get_json(out_file)
+        networkdeltas_by_operation = {}
+        for operation_id, delta in networkdelta_dicts.items():
+            networkdeltas_by_operation[int(operation_id)] = NetworkDelta.from_dict(
+                delta
+            )
+
+    out_file = f"{root_id}_meta_operations.json"
+    if not cf.exists(out_file):
+        raise ValueError(f"File does not exist: {out_file}")
+    else:
+        networkdelta_dicts = cf.get_json(out_file)
+        networkdeltas_by_meta_operation = {}
+        for meta_operation_id, delta in networkdelta_dicts.items():
+            networkdeltas_by_meta_operation[
+                int(meta_operation_id)
+            ] = NetworkDelta.from_dict(delta)
+        in_meta_operation_map = cf.get_json(f"{root_id}_meta_operation_map.json")
+        meta_operation_map = {}
+        for meta_operation_id, operation_ids in in_meta_operation_map.items():
+            meta_operation_map[int(meta_operation_id)] = operation_ids
+
+    return networkdeltas_by_operation, networkdeltas_by_meta_operation
+
+
 def lazy_load_initial_network(root_id, client, positions=True):
     cloud, recompute = get_environment_variables()
     cf = get_cloud_paths(cloud)
@@ -93,6 +126,11 @@ def lazy_load_initial_network(root_id, client, positions=True):
     out_file = f"{root_id}_initial_network.json"
     if not cf.exists(out_file) or recompute:
         initial_network = get_initial_network(root_id, client, positions=positions)
+
+        if isinstance(positions, bool) and positions:
+            all_found = initial_network.nodes[["x", "y", "z"]].notna().all().all()
+            if not all_found:
+                raise ValueError("Not all nodes have positions")
 
         cf.put_json(out_file, initial_network.to_dict())
 

@@ -284,15 +284,21 @@ def get_initial_network(root_id, client, positions=False):
     all_edges = []
     had_error = False
     for leaf_id in tqdm(
-        original_node_ids, desc="Finding L2 graphs for original segmentation objects"
+        original_node_ids,
+        desc="Finding L2 graphs for original segmentation objects",
+        disable=True,
     ):
         try:
             nodes, edges = get_level2_nodes_edges(leaf_id, client, positions=positions)
             all_nodes.append(nodes)
             all_edges.append(edges)
         except HTTPError:
-            had_error = True
-            continue
+            if isinstance(positions, bool) and positions:
+                raise ValueError(
+                    f"HTTPError: no level 2 graph found for node ID: {leaf_id}"
+                )
+            else:
+                had_error = True
     if had_error:
         print("HTTPError on at least one leaf node, continuing...")
     all_nodes = pd.concat(all_nodes, axis=0)
