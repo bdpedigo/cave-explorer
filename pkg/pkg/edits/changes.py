@@ -233,6 +233,10 @@ def get_network_metaedits(networkdeltas_by_operation):
         meta_networkdelta.metadata = dict(
             meta_operation_id=meta_operation_id,
             operation_ids=operation_ids,
+            is_merges=[
+                networkdeltas_by_operation[operation_id]["is_merge"]
+                for operation_id in operation_ids
+            ],
         )
         networkdeltas_by_meta_operation[meta_operation_id] = meta_networkdelta
 
