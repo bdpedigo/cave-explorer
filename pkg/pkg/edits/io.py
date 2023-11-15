@@ -38,7 +38,7 @@ def lazy_load_network_edits(root_id: int, client: CAVEclient):
     out_file = f"{root_id}_operations.json"
 
     if not cf.exists(out_file) or recompute:
-        networkdeltas_by_operation = get_network_edits(root_id, client, filtered=False)
+        networkdeltas_by_operation = get_network_edits(root_id, client)
 
         networkdelta_dicts = {}
         for operation_id, delta in networkdeltas_by_operation.items():
@@ -56,7 +56,7 @@ def lazy_load_network_edits(root_id: int, client: CAVEclient):
 
     if not cf.exists(out_file) or recompute:
         networkdeltas_by_meta_operation, meta_operation_map = get_network_metaedits(
-            networkdeltas_by_operation
+            networkdeltas_by_operation, root_id, client
         )
 
         # remap all of the keys to strings

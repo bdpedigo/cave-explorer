@@ -11,8 +11,11 @@ from .changes import (
     get_network_edits,
     get_network_metaedits,
     get_supervoxel_level2_map,
+    reverse_edit,
 )
 from .io import (
+    get_cloud_paths,
+    get_environment_variables,
     lazy_load_initial_network,
     lazy_load_network_edits,
     lazy_load_supervoxel_level2_map,

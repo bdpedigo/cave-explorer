@@ -43,7 +43,7 @@ def get_detailed_change_log(root_id, client, filtered=True):
         # details = cg.get_operation_details(change_log.index.to_list())
     except HTTPError:
         raise HTTPError(
-            f"Oopsies, requested details for {chunk_size} operations at once and failed :("
+            f"Oops, requested details for {chunk_size} operations at once and failed :("
         )
     details = pd.DataFrame(details).T
     details.index.name = "operation_id"
@@ -128,12 +128,18 @@ def combine_deltas(deltas):
     ).reset_index(drop=False)
 
     return NetworkDelta(
-        total_removed_nodes, total_added_nodes, total_removed_edges, total_added_edges
+        total_removed_nodes,
+        total_added_nodes,
+        total_removed_edges,
+        total_added_edges,
     )
 
 
-def get_network_edits(root_id, client, filtered=True, verbose=True):
-    change_log = get_detailed_change_log(root_id, client, filtered=filtered)
+def get_network_edits(root_id, client, verbose=True):
+    change_log = get_detailed_change_log(root_id, client, filtered=False)
+    filtered_change_log = get_detailed_change_log(root_id, client, filtered=True)
+    change_log["is_filtered"] = False
+    change_log.loc[filtered_change_log.index, "is_filtered"] = True
 
     networkdeltas_by_operation = {}
     for operation_id in tqdm(
@@ -142,7 +148,7 @@ def get_network_edits(root_id, client, filtered=True, verbose=True):
         disable=not verbose,
     ):
         row = change_log.loc[operation_id]
-        is_merge = row["is_merge"]
+
         before_root_ids = row["before_root_ids"]
         after_root_ids = row["roots"]
 
@@ -167,13 +173,25 @@ def get_network_edits(root_id, client, filtered=True, verbose=True):
         )
 
         # keep track of what changed
-        metadata = dict(
-            operation_id=operation_id,
-            is_merge=bool(is_merge),
-            before_root_ids=before_root_ids,
-            after_root_ids=after_root_ids,
-            timestamp=row["timestamp"],
-        )
+        # metadata = dict(
+        #     operation_id=operation_id,
+        #     is_merge=bool(is_merge),
+        #     before_root_ids=before_root_ids,
+        #     after_root_ids=after_root_ids,
+        #     timestamp=row["timestamp"],
+        # )
+        metadata = {
+            **row.to_dict(),
+            "operation_id": operation_id,
+            "root_id": root_id,
+            "n_added_nodes": len(added_nodes),
+            "n_removed_nodes": len(removed_nodes),
+            "n_modified_nodes": len(added_nodes) + len(removed_nodes),
+            "n_added_edges": len(added_edges),
+            "n_removed_edges": len(removed_edges),
+            "n_modified_edges": len(added_edges) + len(removed_edges),
+        }
+
         networkdeltas_by_operation[operation_id] = NetworkDelta(
             removed_nodes, added_nodes, removed_edges, added_edges, metadata=metadata
         )
@@ -181,7 +199,7 @@ def get_network_edits(root_id, client, filtered=True, verbose=True):
     return networkdeltas_by_operation
 
 
-def get_network_metaedits(networkdeltas_by_operation):
+def get_network_metaedits(networkdeltas_by_operation, root_id, client):
     # find the nodes that are modified in any way by each operation
     mod_sets = {}
     for edit_id, delta in networkdeltas_by_operation.items():
@@ -224,42 +242,45 @@ def get_network_metaedits(networkdeltas_by_operation):
             labels == label
         ].tolist()
 
+    # get the final network state for checking "relevance"
+    nodes, edges = get_level2_nodes_edges(root_id, client, positions=False)
+    final_nf = NetworkFrame(nodes, edges)
+
     # for each meta-operation, combine the deltas of the operations that make it up
     networkdeltas_by_meta_operation = {}
     for meta_operation_id, operation_ids in meta_operation_map.items():
-        meta_networkdelta = combine_deltas(
-            [networkdeltas_by_operation[operation_id] for operation_id in operation_ids]
-        )
+        deltas = [
+            networkdeltas_by_operation[operation_id] for operation_id in operation_ids
+        ]
+        meta_networkdelta = combine_deltas(deltas)
+
+        is_relevant = meta_networkdelta.added_nodes.index.isin(
+            final_nf.nodes.index
+        ).any()
+
+        all_metadata = {}
+        for delta in deltas:
+            all_metadata[delta.metadata["operation_id"]] = delta.metadata
+
+        is_merges = [
+            networkdeltas_by_operation[operation_id].metadata["is_merge"]
+            for operation_id in operation_ids
+        ]
         meta_networkdelta.metadata = dict(
             meta_operation_id=meta_operation_id,
+            root_id=root_id,
             operation_ids=operation_ids,
-            is_merges=[
-                networkdeltas_by_operation[operation_id]["is_merge"]
-                for operation_id in operation_ids
-            ],
-        )
-        networkdeltas_by_meta_operation[meta_operation_id] = meta_networkdelta
-
-    return networkdeltas_by_meta_operation, meta_operation_map
-
-
-def _get_network_metaedits(networkdeltas_by_operation, edit_lineage_graph):
-    meta_operation_map = {}
-    for i, component in enumerate(nx.weakly_connected_components(edit_lineage_graph)):
-        subgraph = edit_lineage_graph.subgraph(component)
-        subgraph_operations = set()
-        for _, _, data in subgraph.edges(data=True):
-            subgraph_operations.add(data["operation_id"])
-        meta_operation_map[i] = list(subgraph_operations)
-
-    networkdeltas_by_meta_operation = {}
-    for meta_operation_id, operation_ids in meta_operation_map.items():
-        meta_networkdelta = combine_deltas(
-            [networkdeltas_by_operation[operation_id] for operation_id in operation_ids]
-        )
-        meta_networkdelta.metadata = dict(
-            meta_operation_id=meta_operation_id,
-            operation_ids=operation_ids,
+            is_merges=is_merges,
+            any_merges=np.any(is_merges),
+            is_relevant=is_relevant,
+            n_added_nodes=len(meta_networkdelta.added_nodes),
+            n_removed_nodes=len(meta_networkdelta.removed_nodes),
+            n_modified_nodes=len(meta_networkdelta.added_nodes)
+            + len(meta_networkdelta.removed_nodes),
+            n_added_edges=len(meta_networkdelta.added_edges),
+            n_removed_edges=len(meta_networkdelta.removed_edges),
+            n_modified_edges=len(meta_networkdelta.added_edges)
+            + len(meta_networkdelta.removed_edges),
         )
         networkdeltas_by_meta_operation[meta_operation_id] = meta_networkdelta
 
@@ -346,6 +367,24 @@ def apply_edit(network_frame: NetworkFrame, network_delta):
 def apply_additions(network_frame, network_delta):
     network_frame.add_nodes(network_delta.added_nodes, inplace=True)
     network_frame.add_edges(network_delta.added_edges, inplace=True)
+
+
+def reverse_edit(network_frame: NetworkFrame, network_delta):
+    network_frame.add_nodes(network_delta.removed_nodes, inplace=True)
+    network_frame.add_edges(network_delta.removed_edges, inplace=True)
+    nodes_to_remove = network_delta.added_nodes.index.intersection(
+        network_frame.nodes.index
+    )
+    added_edges = network_delta.added_edges.set_index(["source", "target"])
+    added_edges_index = added_edges.index
+    current_edges_index = network_frame.edges.set_index(["source", "target"]).index
+    edges_to_remove_index = added_edges_index.intersection(current_edges_index)
+    edges_to_remove = added_edges.loc[edges_to_remove_index].reset_index()
+    if len(nodes_to_remove) > 0 or len(edges_to_remove) > 0:
+        network_frame.remove_nodes(nodes_to_remove, inplace=True)
+        network_frame.remove_edges(edges_to_remove, inplace=True)
+    else:
+        print("Skipping edit:", network_delta.metadata)
 
 
 def get_level2_lineage_components(networkdeltas_by_operation):
