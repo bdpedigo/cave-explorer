@@ -5,21 +5,17 @@ import caveclient as cc
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn.objects as so
-from neuropull.graph import NetworkFrame
 from tqdm.autonotebook import tqdm
 
 from pkg.edits import (
-    apply_edit,
     find_supervoxel_component,
     get_detailed_change_log,
-    lazy_load_initial_network,
     lazy_load_network_edits,
     reverse_edit,
 )
-from pkg.utils import get_level2_nodes_edges, pt_to_xyz
+from pkg.utils import pt_to_xyz
 
 # %%
-
 
 client = cc.CAVEclient("minnie65_phase3_v1")
 
@@ -31,68 +27,18 @@ nuc = client.materialize.query_table(
 
 # %%
 
-root_id = query_neurons["pt_root_id"].iloc[2]
-
 os.environ["SKEDITS_USE_CLOUD"] = "True"
 os.environ["SKEDITS_RECOMPUTE"] = "False"
-
-nf = lazy_load_initial_network(root_id, client=client)
-
-networkdeltas_by_operation, networkdeltas_by_metaoperation = lazy_load_network_edits(
-    root_id, client=client
-)
-
-for edit in tqdm(networkdeltas_by_operation.values()):
-    apply_edit(nf, edit)
-
-
-nuc_supervoxel = nuc.loc[root_id, "pt_supervoxel_id"]
-nuc_nf = find_supervoxel_component(nuc_supervoxel, nf, client)
-
-
-nodes, edges = get_level2_nodes_edges(root_id, client=client)
-final_nf = NetworkFrame(nodes, edges)
-
-final_nf.nodes.drop(columns=["rep_coord_nm", "x", "y", "z"], inplace=True)
-nuc_nf.nodes.drop(columns=["rep_coord_nm", "x", "y", "z"], inplace=True)
-
-assert nuc_nf == final_nf
-
-
-# %%
-
-
-def find_relevant_metamerges(
-    networkdeltas_by_operation, networkdeltas_by_metaoperation, final_nf
-):
-    merge_metaedit_pool = []
-    for metaoperation_id, networkdelta in networkdeltas_by_metaoperation.items():
-        operation_ids = networkdelta.metadata["operation_ids"]
-        is_merges = []
-        for operation_id in operation_ids:
-            is_merges.append(
-                networkdeltas_by_operation[operation_id].metadata["is_merge"]
-            )
-        any_is_merges = any(is_merges)
-        is_relevant = networkdelta.added_nodes.index.isin(final_nf.nodes.index).any()
-        if any_is_merges and is_relevant:
-            merge_metaedit_pool.append(metaoperation_id)
-
-    merge_metaedit_pool = pd.Series(merge_metaedit_pool)
-    return merge_metaedit_pool
-
 
 # %%
 
 # getting a table of additional metadata for each operation
 
 rows = []
-all_modified_nodes = []
+raw_modified_nodes = []
 for root_id in tqdm(
-    query_neurons["pt_root_id"].values, desc="Computing edit statistics"
+    query_neurons["pt_root_id"].values[:20], desc="Pulling edit statistics"
 ):
-    if root_id == 864691135279452833:
-        continue
     (
         networkdeltas_by_operation,
         networkdeltas_by_metaoperation,
@@ -106,50 +52,29 @@ for root_id in tqdm(
         [current_nuc_level2], attributes=["rep_coord_nm"]
     )[str(current_nuc_level2)]["rep_coord_nm"]
 
-    change_log = get_detailed_change_log(root_id, client, filtered=False)
-
     for operation_id, networkdelta in networkdeltas_by_operation.items():
-        modified_nodes = pd.concat(
-            (networkdelta.added_nodes, networkdelta.removed_nodes)
-        )
-        n_modified_nodes = len(modified_nodes)
-        n_added_nodes = len(networkdelta.added_nodes)
-        n_removed_nodes = len(networkdelta.removed_nodes)
-        n_added_edges = len(networkdelta.added_edges)
-        n_removed_edges = len(networkdelta.removed_edges)
-        n_modified_edges = n_added_edges + n_removed_edges
-        # modified_node_positions = get_positions(
-        #     modified_nodes.index.tolist(), client=client, n_retries=0
-        # )
+        if "user_id" in networkdelta.metadata:
+            info = {
+                **networkdelta.metadata,
+                "nuc_pt_nm": nuc_pt_nm,
+                "nuc_x": nuc_pt_nm[0],
+                "nuc_y": nuc_pt_nm[1],
+                "nuc_z": nuc_pt_nm[2],
+            }
+            rows.append(info)
 
-        modified_nodes["root_id"] = root_id
-        modified_nodes["operation_id"] = operation_id
+            modified_nodes = pd.concat(
+                (networkdelta.added_nodes, networkdelta.removed_nodes)
+            )
+            modified_nodes.index.name = "level2_node_id"
+            modified_nodes["root_id"] = root_id
+            modified_nodes["operation_id"] = operation_id
+            modified_nodes["is_merge"] = info["is_merge"]
+            raw_modified_nodes.append(modified_nodes)
 
-        all_modified_nodes.append(modified_nodes)
-
-        row = {
-            **networkdelta.metadata,
-            "user_name": change_log.loc[operation_id, "user_name"],
-            "user_id": change_log.loc[operation_id, "user_id"],
-            "root_id": root_id,
-            "n_modified_nodes": n_modified_nodes,
-            "n_modified_edges": n_modified_edges,
-            "n_added_nodes": n_added_nodes,
-            "n_removed_nodes": n_removed_nodes,
-            "n_added_edges": n_added_edges,
-            "n_removed_edges": n_removed_edges,
-            "modified_nodes": modified_nodes.index.tolist(),
-            "nuc_supervoxel": nuc_supervoxel,
-            "current_nuc_level2": current_nuc_level2,
-            "nuc_pt_nm": nuc_pt_nm,
-            "nuc_x": nuc_pt_nm[0],
-            "nuc_y": nuc_pt_nm[1],
-            "nuc_z": nuc_pt_nm[2],
-        }
-        rows.append(row)
-
+# %%
 edit_stats = pd.DataFrame(rows)
-all_modified_nodes = pd.concat(all_modified_nodes)
+all_modified_nodes = pd.concat(raw_modified_nodes)
 
 raw_node_coords = client.l2cache.get_l2data(
     all_modified_nodes.index.to_list(), attributes=["rep_coord_nm"]
@@ -176,6 +101,48 @@ edit_stats["centroid_distance_to_nuc"] = (
 
 edit_stats["was_forrest"] = edit_stats["user_name"].str.contains("Forrest")
 
+# %%
+sns.histplot(all_modified_nodes["z"])
+
+# %%
+round_data = []
+for i in range(10):
+    raw_node_coords = client.l2cache.get_l2data(
+        all_modified_nodes.index.to_list(), attributes=["rep_coord_nm"]
+    )
+    node_coords = pd.DataFrame(raw_node_coords).T
+    node_coords[["x", "y", "z"]] = pt_to_xyz(node_coords["rep_coord_nm"])
+    node_coords.index = node_coords.index.astype(int)
+    node_coords.index.name = "level2_node_id"
+    node_coords["round"] = i
+    round_data.append(node_coords)
+
+# %%
+all_modified_nodes.index.to_series().to_csv("modified_l2_nodes.csv")
+
+# %%
+round_data = pd.concat(round_data)
+# %%
+round_data = round_data.reset_index()
+
+# %%
+sns.histplot(round_data["z"])
+
+# %%
+round_data.query("(z > 1e7) & level2_node_id == 156098560020972550")
+
+# %%
+round_data.groupby("level2_node_id")["z"].nunique().max()
+
+# %%
+
+client.l2cache.get_l2data([156098560020972550], attributes=["rep_coord_nm"])
+
+# %%
+all_modified_nodes[all_modified_nodes["z"] > 1e7]
+
+# %%
+client.l2cache.get_l2data([156098560020972550], attributes=["rep_coord_nm"])
 
 # %%
 
@@ -339,6 +306,26 @@ edit_df = all_modified_nodes.query(
 # make_neuron_neuroglancer_link(
 #     client,
 # )
+
+# %%
+root_id = 864691135988251651
+edit_df = all_modified_nodes.query("root_id == @root_id").copy()
+edit_df = edit_df.reset_index().set_index(["root_id", "operation_id"])
+edit_df["is_relevant"] = edit_df.index.map(edit_stats["is_relevant"])
+edit_df = edit_df.reset_index()
+edit_df = edit_df.query("is_relevant & is_merge")
+
+# %%
+import seaborn as sns
+
+sns.histplot(edit_df["z"])
+
+# %%
+edit_df.query("z > 1e7")
+
+
+# %%
+
 root_ids = [root_id]
 df1 = pd.DataFrame({"root_id": root_ids})
 dataframes = [df1]
@@ -405,23 +392,35 @@ sb1 = StateBuilder(layers=[img_layer, seg_layer], client=client, view_kws=view_k
 
 state_builders = [sb1]
 
-###
-output_point_mapper = PointMapper(
-    point_column=point_column,
-    linked_segmentation_column=post_pt_root_id_col,
-    split_positions=split_positions,
+
+edit_point_mapper = PointMapper(
+    point_column="rep_coord_nm",
+    description_column="level2_node_id",
+    split_positions=False,
+    gather_linked_segmentations=False,
 )
-outputs_lay = AnnotationLayerConfig(
-    output_layer_name,
-    mapping_rules=[output_point_mapper],
-    linked_segmentation_layer=seg_layer.name,
-    data_resolution=dataframe_resolution_pre,
-    color=output_layer_color,
+edit_layer = AnnotationLayerConfig(
+    "level2-edits",
+    data_resolution=[1, 1, 1],
+    color=input_color,
+    mapping_rules=edit_point_mapper,
 )
-sb_out = StateBuilder([outputs_lay], client=client)
-state_builders.append(sb_out)
-###
+sb_edits = StateBuilder([edit_layer], client=client)
+# outputs_lay = AnnotationLayerConfig(
+#     output_layer_name,
+#     mapping_rules=[output_point_mapper],
+#     linked_segmentation_layer=seg_layer.name,
+#     data_resolution=dataframe_resolution_pre,
+#     color=output_layer_color,
+# )
+#
+state_builders.append(sb_edits)
+dataframes.append(edit_df)
 
 sb = ChainedStateBuilder(state_builders)
 
 package_state(dataframes, sb, client, shorten, return_as, ngl_url, link_text)
+
+
+# %%
+client.l2cache.get_l2data([162699477809890531], attributes=["rep_coord_nm"])
