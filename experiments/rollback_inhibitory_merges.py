@@ -31,7 +31,7 @@ os.environ["SKEDITS_RECOMPUTE"] = "False"
 
 # getting a table of additional metadata for each operation
 
-root_id = query_neurons["pt_root_id"].values[1]
+root_id = query_neurons["pt_root_id"].values[7]
 
 
 (
@@ -245,7 +245,7 @@ package_state(dataframes, sb, client, shorten, return_as, ngl_url, link_text)
 #     a given merge (more distal from the soma) would therefore have no effect, if that
 #     upstream merge is rolled back
 
-root_id = query_neurons["pt_root_id"].values[1]
+# root_id = query_neurons["pt_root_id"].values[1]
 nuc_supervoxel = nuc.loc[root_id, "pt_supervoxel_id"]
 
 (
@@ -399,17 +399,21 @@ sns.heatmap(connectivity_df, ax=ax, cmap="Blues", xticklabels=False)
 
 
 # %%
-mtypes = client.materialize.query_view("allen_column_mtypes_v2")
+from requests import HTTPError
 
-# %%
-mtypes["target_id"].isin(nuc["id"]).mean()
+try:
+    mtypes = client.materialize.query_view("allen_column_mtypes_v2")
+    mtypes["target_id"].isin(nuc["id"]).mean()
+    new_root_ids = mtypes["target_id"].map(
+        nuc.reset_index().set_index("id")["pt_root_id"]
+    )
+    mtypes["root_id"] = new_root_ids
+    mtypes.set_index("root_id", inplace=True)
+    mtypes.to_csv("mtypes.csv")
+except HTTPError:
+    mtypes = pd.read_csv("mtypes.csv", index_col=0)
+    mtypes.index = mtypes.index.astype(int)
 
-# %%
-
-new_root_ids = mtypes["target_id"].map(nuc.reset_index().set_index("id")["pt_root_id"])
-mtypes["root_id"] = new_root_ids
-
-mtypes.set_index("root_id", inplace=True)
 
 # %%
 connectivity_df.columns.isin(mtypes.index).mean()
@@ -479,7 +483,7 @@ plot1 = (
     .layout(engine="tight")
     .on(axs[0])
     # .show()
-    .save("exc_group_connectivity_tidy.png", bbox_inches="tight")
+    .save(f"exc_group_connectivity_root={root_id}.png", bbox_inches="tight")
 )
 plot2 = (
     so.Plot(
@@ -497,5 +501,5 @@ plot2 = (
     .layout(engine="tight")
     .on(axs[1])
     # .show()
-    .save("exc_group_connectivity_tidy.png", bbox_inches="tight")
+    .save(f"exc_group_connectivity_root={root_id}.png", bbox_inches="tight")
 )
