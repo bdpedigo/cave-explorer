@@ -3,13 +3,15 @@ import os
 
 import caveclient as cc
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import seaborn.objects as so
+from IPython.display import display
+from nglui.statebuilder import make_neuron_neuroglancer_link
 from tqdm.autonotebook import tqdm
 
 from pkg.edits import (
     find_supervoxel_component,
-    get_detailed_change_log,
     lazy_load_network_edits,
     reverse_edit,
 )
@@ -31,14 +33,21 @@ os.environ["SKEDITS_USE_CLOUD"] = "True"
 os.environ["SKEDITS_RECOMPUTE"] = "False"
 
 # %%
+maybe_missing = [
+    864691135771997179,
+]
+
+# %%
 
 # getting a table of additional metadata for each operation
 
 rows = []
 raw_modified_nodes = []
 for root_id in tqdm(
-    query_neurons["pt_root_id"].values[:20], desc="Pulling edit statistics"
+    query_neurons["pt_root_id"].values[:40], desc="Pulling edit statistics"
 ):
+    if root_id == 864691135279452833:
+        continue
     (
         networkdeltas_by_operation,
         networkdeltas_by_metaoperation,
@@ -77,18 +86,24 @@ edit_stats = pd.DataFrame(rows)
 all_modified_nodes = pd.concat(raw_modified_nodes)
 
 raw_node_coords = client.l2cache.get_l2data(
-    all_modified_nodes.index.to_list(), attributes=["rep_coord_nm"]
+    np.unique(all_modified_nodes.index.to_list()), attributes=["rep_coord_nm"]
 )
 
 node_coords = pd.DataFrame(raw_node_coords).T
+node_coords[node_coords["rep_coord_nm"].isna()]
+
+# %%
+
 node_coords[["x", "y", "z"]] = pt_to_xyz(node_coords["rep_coord_nm"])
 node_coords.index = node_coords.index.astype(int)
+node_coords.index.name = "level2_node_id"
 
-all_modified_nodes = all_modified_nodes.join(node_coords)
+all_modified_nodes = all_modified_nodes.join(node_coords, validate="many_to_one")
 
 centroids = all_modified_nodes.groupby(["root_id", "operation_id"])[
     ["x", "y", "z"]
 ].mean()
+
 centroids.columns = ["centroid_x", "centroid_y", "centroid_z"]
 
 edit_stats = edit_stats.set_index(["root_id", "operation_id"]).join(centroids)
@@ -101,90 +116,48 @@ edit_stats["centroid_distance_to_nuc"] = (
 
 edit_stats["was_forrest"] = edit_stats["user_name"].str.contains("Forrest")
 
-# %%
-sns.histplot(all_modified_nodes["z"])
-
-# %%
-round_data = []
-for i in range(10):
-    raw_node_coords = client.l2cache.get_l2data(
-        all_modified_nodes.index.to_list(), attributes=["rep_coord_nm"]
-    )
-    node_coords = pd.DataFrame(raw_node_coords).T
-    node_coords[["x", "y", "z"]] = pt_to_xyz(node_coords["rep_coord_nm"])
-    node_coords.index = node_coords.index.astype(int)
-    node_coords.index.name = "level2_node_id"
-    node_coords["round"] = i
-    round_data.append(node_coords)
-
-# %%
-all_modified_nodes.index.to_series().to_csv("modified_l2_nodes.csv")
-
-# %%
-round_data = pd.concat(round_data)
-# %%
-round_data = round_data.reset_index()
-
-# %%
-sns.histplot(round_data["z"])
-
-# %%
-round_data.query("(z > 1e7) & level2_node_id == 156098560020972550")
-
-# %%
-round_data.groupby("level2_node_id")["z"].nunique().max()
-
-# %%
-
-client.l2cache.get_l2data([156098560020972550], attributes=["rep_coord_nm"])
-
-# %%
-all_modified_nodes[all_modified_nodes["z"] > 1e7]
-
-# %%
-client.l2cache.get_l2data([156098560020972550], attributes=["rep_coord_nm"])
+edit_stats["centroid_distance_to_nuc_um"] = (
+    edit_stats["centroid_distance_to_nuc"] / 1000
+)
 
 # %%
 
 # TODO figure out a method for finding the operations that merge soma/nucleus
 
 
-# fig, ax = plt.subplots(figsize=(10, 10))
+so.Plot(
+    edit_stats.query("is_merge & (centroid_distance_to_nuc_um < 1000)"),
+    x="n_modified_nodes",
+    y="centroid_distance_to_nuc_um",
+    color="was_forrest",
+).add(so.Dots(pointsize=3, alpha=0.5))
+
+# %%
+biggest_edits = (
+    edit_stats.query(
+        "is_filtered & is_merge & (centroid_distance_to_nuc_um < 10) & (n_modified_nodes >= 10)"
+    )
+    .groupby("root_id")["n_modified_nodes"]
+    .idxmax()
+)
+
+biggest_edit_stats = (
+    edit_stats.loc[biggest_edits].copy().sort_values("centroid_distance_to_nuc_um")
+)
 
 
 so.Plot(
-    edit_stats.query("is_merge & (centroid_distance_to_nuc < 1e6)"),
+    biggest_edit_stats,
     x="n_modified_nodes",
-    y="centroid_distance_to_nuc",
-    color="user_id",
+    y="centroid_distance_to_nuc_um",
+    color="user_name",
 ).add(so.Dot(pointsize=3, alpha=0.5))
 
-# %%
-
-# edit_stats.query(
-#     "is_merge & (centroid_distance_to_nuc < 3e6) & (n_modified_nodes > 50)"
-# )
-
-edit_stats.query(
-    "(n_modified_nodes > 20) & is_merge & (centroid_distance_to_nuc < 3e6) & was_forrest"
-).sort_values("centroid_distance_to_nuc")
-
-
-# %%
-candidate_edits = edit_stats.query(
-    "(n_modified_nodes > 10) & is_merge & (centroid_distance_to_nuc < 100_000)"
-)
-candidate_edits = candidate_edits.sort_values("centroid_distance_to_nuc")
 
 # %%
 
-from IPython.display import display
-from nglui.statebuilder import make_neuron_neuroglancer_link
 
-make_neuron_neuroglancer_link(client, [root_id])
-
-i = 0
-for idx, row in candidate_edits.iterrows():
+for idx, row in biggest_edit_stats.iterrows():
     x, y, z = row[["nuc_x", "nuc_y", "nuc_z"]]
     x, y, z = row[["centroid_x", "centroid_y", "centroid_z"]]
     x = x / 4
@@ -200,40 +173,10 @@ for idx, row in candidate_edits.iterrows():
         view_kws={"position": (x, y, z)},
     )
     display(link)
-    i += 1
-    if i > 10:
-        break
-# img_source =
-# %%
-nuc.loc[864691136966961614]
-
-# %%
-pos = np.array([128664, 202405, 24925])
-pos *= np.array([4, 4, 40])
-print(pos)
-
-print(row[["nuc_x", "nuc_y", "nuc_z"]])
-print(row[["centroid_x", "centroid_y", "centroid_z"]])
-
-# %%
-
-
-fig, ax = plt.subplots(figsize=(10, 10))
-so.Plot(edit_stats, x="n_modified_nodes", y="n_modified_edges", color="is_merge").add(
-    so.Dot(pointsize=3, alpha=0.5)
-).on(ax)
-
-# %%
-fig, ax = plt.subplots(figsize=(10, 10))
-so.Plot(
-    edit_stats.query("is_merge"),
-    x="n_modified_nodes",
-    y="n_modified_edges",
-    # color="is_merge",
-).add(so.Dot(pointsize=3, alpha=0.5)).scale(x="log", y="log").on(ax)
 
 
 # %%
+
 
 merge_metaedit_pool = find_relevant_merges(networkdeltas_by_metaoperation, final_nf)
 n_samples = 15
@@ -273,58 +216,39 @@ for i in tqdm(range(n_samples)):
             ax=ax,
         )
 
-# %%
-from pkg.edits import get_network_edits
-
-get_network_edits(root_id, client=client)
-
-# %%
-change_log = get_detailed_change_log(root_id, client, filtered=False)
-filtered_change_log = get_detailed_change_log(root_id, client, filtered=True)
-change_log["is_filtered"] = False
-change_log.loc[filtered_change_log.index, "is_filtered"] = True
-
-# %%
-os.environ["SKEDITS_RECOMPUTE"] = "True"
-lazy_load_network_edits(root_id, client=client)
-
-# %%
-
-# from nglui.statebuilder import StateBuilder, ChainedStateBuilder, ImageLayerConfig, SegmentationLayerConfig, AnnotationLayerConfig
-
-# sb = StateBuilder()
-
-# %%
-root_id = 864691135511632080
-operation_id = 11249
-
-edit_df = all_modified_nodes.query(
-    "root_id == @root_id & operation_id == @operation_id"
-)
-
-# %%
-# make_neuron_neuroglancer_link(
-#     client,
-# )
 
 # %%
 root_id = 864691135988251651
+
+(
+    networkdeltas_by_operation,
+    networkdeltas_by_metaoperation,
+) = lazy_load_network_edits(root_id, client=client)
+
+nuc_supervoxel = nuc.loc[root_id, "pt_supervoxel_id"]
+current_nuc_level2 = client.chunkedgraph.get_roots([nuc_supervoxel], stop_layer=2)[0]
+nuc_pt_nm = client.l2cache.get_l2data(
+    [current_nuc_level2], attributes=["rep_coord_nm"]
+)[str(current_nuc_level2)]["rep_coord_nm"]
+
+rows = {}
+for operation_id, networkdelta in networkdeltas_by_operation.items():
+    rows[operation_id] = networkdelta.metadata
+change_log = pd.DataFrame(rows).T
+change_log.index.name = "operation_id"
+change_log
+
+# %%
 edit_df = all_modified_nodes.query("root_id == @root_id").copy()
+edit_df["is_filtered"] = (
+    edit_df["operation_id"].map(change_log["is_filtered"]).astype(bool)
+)
 edit_df = edit_df.reset_index().set_index(["root_id", "operation_id"])
 edit_df["is_relevant"] = edit_df.index.map(edit_stats["is_relevant"])
-edit_df = edit_df.reset_index()
-edit_df = edit_df.query("is_relevant & is_merge")
+edit_df = edit_df.reset_index().copy()
+edit_df = edit_df.query("is_filtered & is_merge")
 
-# %%
 import seaborn as sns
-
-sns.histplot(edit_df["z"])
-
-# %%
-edit_df.query("z > 1e7")
-
-
-# %%
 
 root_ids = [root_id]
 df1 = pd.DataFrame({"root_id": root_ids})
@@ -357,23 +281,6 @@ output_layer_name = "syns_out"
 ngl_url = None
 link_text = "Neuroglancer Link"
 
-# sb = make_pre_post_statebuilder(
-#     client,
-#     show_inputs=show_inputs,
-#     show_outputs=show_outputs,
-#     contrast=contrast,
-#     point_column=point_column,
-#     view_kws=view_kws,
-#     pre_pt_root_id_col=pre_pt_root_id_col,
-#     post_pt_root_id_col=post_pt_root_id_col,
-#     input_layer_name=input_layer_name,
-#     output_layer_name=output_layer_name,
-#     input_layer_color=input_color,
-#     output_layer_color=output_color,
-#     dataframe_resolution_pre=data_resolution_pre,
-#     dataframe_resolution_post=data_resolution_post,
-#     split_positions=True,
-# )
 
 from nglui.statebuilder import (
     AnnotationLayerConfig,
@@ -386,41 +293,31 @@ from nglui.statebuilder.helpers import from_client
 img_layer, seg_layer = from_client(client, contrast=contrast)
 seg_layer.add_selection_map(selected_ids_column="root_id")
 
-if view_kws is None:
-    view_kws = {}
+
+view_kws = {"position": np.array(nuc_pt_nm) / np.array([4, 4, 40])}
 sb1 = StateBuilder(layers=[img_layer, seg_layer], client=client, view_kws=view_kws)
 
 state_builders = [sb1]
 
-
-edit_point_mapper = PointMapper(
-    point_column="rep_coord_nm",
-    description_column="level2_node_id",
-    split_positions=False,
-    gather_linked_segmentations=False,
-)
-edit_layer = AnnotationLayerConfig(
-    "level2-edits",
-    data_resolution=[1, 1, 1],
-    color=input_color,
-    mapping_rules=edit_point_mapper,
-)
-sb_edits = StateBuilder([edit_layer], client=client)
-# outputs_lay = AnnotationLayerConfig(
-#     output_layer_name,
-#     mapping_rules=[output_point_mapper],
-#     linked_segmentation_layer=seg_layer.name,
-#     data_resolution=dataframe_resolution_pre,
-#     color=output_layer_color,
-# )
-#
-state_builders.append(sb_edits)
-dataframes.append(edit_df)
+colors = sns.color_palette("husl", len(edit_df["operation_id"].unique()))
+for i, (operation_id, operation_data) in enumerate(edit_df.groupby("operation_id")):
+    edit_point_mapper = PointMapper(
+        point_column="rep_coord_nm",
+        description_column="level2_node_id",
+        split_positions=False,
+        gather_linked_segmentations=False,
+        set_position=False,
+    )
+    edit_layer = AnnotationLayerConfig(
+        f"level2-operation-{operation_id}",
+        data_resolution=[1, 1, 1],
+        color=colors[i],
+        mapping_rules=edit_point_mapper,
+    )
+    sb_edits = StateBuilder([edit_layer], client=client, view_kws=view_kws)
+    state_builders.append(sb_edits)
+    dataframes.append(operation_data)
 
 sb = ChainedStateBuilder(state_builders)
 
 package_state(dataframes, sb, client, shorten, return_as, ngl_url, link_text)
-
-
-# %%
-client.l2cache.get_l2data([162699477809890531], attributes=["rep_coord_nm"])
