@@ -133,3 +133,24 @@ def integerize_dict_keys(dictionary):
 
 def stringize_dict_keys(dictionary):
     return {str(k): v for k, v in dictionary.items()}
+
+
+def get_nucleus_point_nm(root_id: int, client: CAVEclient, method="table"):
+    nuc = client.materialize.query_table(
+        "nucleus_detection_v0",
+        filter_equal_dict={"pt_root_id": root_id},
+        select_columns=["pt_supervoxel_id", "pt_root_id", "pt_position"],
+    ).set_index("pt_root_id")
+    if method == "l2cache":
+        nuc_supervoxel = nuc.loc[root_id, "pt_supervoxel_id"]
+        current_nuc_level2 = client.chunkedgraph.get_roots(
+            [nuc_supervoxel], stop_layer=2
+        )[0]
+        nuc_pt_nm = client.l2cache.get_l2data(
+            [current_nuc_level2], attributes=["rep_coord_nm"]
+        )[str(current_nuc_level2)]["rep_coord_nm"]
+        nuc_pt_nm = np.array(nuc_pt_nm)
+    elif method == "table":
+        nuc_pt_nm = np.array(nuc.loc[root_id, "pt_position"])
+        nuc_pt_nm *= np.array([4, 4, 40])
+    return nuc_pt_nm
