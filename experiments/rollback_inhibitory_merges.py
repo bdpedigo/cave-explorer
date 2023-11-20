@@ -187,6 +187,26 @@ sb1 = StateBuilder(layers=[img_layer, seg_layer], client=client, view_kws=view_k
 
 state_builders = [sb1]
 
+level2_graph_mapper = PointMapper(
+    point_column="rep_coord_nm",
+    description_column="l2_id",
+    split_positions=False,
+    gather_linked_segmentations=False,
+    set_position=False,
+    collapse_groups=True,
+)
+level2_graph_layer = AnnotationLayerConfig(
+    "level2-graph",
+    data_resolution=[1, 1, 1],
+    color=(0.2, 0.2, 0.2),
+    mapping_rules=level2_graph_mapper,
+)
+level2_graph_statebuilder = StateBuilder(
+    layers=[level2_graph_layer], client=client, view_kws=view_kws
+)
+state_builders.append(level2_graph_statebuilder)
+dataframes.append(final_nf.nodes.reset_index())
+
 key = "metaoperation_id"
 
 colors = sns.color_palette("husl", len(edit_df[key].unique()))
@@ -208,6 +228,7 @@ for i, (operation_id, operation_data) in enumerate(edit_df.groupby(key)):
     sb_edits = StateBuilder([edit_layer], client=client, view_kws=view_kws)
     state_builders.append(sb_edits)
     dataframes.append(operation_data)
+
 
 sb = ChainedStateBuilder(state_builders)
 
@@ -255,6 +276,7 @@ nuc_supervoxel = nuc.loc[root_id, "pt_supervoxel_id"]
 
 nuc_dist_threshold = 10
 n_modified_nodes_threshold = 10
+soma_nuc_merge_metaoperation = None
 
 candidate_metaedits = []
 for metaoperation_id, networkdelta in networkdeltas_by_metaoperation.items():
@@ -283,6 +305,8 @@ for metaoperation_id, networkdelta in networkdeltas_by_metaoperation.items():
                 and n_modified_nodes >= n_modified_nodes_threshold
             ):
                 has_soma_nuc = True
+                soma_nuc_merge_metaoperation = metaoperation_id
+                print("Found soma/nucleus merge metaoperation: ", metaoperation_id)
                 break
 
     if has_filtered and metadata["any_merges"] and (not has_soma_nuc):
@@ -452,6 +476,17 @@ fig, ax = plt.subplots(1, 1, figsize=(10, 5))
 sns.heatmap(exc_group_p_connectivity_df, cmap="Blues", ax=ax)
 
 # %%
+import pickle
+
+palette_file = "data/ctype_hues.pkl"
+
+with open(palette_file, "rb") as f:
+    ctype_hues = pickle.load(f)
+
+ctype_hues = {ctype: tuple(ctype_hues[ctype]) for ctype in ctype_hues.keys()}
+
+
+# %%
 exc_group_connectivity_tidy = pd.melt(
     exc_group_connectivity_df.reset_index(),
     id_vars=["p_merge", "sample"],
@@ -470,7 +505,12 @@ fig.suptitle(
     f"Root ID {root_id}, Motif group: {query_neurons.set_index('pt_root_id').loc[root_id, 'cell_type']}"
 )
 plot1 = (
-    so.Plot(exc_group_connectivity_tidy, x="p_merge", y="n_synapses", color="cell_type")
+    so.Plot(
+        exc_group_connectivity_tidy,
+        x="p_merge",
+        y="n_synapses",
+        color="cell_type",
+    )
     .add(so.Dots(pointsize=3, alpha=0.5), so.Jitter())
     .add(so.Line(), so.Agg())
     .add(so.Band(), so.Est())
@@ -481,6 +521,7 @@ plot1 = (
         color="Target M-type",
     )
     .layout(engine="tight")
+    .scale(color=ctype_hues)
     .on(axs[0])
     # .show()
     .save(f"exc_group_connectivity_root={root_id}.png", bbox_inches="tight")
@@ -499,7 +540,220 @@ plot2 = (
         color="Target M-type",
     )
     .layout(engine="tight")
+    .scale(color=so.Nominal(ctype_hues))
     .on(axs[1])
     # .show()
     .save(f"exc_group_connectivity_root={root_id}.png", bbox_inches="tight")
 )
+
+# %%
+sns.palplot(ctype_hues.values())
+
+# %%
+final_nf
+
+# %%
+final_nf.nodes["metaoperation_id"] = np.nan
+final_nf.nodes["metaoperation_id"] = final_nf.nodes["metaoperation_id"].astype("Int64")
+
+
+for metaoperation_id, networkdelta in networkdeltas_by_metaoperation.items():
+    added_nodes = networkdelta.added_nodes
+    # TODO more robustly deal with add->removes in the metaedits
+    # TODO maybe just take the intersection with the final network as a shortcut
+    #      Since some of the metaedits might not have merges which are relevant so added
+    #      nodes get removed later or something...
+    net_added_node_ids = networkdelta.added_nodes.index.difference(
+        networkdelta.removed_nodes.index
+    )
+
+    net_added_node_ids = networkdelta.added_nodes.index.intersection(
+        final_nf.nodes.index
+    )
+
+    if not final_nf.nodes.loc[net_added_node_ids, "metaoperation_id"].isna().all():
+        raise AssertionError("Some nodes already exist")
+    else:
+        final_nf.nodes.loc[net_added_node_ids, "metaoperation_id"] = metaoperation_id
+
+# %%
+import numpy as np
+
+np.array(nuc_pt_nm)
+
+
+# %%%
+from sklearn.metrics import pairwise_distances_argmin
+
+ind = pairwise_distances_argmin(
+    np.array(nuc_pt_nm).reshape(1, -1), final_nf.nodes[["x", "y", "z"]]
+)[0]
+nuc_level2_id = final_nf.nodes.index[ind]
+final_nf.nodes["nucleus"] = False
+final_nf.nodes.loc[nuc_level2_id, "nucleus"] = True
+
+# %%
+adjacency = final_nf.to_sparse_adjacency()
+
+
+final_nf.nodes["iloc"] = np.arange(len(final_nf.nodes))
+
+metaoperations_to_query = list(edit_df["metaoperation_id"].unique())
+final_nf_keypoints = final_nf.nodes.query(
+    "metaoperation_id.isin(@metaoperations_to_query) | nucleus", engine="python"
+)
+# %%
+
+
+# currtime = time.time()
+
+# dists, predecessors = shortest_path(
+#     adjacency,
+#     directed=False,
+#     indices=final_nf_keypoints["iloc"],
+#     return_predecessors=True,
+# )
+# print(f"{time.time() - currtime:.3f} seconds elapsed.")
+
+# # %%
+# dists = pd.DataFrame(
+#     dists, index=final_nf_keypoints.index, columns=final_nf.nodes.index
+# )
+# predecessors = pd.DataFrame(
+#     predecessors, index=final_nf_keypoints.index, columns=final_nf.nodes.index
+# )
+
+# # %%
+# predecessors.loc[ind][final_nf_keypoints.index]
+
+# %%
+# TODO compute bidirectional shortest path between nucleus point and each metaedit node
+# then loop through each of these paths.
+# If a path from nucleus to nodes in a metaedit A contains metaedit B nodes along the
+# way, then that means that metaedit A is downstream of metaedit B
+# Build up a dependency tree of such things, stored as an anytree object or networkx graph
+
+# %%
+
+# %%
+
+# %%
+
+final_nf = final_nf.apply_node_features(["x", "y", "z"], axis="both")
+
+# %%
+final_nf.edges["distance_nm"] = np.sqrt(
+    (final_nf.edges["source_x"] - final_nf.edges["target_x"]) ** 2
+    + (final_nf.edges["source_y"] - final_nf.edges["target_z"]) ** 2
+    + (final_nf.edges["source_z"] - final_nf.edges["target_z"]) ** 2
+)
+final_nf.edges["distance_um"] = final_nf.edges["distance_nm"] / 1000
+# %%
+
+
+g = final_nf.to_networkx()
+g = g.to_undirected()
+
+import networkx as nx
+
+predecessors_by_metaoperation = {}
+
+# final_nf_keypoints = final_nf_keypoints.groupby("metaoperation_id").first()
+
+# for target_ind in final_nf_keypoints.index:
+#     metaoperation = final_nf.nodes.loc[target_ind, "metaoperation_id"]
+#     if not pd.isna(metaoperation):
+#         path = nx.shortest_path(g, source=ind, target=target_ind, weight="distance_um")
+
+#         keypoint_predecessors = final_nf_keypoints.index.intersection(path)
+#         keypoint_metaoperations = final_nf_keypoints.loc[
+#             keypoint_predecessors, "metaoperation_id"
+#         ]
+#         keypoint_metaoperations = keypoint_metaoperations[
+#             ~keypoint_metaoperations.isna()
+#         ]
+#         keypoint_metaoperations = keypoint_metaoperations[
+#             keypoint_metaoperations != metaoperation
+#         ]
+#         predecessors_by_metaoperation[metaoperation] = list(
+#             np.unique(keypoint_metaoperations)
+#         )
+
+for metaoperation_id, metaoperation_points in final_nf_keypoints.groupby(
+    "metaoperation_id", dropna=True
+):
+    if metaoperation_id == soma_nuc_merge_metaoperation:
+        continue
+    min_path_length = np.inf
+    min_path = None
+    for level2_id in metaoperation_points.index:
+        path = nx.shortest_path(
+            g, source=nuc_level2_id, target=level2_id, weight="distance_um"
+        )
+        path_length = nx.shortest_path_length(
+            g, source=nuc_level2_id, target=level2_id, weight="distance_um"
+        )
+        if path_length < min_path_length:
+            min_path_length = path_length
+            min_path = path
+
+    min_path = pd.Index(min_path)
+    keypoint_predecessors = min_path.intersection(final_nf_keypoints.index)
+    metaoperation_predecessors = final_nf_keypoints.loc[
+        keypoint_predecessors, "metaoperation_id"
+    ]
+    print(metaoperation_predecessors)
+    metaoperation_predecessors = metaoperation_predecessors[
+        ~metaoperation_predecessors.isna()
+    ]
+    print(metaoperation_predecessors)
+    metaoperation_predecessors = metaoperation_predecessors[
+        metaoperation_predecessors != metaoperation_id
+    ]
+    print(metaoperation_predecessors)
+    predecessors_by_metaoperation[metaoperation_id] = list(
+        np.unique(metaoperation_predecessors)
+    )
+
+# %%
+metaoperation_dependencies = nx.DiGraph()
+
+for metaoperation, predecessors in predecessors_by_metaoperation.items():
+    print(predecessors)
+    path = predecessors + [metaoperation]
+    print(path)
+    nx.add_path(metaoperation_dependencies, path)
+
+nx.is_tree(metaoperation_dependencies)
+
+# %%
+
+nontrivial_metaoperation_dependencies = metaoperation_dependencies.copy()
+out_degrees = metaoperation_dependencies.out_degree()
+
+in_degrees = list(metaoperation_dependencies.in_degree())
+in_degrees = list(zip(*in_degrees))
+in_degrees = pd.Series(index=in_degrees[0], data=in_degrees[1])
+max_degree_node = in_degrees.idxmax()
+
+# %%
+for node_id in metaoperation_dependencies.nodes():
+    in_edges = metaoperation_dependencies.in_edges(node_id)
+    n_edges = len(in_edges)
+    if n_edges == 0:
+        continue
+    first_edge = next(iter(in_edges))
+    if n_edges == 1 and first_edge == (max_degree_node, node_id):
+        nontrivial_metaoperation_dependencies.remove_node(node_id)
+
+# %%
+fig, ax = plt.subplots(1, 1, figsize=(15, 15))
+nx.draw(metaoperation_dependencies, with_labels=True, ax=ax)
+
+# %%
+
+fig, ax = plt.subplots(1, 1, figsize=(15, 15))
+nx.draw(nontrivial_metaoperation_dependencies, with_labels=True, ax=ax)
+
+# %%
+nx.minimum_cycle_basis(nx.to_undirected(metaoperation_dependencies))

@@ -27,6 +27,7 @@ axon-id = {path = "../axon_id", develop = true}
 apical-classifier = {path = "../apical_classifier", develop = true}
 task-queue = "^2.13.0"
 tables = {git = "https://github.com/PyTables/PyTables"}
+glasbey = "^0.2.0"
 
 [tool.poetry.group.dev]
 optional = true
