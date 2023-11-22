@@ -30,6 +30,7 @@ client = cc.CAVEclient("minnie65_phase3_v1")
 
 query_neurons = client.materialize.query_table("connectivity_groups_v507")
 
+
 nuc = client.materialize.query_table(
     "nucleus_detection_v0",  # select_columns=["pt_supervoxel_id", "pt_root_id"]
 ).set_index("pt_root_id")
@@ -39,12 +40,12 @@ nuc = client.materialize.query_table(
 os.environ["SKEDITS_USE_CLOUD"] = "True"
 os.environ["SKEDITS_RECOMPUTE"] = "False"
 
-
 # %%
 
 # getting a table of additional metadata for each operation
+# TODO something weird with 3, 6
 
-root_id = query_neurons["pt_root_id"].values[9]
+root_id = query_neurons["pt_root_id"].values[16]
 
 (
     networkdeltas_by_operation,
@@ -157,7 +158,6 @@ pre_synapses.set_index("id", inplace=True)
 # post_synapses = client.materialize.query_table(
 #     "synapses_pni_2", filter_equal_dict={"post_pt_root_id": root_id}
 # )
-
 
 # remove autapses
 pre_synapses.query("pre_pt_root_id != post_pt_root_id", inplace=True)
@@ -366,6 +366,74 @@ for metaoperation_id, metaoperation_points in final_nf_keypoints.groupby(
         metaoperation_predecessors.unique()
     )
 
+# %%
+# decent amount of redundant computation here but seems fast enough...
+
+predecessors_by_synapse = {}
+path_lengths_by_synapse = {}
+for synapse_id, row in tqdm(pre_synapses.iterrows(), total=len(pre_synapses)):
+    level2_id = row["pre_pt_current_level2_id"]
+    path = nx.shortest_path(
+        g, source=nuc_level2_id, target=level2_id, weight="distance_um"
+    )
+    # path_length = nx.shortest_path_length(
+    #     g, source=nuc_level2_id, target=level2_id, weight="distance_um"
+    # )
+
+    starts = final_nf.nodes.loc[path[:-1], ["x", "y", "z"]]
+    ends = final_nf.nodes.loc[path[1:], ["x", "y", "z"]]
+    path_length_nm = np.sqrt(((starts.values - ends.values) ** 2).sum(axis=1)).sum()
+
+    path = pd.Index(path)
+
+    keypoint_predecessors = path.intersection(final_nf_keypoints.index)
+
+    metaoperation_predecessors = final_nf_keypoints.loc[
+        keypoint_predecessors, "metaoperation_id"
+    ]
+    metaoperation_predecessors = metaoperation_predecessors[
+        ~metaoperation_predecessors.isna()
+    ]
+    metaoperation_predecessors = metaoperation_predecessors[
+        metaoperation_predecessors != metaoperation_id
+    ]
+    predecessors_by_synapse[synapse_id] = list(metaoperation_predecessors.unique())
+    path_lengths_by_synapse[synapse_id] = path_length_nm
+
+# %%
+
+synapse_metaoperation_dependencies = pd.Series(predecessors_by_synapse)
+pre_synapses["metaoperation_dependencies"] = synapse_metaoperation_dependencies
+pre_synapses["n_metaoperation_dependencies"] = pre_synapses[
+    "metaoperation_dependencies"
+].apply(len)
+
+synapse_path_lengths = pd.Series(path_lengths_by_synapse)
+pre_synapses["path_length_nm"] = synapse_path_lengths
+pre_synapses["path_length_um"] = pre_synapses["path_length_nm"] / 1000
+
+
+# %%
+
+plot = so.Plot(
+    data=pre_synapses, x="path_length_um", y="n_metaoperation_dependencies"
+).add(so.Dots(alpha=0.1, pointsize=3), so.Jitter(x=0, y=0.4))
+plot.save(f"path_length_vs_n_dependencies-root={root_id}")
+
+# %%
+so.Plot(data=pre_synapses, x="n_metaoperation_dependencies").add(
+    so.Bar(width=1), so.Hist(discrete=True, stat="proportion")
+).label(x="# of metaoperation dependencies", y="Proportion of synapses").show()
+
+# %%
+
+metaoperation_synapse_dependents = pre_synapses.explode("metaoperation_dependencies")[
+    "metaoperation_dependencies"
+].value_counts()
+metaoperation_synapse_dependents = metaoperation_synapse_dependents.reindex(
+    metaoperations_to_query
+).fillna(0)
+
 
 # %%
 
@@ -422,6 +490,13 @@ is_tree = nx.is_tree(metaoperation_dependencies)
 print("Merge dependency graph is a tree: ", is_tree)
 
 # %%
+# for each synapse
+# backtrack towards the soma/nucleus
+# stop when you reach a merge
+# then inherit the dependency structure of that merge
+
+
+# %%
 
 nontrivial_metaoperation_dependencies = metaoperation_dependencies.copy()
 out_degrees = metaoperation_dependencies.out_degree()
@@ -442,16 +517,24 @@ for node_id in metaoperation_dependencies.nodes():
         nontrivial_metaoperation_dependencies.remove_node(node_id)
 
 # %%
-fig, ax = plt.subplots(1, 1, figsize=(15, 15))
-nx.draw(metaoperation_dependencies, with_labels=True, ax=ax)
 
-# %%
+from pkg.plot import radial_hierarchy_pos
 
 fig, ax = plt.subplots(1, 1, figsize=(15, 15))
-nx.draw(nontrivial_metaoperation_dependencies, with_labels=True, ax=ax)
+pos = radial_hierarchy_pos(metaoperation_dependencies)
 
-# %%
-nx.minimum_cycle_basis(nx.to_undirected(metaoperation_dependencies))
+nx.draw_networkx(
+    metaoperation_dependencies,
+    nodelist=metaoperation_synapse_dependents.index.to_list(),
+    pos=pos,
+    with_labels=True,
+    ax=ax,
+    node_size=list(metaoperation_synapse_dependents.values),
+    font_size=6,
+)
+ax.axis("equal")
+ax.axis("off")
+plt.savefig(f"merge_dependency_tree_root={root_id}.png", bbox_inches="tight", dpi=300)
 
 # %%
 
@@ -515,22 +598,41 @@ fig, ax = plt.subplots(1, 1, figsize=(15, 9))
 sns.heatmap(connectivity_df, ax=ax, cmap="Blues", xticklabels=False)
 
 
+# # %%
+# from requests import HTTPError
+
+# try:
+#     mtypes = client.materialize.query_view("allen_column_mtypes_v2")
+#     mtypes["target_id"].isin(nuc["id"]).mean()
+#     new_root_ids = mtypes["target_id"].map(
+#         nuc.reset_index().set_index("id")["pt_root_id"]
+#     )
+#     mtypes["root_id"] = new_root_ids
+#     mtypes.set_index("root_id", inplace=True)
+#     mtypes.to_csv("mtypes.csv")
+# except HTTPError:
+#     mtypes = pd.read_csv("mtypes.csv", index_col=0)
+#     mtypes.index = mtypes.index.astype(int)
+
 # %%
-from requests import HTTPError
+mtypes = client.materialize.query_table("aibs_metamodel_mtypes_v661_v2")
 
-try:
-    mtypes = client.materialize.query_view("allen_column_mtypes_v2")
-    mtypes["target_id"].isin(nuc["id"]).mean()
-    new_root_ids = mtypes["target_id"].map(
-        nuc.reset_index().set_index("id")["pt_root_id"]
-    )
-    mtypes["root_id"] = new_root_ids
-    mtypes.set_index("root_id", inplace=True)
-    mtypes.to_csv("mtypes.csv")
-except HTTPError:
-    mtypes = pd.read_csv("mtypes.csv", index_col=0)
-    mtypes.index = mtypes.index.astype(int)
+# %%
+mtypes["target_id"].isin(nuc["id"]).mean()
 
+# %%
+new_root_ids = mtypes["target_id"].map(nuc.reset_index().set_index("id")["pt_root_id"])
+mtypes["root_id"] = new_root_ids
+
+root_id_counts = mtypes["root_id"].value_counts().sort_values(ascending=False)
+
+root_id_dups = root_id_counts[root_id_counts > 1].index
+
+#%%
+mtypes = mtypes.query("~root_id.isin(@root_id_dups)")
+
+# %%
+mtypes.set_index("root_id", inplace=True)
 
 # %%
 connectivity_df.columns.isin(mtypes.index).mean()
@@ -638,3 +740,5 @@ plot2 = (
     # .show()
     .save(f"exc_group_connectivity_root={root_id}.png", bbox_inches="tight")
 )
+
+# %%
