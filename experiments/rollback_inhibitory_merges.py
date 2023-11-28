@@ -1,5 +1,6 @@
 # %%
 import os
+import pickle
 
 import caveclient as cc
 import matplotlib.pyplot as plt
@@ -22,6 +23,7 @@ from pkg.neuroglancer import (
     finalize_link,
     generate_neuron_base_builders,
 )
+from pkg.plot import radial_hierarchy_pos
 from pkg.utils import get_level2_nodes_edges, get_nucleus_point_nm, pt_to_xyz
 
 # %%
@@ -29,7 +31,7 @@ from pkg.utils import get_level2_nodes_edges, get_nucleus_point_nm, pt_to_xyz
 client = cc.CAVEclient("minnie65_phase3_v1")
 
 query_neurons = client.materialize.query_table("connectivity_groups_v507")
-
+query_neurons.sort_values("id", inplace=True)
 
 nuc = client.materialize.query_table(
     "nucleus_detection_v0",  # select_columns=["pt_supervoxel_id", "pt_root_id"]
@@ -45,7 +47,7 @@ os.environ["SKEDITS_RECOMPUTE"] = "False"
 # getting a table of additional metadata for each operation
 # TODO something weird with 3, 6
 
-root_id = query_neurons["pt_root_id"].values[16]
+root_id = query_neurons["pt_root_id"].values[13]
 
 (
     networkdeltas_by_operation,
@@ -415,15 +417,28 @@ pre_synapses["path_length_um"] = pre_synapses["path_length_nm"] / 1000
 
 # %%
 
-plot = so.Plot(
-    data=pre_synapses, x="path_length_um", y="n_metaoperation_dependencies"
-).add(so.Dots(alpha=0.1, pointsize=3), so.Jitter(x=0, y=0.4))
+plot = (
+    so.Plot(data=pre_synapses, x="path_length_um", y="n_metaoperation_dependencies")
+    .add(so.Dots(alpha=0.1, pointsize=3), so.Jitter(x=0, y=0.4))
+    .label(
+        title=f"Root ID {root_id}, Found soma/nuc merge = {soma_nuc_merge_metaoperation is not None}",
+        x="Path length (um)",
+        y="# of metaoperation dependencies",
+    )
+)
 plot.save(f"path_length_vs_n_dependencies-root={root_id}")
 
 # %%
-so.Plot(data=pre_synapses, x="n_metaoperation_dependencies").add(
-    so.Bar(width=1), so.Hist(discrete=True, stat="proportion")
-).label(x="# of metaoperation dependencies", y="Proportion of synapses").show()
+plot = (
+    so.Plot(data=pre_synapses, x="n_metaoperation_dependencies")
+    .add(so.Bar(width=1), so.Hist(discrete=True, stat="proportion"))
+    .label(
+        x="# of metaoperation dependencies",
+        y="Proportion of synapses",
+        title=f"Root ID {root_id}, Found soma/nuc merge = {soma_nuc_merge_metaoperation is not None}",
+    )
+)
+plot.save(f"n_dependencies_hist-root={root_id}")
 
 # %%
 
@@ -483,17 +498,13 @@ metaoperation_dependencies = nx.DiGraph()
 
 for metaoperation, predecessors in predecessors_by_metaoperation.items():
     path = predecessors + [metaoperation]
+    if soma_nuc_merge_metaoperation is None:
+        path = [-1] + path
     nx.add_path(metaoperation_dependencies, path)
 
 is_tree = nx.is_tree(metaoperation_dependencies)
 
 print("Merge dependency graph is a tree: ", is_tree)
-
-# %%
-# for each synapse
-# backtrack towards the soma/nucleus
-# stop when you reach a merge
-# then inherit the dependency structure of that merge
 
 
 # %%
@@ -518,25 +529,30 @@ for node_id in metaoperation_dependencies.nodes():
 
 # %%
 
-from pkg.plot import radial_hierarchy_pos
 
 fig, ax = plt.subplots(1, 1, figsize=(15, 15))
 pos = radial_hierarchy_pos(metaoperation_dependencies)
 
+nodelist = metaoperation_synapse_dependents.index.to_list()
+if soma_nuc_merge_metaoperation is None:
+    nodelist = [-1] + nodelist
+
+node_sizes = list(metaoperation_synapse_dependents.values)
+if soma_nuc_merge_metaoperation is None:
+    node_sizes = [max(node_sizes) + 1] + node_sizes
+
 nx.draw_networkx(
     metaoperation_dependencies,
-    nodelist=metaoperation_synapse_dependents.index.to_list(),
+    nodelist=nodelist,
     pos=pos,
     with_labels=True,
     ax=ax,
-    node_size=list(metaoperation_synapse_dependents.values),
+    node_size=node_sizes,
     font_size=6,
 )
 ax.axis("equal")
 ax.axis("off")
 plt.savefig(f"merge_dependency_tree_root={root_id}.png", bbox_inches="tight", dpi=300)
-
-# %%
 
 
 # %%
@@ -597,23 +613,6 @@ connectivity_df = connectivity_df[p_found.index]
 fig, ax = plt.subplots(1, 1, figsize=(15, 9))
 sns.heatmap(connectivity_df, ax=ax, cmap="Blues", xticklabels=False)
 
-
-# # %%
-# from requests import HTTPError
-
-# try:
-#     mtypes = client.materialize.query_view("allen_column_mtypes_v2")
-#     mtypes["target_id"].isin(nuc["id"]).mean()
-#     new_root_ids = mtypes["target_id"].map(
-#         nuc.reset_index().set_index("id")["pt_root_id"]
-#     )
-#     mtypes["root_id"] = new_root_ids
-#     mtypes.set_index("root_id", inplace=True)
-#     mtypes.to_csv("mtypes.csv")
-# except HTTPError:
-#     mtypes = pd.read_csv("mtypes.csv", index_col=0)
-#     mtypes.index = mtypes.index.astype(int)
-
 # %%
 mtypes = client.materialize.query_table("aibs_metamodel_mtypes_v661_v2")
 
@@ -628,7 +627,7 @@ root_id_counts = mtypes["root_id"].value_counts().sort_values(ascending=False)
 
 root_id_dups = root_id_counts[root_id_counts > 1].index
 
-#%%
+# %%
 mtypes = mtypes.query("~root_id.isin(@root_id_dups)")
 
 # %%
@@ -671,7 +670,6 @@ fig, ax = plt.subplots(1, 1, figsize=(10, 5))
 sns.heatmap(exc_group_p_connectivity_df, cmap="Blues", ax=ax)
 
 # %%
-import pickle
 
 palette_file = "data/ctype_hues.pkl"
 
@@ -693,7 +691,6 @@ exc_group_p_connectivity_tidy = pd.melt(
     value_name="p_synapses",
 )
 
-import seaborn.objects as so
 
 fig, axs = plt.subplots(1, 2, figsize=(10, 5))
 fig.suptitle(
