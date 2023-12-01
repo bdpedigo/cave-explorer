@@ -353,5 +353,3 @@ plt.savefig(
     / f"feature_samples_root_id={root_id}_use_cc={use_cc}.png",
     dpi=300,
 )
-
-# %%
