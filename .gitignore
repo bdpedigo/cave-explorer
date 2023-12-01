@@ -163,3 +163,5 @@ cython_debug/
 results/figs
 results/outs
 .DS_Store
+docs/.quarto/
+docs/_site/
