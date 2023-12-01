@@ -27,7 +27,7 @@ from pcg_skel.chunk_tools import build_spatial_graph
 
 # %%
 recompute = False
-cloud = False
+cloud = True
 
 # %%
 
@@ -57,7 +57,7 @@ out_file = f"{root_id}_operations.json"
 
 if not cf.exists(out_file) or recompute:
     print("Pulling network edits")
-    networkdeltas_by_operation = get_network_edits(root_id, client, filtered=False)
+    networkdeltas_by_operation = get_network_edits(root_id, client)
 
     networkdelta_dicts = {}
     for operation_id, delta in networkdeltas_by_operation.items():
@@ -353,3 +353,5 @@ plt.savefig(
     / f"feature_samples_root_id={root_id}_use_cc={use_cc}.png",
     dpi=300,
 )
+
+# %%
