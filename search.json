@@ -1,10 +1,10 @@
 [
   {
-    "objectID": "about.html",
-    "href": "about.html",
-    "title": "About",
+    "objectID": "introduction.html",
+    "href": "introduction.html",
+    "title": "Introduction",
     "section": "",
-    "text": "About this site"
+    "text": "In the effort to understand the brain and its function, connectomics (the mapping of neural wiring diagrams in precise detail, often via electron microscopy) has proven a useful tool. Connectomes are now available for entire larval (Winding et al. 2023) and adult fly brains (Schlegel et al. 2023; Dorkenwald et al. 2023), large regions of mouse visual cortex (MICrONS Consortium et al. 2021), human cortex (Shapson-Coe et al. 2021), and many others. These reconstructions now contain on the order of 100,000s of neurons, and 100s of millions of synapses. This dramatic scaling in accurate connnectome reconstruction has been enabled by a strategy of scalable automatic segmentation of neurons and detection of synapses, followed by laborious human proofreading of\n\n\n\n\n\nReferences\n\nDorkenwald, Sven, Arie Matsliah, Amy R Sterling, Philipp Schlegel, Szi-chieh Yu, Claire E. McKellar, Albert Lin, et al. 2023. “Neuronal Wiring Diagram of an Adult Brain.” http://dx.doi.org/10.1101/2023.06.27.546656.\n\n\nMICrONS Consortium, J. Alexander Bae, Mahaly Baptiste, Caitlyn A. Bishop, Agnes L. Bodor, Derrick Brittain, JoAnn Buchanan, et al. 2021. “Functional Connectomics Spanning Multiple Areas of Mouse Visual Cortex.” http://dx.doi.org/10.1101/2021.07.28.454025.\n\n\nSchlegel, Philipp, Yijie Yin, Alexander S. Bates, Sven Dorkenwald, Katharina Eichler, Paul Brooks, Daniel S. Han, et al. 2023. “Whole-Brain Annotation and Multi-Connectome Cell Typing Quantifies Circuit Stereotypy inDrosophila.” http://dx.doi.org/10.1101/2023.06.27.546055.\n\n\nShapson-Coe, Alexander, Michał Januszewski, Daniel R. Berger, Art Pope, Yuelong Wu, Tim Blakely, Richard L. Schalek, et al. 2021. “A Connectomic Study of a Petascale Fragment of Human Cerebral Cortex.” http://dx.doi.org/10.1101/2021.05.29.446289.\n\n\nWinding, Michael, Benjamin D. Pedigo, Christopher L. Barnes, Heather G. Patsolic, Youngser Park, Tom Kazimiers, Akira Fushiki, et al. 2023. “The Connectome of an Insect Brain.” Science 379 (6636): eadd9330. https://doi.org/10.1126/science.add9330."
   },
   {
     "objectID": "index.html",
@@ -12,5 +12,26 @@
     "title": "docs",
     "section": "",
     "text": "This is a Quarto website.\nTo learn more about Quarto websites visit https://quarto.org/docs/websites."
+  },
+  {
+    "objectID": "test.html",
+    "href": "test.html",
+    "title": "test",
+    "section": "",
+    "text": "test"
+  },
+  {
+    "objectID": "abstract.html",
+    "href": "abstract.html",
+    "title": "Abstract",
+    "section": "",
+    "text": "Historically, connectomes have been extremely labor-intensive to generate, requiring vast amounts of person-hours to annotate electron microscopy (EM) image volumes. Automated reconstruction from EM images using computer vision has recently developed to the point where it is being deployed widely to reconstruct connectomes at unprecedented scales. However, these automated techniques, while impressive, typically still have many errors that require human proofreading of these datasets, which involves linking together fragments of the same neuron which have been separated or separating false-merges of distinct cells. Here, we study the effect that these proofreading modifications have on the cortical wiring diagram of a region of mouse visual cortex. We compute several connectivity metrics such as the probability of two cell types or two specific neurons connecting, and study how this connectivity changes as we artificially replay a specific subset of edits onto the neurons in the volume. We show that while X changes drastically with proofreading, Z and Y metrics are relatively stable after a key subset of edits are applied. Our work lays the foundation for a quantitative assessment of which areas for human or machine proofreading will be the most influential for downstream analysis, guiding future connectomics reconstructions towards answering scientific questions with a practical amount of effort. We also describe how our analysis reveals quantitative estimates of one aspect of the variability associated with connectome reconstruction."
+  },
+  {
+    "objectID": "about.html",
+    "href": "about.html",
+    "title": "About",
+    "section": "",
+    "text": "About this site"
   }
 ]
