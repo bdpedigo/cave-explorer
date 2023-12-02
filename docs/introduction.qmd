@@ -1,0 +1,8 @@
+---
+title: Introduction
+bibliography: references.bib
+---
+
+::: justify
+In the effort to understand the brain and its function, connectomics (the mapping of neural wiring diagrams in precise detail, often via electron microscopy) has proven a useful tool. Connectomes are now available for entire larval [@winding2023] and adult fly brains [@schlegel2023; @dorkenwald2023], large regions of mouse visual cortex [@microns2021], human cortex [@shapson-coe2021], and many others. These reconstructions now contain on the order of 100,000s of neurons, and 100s of millions of synapses. This dramatic scaling in accurate connnectome reconstruction has been enabled by a strategy of scalable automatic segmentation of neurons and detection of synapses, followed by laborious human proofreading of
+:::

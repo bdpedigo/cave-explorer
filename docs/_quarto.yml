@@ -2,16 +2,30 @@ project:
   type: website
 
 website:
-  title: "docs"
+  title: "Proofreading retrospective"
   navbar:
     left:
       - href: index.qmd
         text: Home
       - about.qmd
+    tools:
+      - icon: github
+        menu:
+          - text: Source Code
+            url: https://github.com/bdpedigo/skedits
+          - text: Report a Bug
+            url: https://github.com/bdpedigo/skedits/issues/new
+  open-graph: true
+  sidebar:
+    style: "docked"
+    search: false
+    contents:
+      - abstract.qmd
+      - introduction.qmd
 
 format:
   html:
-    theme: journal
+    theme: lux
     css: styles.css
     toc: true
 

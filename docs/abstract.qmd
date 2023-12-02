@@ -1,0 +1,9 @@
+---
+title: Abstract
+---
+
+::: {.justify}
+
+Historically, connectomes have been extremely labor-intensive to generate, requiring vast amounts of person-hours to annotate electron microscopy (EM) image volumes. Automated reconstruction from EM images using computer vision has recently developed to the point where it is being deployed widely to reconstruct connectomes at unprecedented scales. However, these automated techniques, while impressive, typically still have many errors that require human proofreading of these datasets, which involves linking together fragments of the same neuron which have been separated or separating false-merges of distinct cells. Here, we study the effect that these proofreading modifications have on the cortical wiring diagram of a region of mouse visual cortex. We compute several connectivity metrics such as the probability of two cell types or two specific neurons connecting, and study how this connectivity changes as we artificially replay a specific subset of edits onto the neurons in the volume. We show that while `X` changes drastically with proofreading, `Z` and `Y` metrics are relatively stable after a key subset of edits are applied. Our work lays the foundation for a quantitative assessment of which areas for human or machine proofreading will be the most influential for downstream analysis, guiding future connectomics reconstructions towards answering scientific questions with a practical amount of effort. We also describe how our analysis reveals quantitative estimates of one aspect of the variability associated with connectome reconstruction.
+
+:::
