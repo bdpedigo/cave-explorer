@@ -1,0 +1,262 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\PassOptionsToPackage{dvipsnames,svgnames,x11names}{xcolor}
+%
+\documentclass[
+  letterpaper,
+  DIV=11,
+  numbers=noendperiod]{scrartcl}
+
+\usepackage{amsmath,amssymb}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math}
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else  
+    % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{xcolor}
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+% Make \paragraph and \subparagraph free-standing
+\ifx\paragraph\undefined\else
+  \let\oldparagraph\paragraph
+  \renewcommand{\paragraph}[1]{\oldparagraph{#1}\mbox{}}
+\fi
+\ifx\subparagraph\undefined\else
+  \let\oldsubparagraph\subparagraph
+  \renewcommand{\subparagraph}[1]{\oldsubparagraph{#1}\mbox{}}
+\fi
+
+
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}\usepackage{longtable,booktabs,array}
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
+\usepackage{graphicx}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+% Set default figure placement to htbp
+\makeatletter
+\def\fps@figure{htbp}
+\makeatother
+\newlength{\cslhangindent}
+\setlength{\cslhangindent}{1.5em}
+\newlength{\csllabelwidth}
+\setlength{\csllabelwidth}{3em}
+\newlength{\cslentryspacingunit} % times entry-spacing
+\setlength{\cslentryspacingunit}{\parskip}
+\newenvironment{CSLReferences}[2] % #1 hanging-ident, #2 entry spacing
+ {% don't indent paragraphs
+  \setlength{\parindent}{0pt}
+  % turn on hanging indent if param 1 is 1
+  \ifodd #1
+  \let\oldpar\par
+  \def\par{\hangindent=\cslhangindent\oldpar}
+  \fi
+  % set entry spacing
+  \setlength{\parskip}{#2\cslentryspacingunit}
+ }%
+ {}
+\usepackage{calc}
+\newcommand{\CSLBlock}[1]{#1\hfill\break}
+\newcommand{\CSLLeftMargin}[1]{\parbox[t]{\csllabelwidth}{#1}}
+\newcommand{\CSLRightInline}[1]{\parbox[t]{\linewidth - \csllabelwidth}{#1}\break}
+\newcommand{\CSLIndent}[1]{\hspace{\cslhangindent}#1}
+
+\KOMAoption{captions}{tableheading}
+\makeatletter
+\makeatother
+\makeatletter
+\makeatother
+\makeatletter
+\@ifpackageloaded{caption}{}{\usepackage{caption}}
+\AtBeginDocument{%
+\ifdefined\contentsname
+  \renewcommand*\contentsname{Table of contents}
+\else
+  \newcommand\contentsname{Table of contents}
+\fi
+\ifdefined\listfigurename
+  \renewcommand*\listfigurename{List of Figures}
+\else
+  \newcommand\listfigurename{List of Figures}
+\fi
+\ifdefined\listtablename
+  \renewcommand*\listtablename{List of Tables}
+\else
+  \newcommand\listtablename{List of Tables}
+\fi
+\ifdefined\figurename
+  \renewcommand*\figurename{Figure}
+\else
+  \newcommand\figurename{Figure}
+\fi
+\ifdefined\tablename
+  \renewcommand*\tablename{Table}
+\else
+  \newcommand\tablename{Table}
+\fi
+}
+\@ifpackageloaded{float}{}{\usepackage{float}}
+\floatstyle{ruled}
+\@ifundefined{c@chapter}{\newfloat{codelisting}{h}{lop}}{\newfloat{codelisting}{h}{lop}[chapter]}
+\floatname{codelisting}{Listing}
+\newcommand*\listoflistings{\listof{codelisting}{List of Listings}}
+\makeatother
+\makeatletter
+\@ifpackageloaded{caption}{}{\usepackage{caption}}
+\@ifpackageloaded{subcaption}{}{\usepackage{subcaption}}
+\makeatother
+\makeatletter
+\@ifpackageloaded{tcolorbox}{}{\usepackage[skins,breakable]{tcolorbox}}
+\makeatother
+\makeatletter
+\@ifundefined{shadecolor}{\definecolor{shadecolor}{rgb}{.97, .97, .97}}
+\makeatother
+\makeatletter
+\makeatother
+\makeatletter
+\makeatother
+\ifLuaTeX
+  \usepackage{selnolig}  % disable illegal ligatures
+\fi
+\IfFileExists{bookmark.sty}{\usepackage{bookmark}}{\usepackage{hyperref}}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same} % disable monospaced font for URLs
+\hypersetup{
+  pdftitle={Introduction},
+  colorlinks=true,
+  linkcolor={blue},
+  filecolor={Maroon},
+  citecolor={Blue},
+  urlcolor={Blue},
+  pdfcreator={LaTeX via pandoc}}
+
+\title{Introduction}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\ifdefined\Shaded\renewenvironment{Shaded}{\begin{tcolorbox}[enhanced, boxrule=0pt, borderline west={3pt}{0pt}{shadecolor}, frame hidden, interior hidden, breakable, sharp corners]}{\end{tcolorbox}}\fi
+
+\hypertarget{background}{%
+\subsection{Background}\label{background}}
+
+In the effort to understand the brain and its function, connectomics
+(the mapping of neural wiring diagrams in precise detail, often via
+electron microscopy) has proven a useful tool. Connectomes are now
+available for entire larval (Winding et al. 2023) and adult fly brains
+(Schlegel et al. 2023; Dorkenwald et al. 2023), large regions of mouse
+visual cortex (MICrONS Consortium et al. 2021), human cortex
+(Shapson-Coe et al. 2021), and many others. These reconstructions now
+contain on the order of 100,000s of neurons, and 100s of millions of
+synapses. This dramatic scaling in accurate connnectome reconstruction
+has been enabled by a strategy of scalable automatic segmentation of
+neurons and detection of synapses, followed by laborious human
+proofreading to correct false merges and extend incomplete pieces of
+neurons. This effort has been done, understandably, with the intent that
+we want to be able to trust the resulting reconstruction and believe
+that it is a fair representation of the neuroanatomy and connectivity of
+the biological sample.
+
+\hypertarget{the-question}{%
+\subsection{The question}\label{the-question}}
+
+However, since this manual proofreading is laborious (for instance,
+there were
+\href{https://x.com/FlyWireNews/status/1674886396564193281?s=20}{2.7
+million edits in FlyWire over 4 years} as of June 2023) it is worth
+reflecting on the scientific value of this effort. \textbf{How
+consequential was this proofreading on the downstream measures we care
+about for analysis, such as connection probabilities between cell types?
+Are certain edits more important than others, in terms of their impact
+on overal circuit structure?} Next, we touch on how others have explored
+these and related questions in prior work, before motivating our own
+contributions here.
+
+\hypertarget{prior-work}{%
+\subsection{Prior work}\label{prior-work}}
+
+\hypertarget{why-it-matters}{%
+\subsection{Why it matters}\label{why-it-matters}}
+
+\hypertarget{our-contribution}{%
+\subsection{Our contribution}\label{our-contribution}}
+
+\hypertarget{refs}{}
+\begin{CSLReferences}{1}{0}
+\leavevmode\vadjust pre{\hypertarget{ref-dorkenwald2023}{}}%
+Dorkenwald, Sven, Arie Matsliah, Amy R Sterling, Philipp Schlegel,
+Szi-chieh Yu, Claire E. McKellar, Albert Lin, et al. 2023. {``Neuronal
+Wiring Diagram of an Adult Brain.''}
+\url{http://dx.doi.org/10.1101/2023.06.27.546656}.
+
+\leavevmode\vadjust pre{\hypertarget{ref-microns2021}{}}%
+MICrONS Consortium, J. Alexander Bae, Mahaly Baptiste, Caitlyn A.
+Bishop, Agnes L. Bodor, Derrick Brittain, JoAnn Buchanan, et al. 2021.
+{``Functional Connectomics Spanning Multiple Areas of Mouse Visual
+Cortex.''} \url{http://dx.doi.org/10.1101/2021.07.28.454025}.
+
+\leavevmode\vadjust pre{\hypertarget{ref-schlegel2023}{}}%
+Schlegel, Philipp, Yijie Yin, Alexander S. Bates, Sven Dorkenwald,
+Katharina Eichler, Paul Brooks, Daniel S. Han, et al. 2023.
+{``Whole-Brain Annotation and Multi-Connectome Cell Typing Quantifies
+Circuit Stereotypy in{\emph{Drosophila}}.''}
+\url{http://dx.doi.org/10.1101/2023.06.27.546055}.
+
+\leavevmode\vadjust pre{\hypertarget{ref-shapson-coe2021}{}}%
+Shapson-Coe, Alexander, Michał Januszewski, Daniel R. Berger, Art Pope,
+Yuelong Wu, Tim Blakely, Richard L. Schalek, et al. 2021. {``A
+Connectomic Study of a Petascale Fragment of Human Cerebral Cortex.''}
+\url{http://dx.doi.org/10.1101/2021.05.29.446289}.
+
+\leavevmode\vadjust pre{\hypertarget{ref-winding2023}{}}%
+Winding, Michael, Benjamin D. Pedigo, Christopher L. Barnes, Heather G.
+Patsolic, Youngser Park, Tom Kazimiers, Akira Fushiki, et al. 2023.
+{``The Connectome of an Insect Brain.''} \emph{Science} 379 (6636):
+eadd9330. \url{https://doi.org/10.1126/science.add9330}.
+
+\end{CSLReferences}
+
+
+
+\end{document}

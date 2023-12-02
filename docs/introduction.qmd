@@ -4,5 +4,27 @@ bibliography: references.bib
 ---
 
 ::: justify
-In the effort to understand the brain and its function, connectomics (the mapping of neural wiring diagrams in precise detail, often via electron microscopy) has proven a useful tool. Connectomes are now available for entire larval [@winding2023] and adult fly brains [@schlegel2023; @dorkenwald2023], large regions of mouse visual cortex [@microns2021], human cortex [@shapson-coe2021], and many others. These reconstructions now contain on the order of 100,000s of neurons, and 100s of millions of synapses. This dramatic scaling in accurate connnectome reconstruction has been enabled by a strategy of scalable automatic segmentation of neurons and detection of synapses, followed by laborious human proofreading of
+
+## Background 
+
+In the effort to understand the brain and its function, connectomics (the mapping of neural wiring diagrams in precise detail, often via electron microscopy) has proven a useful tool. Connectomes are now available for entire larval [@winding2023] and adult fly brains [@schlegel2023; @dorkenwald2023], large regions of mouse visual cortex [@microns2021], human cortex [@shapson-coe2021], and many others. These reconstructions now contain on the order of 100,000s of neurons, and 100s of millions of synapses. This dramatic scaling in accurate connnectome reconstruction has been enabled by a strategy of scalable automatic segmentation of neurons and detection of synapses, followed by laborious human proofreading to correct false merges and extend incomplete pieces of neurons. This effort has been done, understandably, with the intent that we want to be able to trust the resulting reconstruction and believe that it is a fair representation of the neuroanatomy and connectivity of the biological sample.
+
+## The question
+
+However, since this manual proofreading is laborious (for instance, there were [2.7 million edits in FlyWire over 4 years](https://x.com/FlyWireNews/status/1674886396564193281?s=20) as of June 2023) it is worth reflecting on the scientific value of this effort. **How consequential was this proofreading on the downstream measures we care about for analysis, such as connection probabilities between cell types? Are certain edits more important than others, in terms of their impact on overal circuit structure?** Next, we touch on how others have explored these and related questions in prior work, before motivating our own contributions here.
+
+## Prior work
+
+#. paper from carey and jovo on power
+#. casey paper
+#. phillip paper mentions variability
+
+## Why it matters
+
+#. 
+#. 
+#. 
+
+## Our contribution
+
 :::
