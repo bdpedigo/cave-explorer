@@ -21,9 +21,9 @@ However, since this manual proofreading is laborious (for instance, there were [
 
 ## Why it matters
 
-#. 
-#. 
-#. 
+#. understand what we can trust about the data we have
+#. understand how to direct future efforts of proofreading
+#. understand 
 
 ## Our contribution
 

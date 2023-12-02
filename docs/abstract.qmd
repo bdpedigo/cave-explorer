@@ -1,6 +1,25 @@
 ---
 title: Abstract
+date: 2023-12-01
+author:
+  - name: Benjamin D. Pedigo
+    id: bdp
+    orcid: 0000-0002-9519-1190
+    email: ben.pedigo@alleninstitute.org
+    corresponding: true
+    affiliation:
+      - ref: allen
+        # - name: Allen Institute for Brain Science
+        # - city: Seattle
+affiliations: 
+  - id: allen
+    name: Allen Institute for Brain Science
+    city: Seattle
+    state: WA
+    url: https://alleninstitute.org/
+    ror: https://ror.org/03cpe7c52
 ---
+
 
 ::: {.justify}
 
