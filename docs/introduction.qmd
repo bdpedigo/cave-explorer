@@ -24,11 +24,13 @@ In @priebe2013, the authors ask whether one should desire lots of "highly proofr
 
 ## Why it matters
 
-1.  understand what we can trust about the data we have
+There are several reasons why understanding the variability of connectivity with respect to proofreading is worthwhile for modern connectomics:
 
-2.  understand how to direct future efforts of proofreading
+First, understanding the sensitivity of connectivity features to proofreading provides clues as to the technical variability associated with an imperfect reconstruction of an underlying biological network. For instance, if one wanted to compare connectivity feature `Y` between two datasets, but `Y` varies drastically based on proofreading level, then it will be challenging to compare `Y` without ensuring proofreading was done in the exact same way for these two datasets.
 
-3.  understand
+Second, understanding this sensitivity is important for directing future proofreading efforts. Achieving a "perfect connectome" reconstruction is a comforting goal to strive for, but given finite time and resources, it is worthwhile to consider which efforts will actually affect downstream analysis we are interested in. Increasingly, a single connectomics datasets may be used for addressing many questions by directing proofreading toward particular sub-goals. It is worth understanding which questions can be answered "out-of-the-box" with no additional proofreading after the initial segmentation, and which will require further effort to get a trustworth answer.
 
 ## Our contribution
+
+In this work, we investigate these questions using large-scale reconstructions of mouse visual cortex as testbeds for these ideas. We *do not* aim to answer these questions holistically for all connectomics datasets and possible connectivity features; such an endeavor would be impossible since the answer is likely to depend greatly on the dataset and the question. Rather, we provide a set of guiding principles for which types of features are likely to be variable, and provide tools for other connectomicists to analyze these questions on their own data.
 :::
