@@ -95,7 +95,7 @@ div.csl-indent {
 <meta property="og:site-name" content="Proofreading retrospective">
 </head>
 
-<body class="nav-sidebar docked nav-fixed">
+<body class="nav-sidebar docked nav-fixed slimcontent">
 
 <div id="quarto-search-results"></div>
   <header id="quarto-header" class="headroom fixed-top">
@@ -179,7 +179,7 @@ div.csl-indent {
         
     </div>
 <!-- main -->
-<main class="content" id="quarto-document-content">
+<main class="content page-columns page-full" id="quarto-document-content">
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
@@ -198,30 +198,30 @@ div.csl-indent {
 
 </header>
 
-<div class="justify">
-<section id="background" class="level2">
+<div class="justify page-columns page-full">
+<section id="background" class="level2 page-columns page-full">
 <h2 class="anchored" data-anchor-id="background">Background</h2>
-<p>In the effort to understand the brain and its function, connectomics (the mapping of neural wiring diagrams in precise detail, often via electron microscopy) has proven a useful tool. Connectomes are now available for entire larval <span class="citation" data-cites="winding2023">(<a href="#ref-winding2023" role="doc-biblioref">Winding et al. 2023</a>)</span> and adult fly brains <span class="citation" data-cites="schlegel2023 dorkenwald2023">(<a href="#ref-schlegel2023" role="doc-biblioref">Schlegel et al. 2023</a>; <a href="#ref-dorkenwald2023" role="doc-biblioref">Dorkenwald et al. 2023</a>)</span>, large regions of mouse visual cortex <span class="citation" data-cites="microns2021">(<a href="#ref-microns2021" role="doc-biblioref">MICrONS Consortium et al. 2021</a>)</span>, human cortex <span class="citation" data-cites="shapson-coe2021">(<a href="#ref-shapson-coe2021" role="doc-biblioref">Shapson-Coe et al. 2021</a>)</span>, and many others. These reconstructions now contain on the order of 100,000s of neurons, and 100s of millions of synapses. This dramatic scaling in accurate connnectome reconstruction has been enabled by a strategy of scalable automatic segmentation of neurons and detection of synapses, followed by laborious human proofreading to correct false merges and extend incomplete pieces of neurons. This effort has been done, understandably, with the intent that we want to be able to trust the resulting reconstruction and believe that it is a fair representation of the neuroanatomy and connectivity of the biological sample.</p>
+<div class="page-columns page-full"><p>In the effort to understand the brain and its function, connectomics has proven a useful tool.  <em>Connectomes</em> are now available for entire larval <span class="citation" data-cites="winding2023">(<a href="#ref-winding2023" role="doc-biblioref">Winding et al. 2023</a>)</span> and adult fly brains <span class="citation" data-cites="schlegel2023 dorkenwald2023">(<a href="#ref-schlegel2023" role="doc-biblioref">Schlegel et al. 2023</a>; <a href="#ref-dorkenwald2023" role="doc-biblioref">Dorkenwald et al. 2023</a>)</span>, large regions of mouse visual cortex <span class="citation" data-cites="microns2021">(<a href="#ref-microns2021" role="doc-biblioref">MICrONS Consortium et al. 2021</a>)</span>, human cortex <span class="citation" data-cites="shapson-coe2021">(<a href="#ref-shapson-coe2021" role="doc-biblioref">Shapson-Coe et al. 2021</a>)</span>, and many other areas and organisms. The largest of these connectome reconstructions now contain on the order of hundreds of thousands of neurons, and hundreds of millions of synapses. This unprecedented scale in connnectome reconstruction has been enabled by segmenting cells and annotating synapses with computer vision, followed by laborious human proofreading to correct false merges and extend incomplete pieces of neurons. This latter effort has been done, understandably, with the intent that we want to be able to trust the resulting reconstruction and believe that it is a fair representation of the neuroanatomy and connectivity of the biological sample: thus, one should correct the results of an automated algorithm by this manual proofreading process.</p><div class="no-row-height column-margin column-container"><span class=""><em>Connectome</em>: a map of neural wiring diagrams in precise detail, often obtained via electron microscopy followed by manual or automated reconstruction of the neurons and other cells in that image volume.</span></div></div>
+
+<div class="no-row-height column-margin column-container"><div class="">
+
+</div></div></section>
+<section id="the-questions" class="level2">
+<h2 class="anchored" data-anchor-id="the-questions">The questions</h2>
+<p>However, since this manual proofreading is laborious (for instance, there were <a href="https://x.com/FlyWireNews/status/1674886396564193281?s=20">2.7 million edits in FlyWire over 4 years</a> as of June 2023) it is worth reflecting on the scientific value of this effort. <strong>How consequential was this proofreading on the downstream measures we care about for analysis,</strong> such as connection probabilities between cell types<strong>? Are some connectivity features stable with proofreading, and others variable? Are certain edits more important than others</strong>, in terms of their impact on overal circuit structure? Next, we touch on how others have explored these and related questions in prior work, before motivating our own contributions here.</p>
 </section>
-<section id="the-question" class="level2">
-<h2 class="anchored" data-anchor-id="the-question">The question</h2>
-<p>However, since this manual proofreading is laborious (for instance, there were <a href="https://x.com/FlyWireNews/status/1674886396564193281?s=20">2.7 million edits in FlyWire over 4 years</a> as of June 2023) it is worth reflecting on the scientific value of this effort. <strong>How consequential was this proofreading on the downstream measures we care about for analysis, such as connection probabilities between cell types? Are some connectivity features stable with proofreading, and others variable? Are certain edits more important than others, in terms of their impact on overal circuit structure?</strong> Next, we touch on how others have explored these and related questions in prior work, before motivating our own contributions here.</p>
-</section>
-<section id="prior-work" class="level2">
+<section id="prior-work" class="level2 page-columns page-full">
 <h2 class="anchored" data-anchor-id="prior-work">Prior work</h2>
-<ol type="1">
-<li>paper from carey and jovo on power</li>
-</ol>
-<p>In <span class="citation" data-cites="priebe2013">Priebe, Vogelstein, and Bock (<a href="#ref-priebe2013" role="doc-biblioref">2013</a>)</span>, the authors ask whether one should desire lots of “highly proofread” data, or a smaller amount of partially proofread or noisy data. They frame this question from the perspective of statistical hypothesis testing, asking which approach has higher power for distinguishing network parameters under a toy model. This work is an illustrative case for why, at least in theory, it is possible to actually <em>prefer</em> lots of unproofread data to a smaller amount of curated data. This is a prospect worth considering, especially in light of costly proofreading endeavors. However, in this work the toy model was set up such that unproofread data had no <em>bias</em>, but merely represented a noisier version of a ground truth network. In reality, the unproofread networks we observe in connectomics likely have extreme bias in the way that errors are observed. For instance, one error in segmentation could lead to missing the entire primary axon of a neuron, effectively deleting all of that neurons outputs in one stroke.</p>
-<ol type="1">
-<li><p>casey paper</p></li>
+<div class="page-columns page-full"><p>In <span class="citation" data-cites="priebe2013">Priebe, Vogelstein, and Bock (<a href="#ref-priebe2013" role="doc-biblioref">2013</a>)</span>, the authors ask whether one should desire lots of “highly proofread” data, or a smaller amount of partially proofread or noisy data. They frame this question from the perspective of statistical hypothesis testing, asking which approach has higher power for distinguishing network parameters under a toy model. This work is an illustrative case for why, at least in theory, it is possible to actually <em>prefer</em> lots of unproofread data to a smaller amount of curated data. This is a prospect worth considering, especially in light of costly proofreading endeavors. However, this work was done in a toy model which was set up such that unproofread data had no <em>bias</em>, but merely represented a noisier version of a ground truth network.  In reality, the unproofread networks we observe in connectomics likely have extreme bias in the way that errors are observed. For instance, one error in segmentation could lead to missing the entire primary axon of a neuron, effectively deleting all of that neurons outputs in one stroke. In this work, we consider how connectivity estimands</p><div class="no-row-height column-margin column-container"><span class=""><em>Bias:</em> the distance between an expected value of an estimator and the true value of the parameter it is trying to estimate.</span></div></div>
+<ul>
+<li><p>casey quantitative neuroanatomy paper</p></li>
 <li><p>phillip paper mentions variability</p></li>
-</ol>
+</ul>
 </section>
 <section id="why-it-matters" class="level2">
 <h2 class="anchored" data-anchor-id="why-it-matters">Why it matters</h2>
 <p>There are several reasons why understanding the variability of connectivity with respect to proofreading is worthwhile for modern connectomics:</p>
-<p>First, understanding the sensitivity of connectivity features to proofreading provides clues as to the technical variability associated with an imperfect reconstruction of an underlying biological network. For instance, if one wanted to compare connectivity feature <code>Y</code> between two datasets, but <code>Y</code> varies drastically based on proofreading level, then it will be challenging to compare <code>Y</code> without ensuring proofreading was done in the exact same way for these two datasets.</p>
+<p>First, understanding the sensitivity of connectivity features to proofreading provides clues as to the technical variability associated with an imperfect reconstruction of an underlying biological network. For instance, if one wanted to compare connectivity feature <span class="math inline">\(Y\)</span> between two datasets, but <span class="math inline">\(Y\)</span> varies drastically based on proofreading level, then it will be challenging to compare <span class="math inline">\(Y\)</span> without ensuring proofreading was done in the exact same way for these two datasets.</p>
 <p>Second, understanding this sensitivity is important for directing future proofreading efforts. Achieving a “perfect connectome” reconstruction is a comforting goal to strive for, but given finite time and resources, it is worthwhile to consider which efforts will actually affect downstream analysis we are interested in. Increasingly, a single connectomics datasets may be used for addressing many questions by directing proofreading toward particular sub-goals. It is worth understanding which questions can be answered “out-of-the-box” with no additional proofreading after the initial segmentation, and which will require further effort to get a trustworth answer.</p>
 </section>
 <section id="our-contribution" class="level2">
@@ -232,7 +232,7 @@ div.csl-indent {
 <h2 class="anchored" data-anchor-id="outline">Outline</h2>
 <p>We start by clearly defining a set of connectivity features to consider for this work.</p>
 <p>Then, we extract the complete set of proofreading edits performed on a highly curated column of cortical connectivity in a mouse’s visual cortex. We also map each synapse between neurons in this column to the edits it “depends” on, in the sense that those edits had to happen for a statement about soma <span class="math inline">\(i\)</span> to soma <span class="math inline">\(j\)</span> connectivity to be made.</p>
-<p>Using this information, we then construct various “sloppy” networks, instantiated by replaying particular edits over the network and omitting others. These networks vary in their degree of completeness (i.e.&nbsp;some measure of how many of the edits were used) from the original segmentation all the way to the final proofread dataset. We also vary the “proofreader model” used to assign edits to “ON” or “OFF” in some ordering.</p>
+<p>Using this information, we then construct various “sloppy” networks, instantiated by replaying particular edits over the network and omitting others. These networks vary in their degree of completeness (i.e.&nbsp;some measure of how many of the edits were used) from the original segmentation all the way to the final proofread dataset. We also vary the “proofreader model” used to assign edits to “ON” or “OFF” in some ordering (i.e.&nbsp;whether edits are replayed uniformly at random, in the order they happened, in order of euclidean distance from the soma, etc.).</p>
 </section>
 </div>
 
