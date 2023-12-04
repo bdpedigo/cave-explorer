@@ -92,7 +92,10 @@ div.csl-indent {
 
 <link rel="stylesheet" href="styles.css">
 <meta property="og:title" content="Proofreading retrospective - Introduction">
+<meta property="og:image" content="https://github.com/bdpedigo/skedits/images/priebe-comparison.png">
 <meta property="og:site-name" content="Proofreading retrospective">
+<meta property="og:image:height" content="416">
+<meta property="og:image:width" content="1726">
 </head>
 
 <body class="nav-sidebar docked nav-fixed slimcontent">
@@ -202,10 +205,7 @@ div.csl-indent {
 <section id="background" class="level2 page-columns page-full">
 <h2 class="anchored" data-anchor-id="background">Background</h2>
 <div class="page-columns page-full"><p>In the effort to understand the brain and its function, connectomics has proven a useful tool.  <em>Connectomes</em> are now available for entire larval <span class="citation" data-cites="winding2023">(<a href="#ref-winding2023" role="doc-biblioref">Winding et al. 2023</a>)</span> and adult fly brains <span class="citation" data-cites="schlegel2023 dorkenwald2023">(<a href="#ref-schlegel2023" role="doc-biblioref">Schlegel et al. 2023</a>; <a href="#ref-dorkenwald2023" role="doc-biblioref">Dorkenwald et al. 2023</a>)</span>, large regions of mouse visual cortex <span class="citation" data-cites="microns2021">(<a href="#ref-microns2021" role="doc-biblioref">MICrONS Consortium et al. 2021</a>)</span>, human cortex <span class="citation" data-cites="shapson-coe2021">(<a href="#ref-shapson-coe2021" role="doc-biblioref">Shapson-Coe et al. 2021</a>)</span>, and many other areas and organisms. The largest of these connectome reconstructions now contain on the order of hundreds of thousands of neurons, and hundreds of millions of synapses. This unprecedented scale in connnectome reconstruction has been enabled by segmenting cells and annotating synapses with computer vision, followed by laborious human proofreading to correct false merges and extend incomplete pieces of neurons. This latter effort has been done, understandably, with the intent that we want to be able to trust the resulting reconstruction and believe that it is a fair representation of the neuroanatomy and connectivity of the biological sample: thus, one should correct the results of an automated algorithm by this manual proofreading process.</p><div class="no-row-height column-margin column-container"><span class=""><em>Connectome</em>: a map of neural wiring diagrams in precise detail, often obtained via electron microscopy followed by manual or automated reconstruction of the neurons and other cells in that image volume.</span></div></div>
-
-<div class="no-row-height column-margin column-container"><div class="">
-
-</div></div></section>
+</section>
 <section id="the-questions" class="level2">
 <h2 class="anchored" data-anchor-id="the-questions">The questions</h2>
 <p>However, since this manual proofreading is laborious (for instance, there were <a href="https://x.com/FlyWireNews/status/1674886396564193281?s=20">2.7 million edits in FlyWire over 4 years</a> as of June 2023) it is worth reflecting on the scientific value of this effort. <strong>How consequential was this proofreading on the downstream measures we care about for analysis,</strong> such as connection probabilities between cell types<strong>? Are some connectivity features stable with proofreading, and others variable? Are certain edits more important than others</strong>, in terms of their impact on overal circuit structure? Next, we touch on how others have explored these and related questions in prior work, before motivating our own contributions here.</p>
@@ -213,9 +213,15 @@ div.csl-indent {
 <section id="prior-work" class="level2 page-columns page-full">
 <h2 class="anchored" data-anchor-id="prior-work">Prior work</h2>
 <div class="page-columns page-full"><p>In <span class="citation" data-cites="priebe2013">Priebe, Vogelstein, and Bock (<a href="#ref-priebe2013" role="doc-biblioref">2013</a>)</span>, the authors ask whether one should desire lots of “highly proofread” data, or a smaller amount of partially proofread or noisy data. They frame this question from the perspective of statistical hypothesis testing, asking which approach has higher power for distinguishing network parameters under a toy model. This work is an illustrative case for why, at least in theory, it is possible to actually <em>prefer</em> lots of unproofread data to a smaller amount of curated data. This is a prospect worth considering, especially in light of costly proofreading endeavors. However, this work was done in a toy model which was set up such that unproofread data had no <em>bias</em>, but merely represented a noisier version of a ground truth network.  In reality, the unproofread networks we observe in connectomics likely have extreme bias in the way that errors are observed. For instance, one error in segmentation could lead to missing the entire primary axon of a neuron, effectively deleting all of that neurons outputs in one stroke. In this work, we consider how connectivity estimands</p><div class="no-row-height column-margin column-container"><span class=""><em>Bias:</em> the distance between an expected value of an estimator and the true value of the parameter it is trying to estimate.</span></div></div>
+<div class="quarto-figure quarto-figure-center page-columns page-full">
+<figure class="figure page-columns page-full">
+<p><img src="./images/priebe-comparison.png" class="img-fluid figure-img"></p>
+<figcaption class="figure-caption margin-caption">Text describing the key result from <span class="citation" data-cites="priebe2013">Priebe, Vogelstein, and Bock (<a href="#ref-priebe2013" role="doc-biblioref">2013</a>)</span>. In essence, power is greater in their toy example when tracing more edges with more errors.</figcaption>
+</figure>
+</div>
+<p>This question of technical variability and proofreading tangentially arose in <span class="citation" data-cites="schlegel2023">Schlegel et al. (<a href="#ref-schlegel2023" role="doc-biblioref">2023</a>)</span> as the authors examined a comparison of two fly connectomes: <a href="https://flywire.ai/">FlyWire</a> and <a href="https://www.janelia.org/project-team/flyem/hemibrain">Hemibrain</a>. The authors were interested in quantitative comparisons of connectivity between cell types that were cross-matched between the left and right hemispheres of the FlyWire connectome and the single hemisphere Hemibrain connectome. They found a general agreement in cell-type-to-cell-type connections both within (FlyWire-left:FlyWire-right) and between (FlyWire:Hemibrain) datasets; still, they wondered how much technical differences in reconstruction between these reconstructions could explain the differences they saw. The authors created synthetic datasets by</p>
 <ul>
-<li><p>casey quantitative neuroanatomy paper</p></li>
-<li><p>phillip paper mentions variability</p></li>
+<li>casey quantitative neuroanatomy paper</li>
 </ul>
 </section>
 <section id="why-it-matters" class="level2">
