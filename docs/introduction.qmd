@@ -33,4 +33,12 @@ Second, understanding this sensitivity is important for directing future proofre
 ## Our contribution
 
 In this work, we investigate these questions using large-scale reconstructions of mouse visual cortex as testbeds for these ideas. We *do not* aim to answer these questions holistically for all connectomics datasets and possible connectivity features; such an endeavor would be impossible since the answer is likely to depend greatly on the dataset and the question. Rather, we provide a set of guiding principles for which types of features are likely to be variable, and provide tools for other connectomicists to analyze these questions on their own data.
+
+## Outline
+
+We start by clearly defining a set of connectivity features to consider for this work.
+
+Then, we extract the complete set of proofreading edits performed on a highly curated column of cortical connectivity in a mouse's visual cortex. We also map each synapse between neurons in this column to the edits it "depends" on, in the sense that those edits had to happen for a statement about soma $i$ to soma $j$ connectivity to be made.
+
+Using this information, we then construct various "sloppy" networks, instantiated by replaying particular edits over the network and omitting others. These networks vary in their degree of completeness (i.e. some measure of how many of the edits were used) from the original segmentation all the way to the final proofread dataset. We also vary the "proofreader model" used to assign edits to "ON" or "OFF" in some ordering.
 :::
