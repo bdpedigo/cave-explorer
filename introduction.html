@@ -87,6 +87,8 @@ div.csl-indent {
 </script>
 <script async="" src="https://hypothes.is/embed.js"></script>
 
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
 
 <link rel="stylesheet" href="styles.css">
 <meta property="og:title" content="Proofreading retrospective - Introduction">
@@ -225,6 +227,12 @@ div.csl-indent {
 <section id="our-contribution" class="level2">
 <h2 class="anchored" data-anchor-id="our-contribution">Our contribution</h2>
 <p>In this work, we investigate these questions using large-scale reconstructions of mouse visual cortex as testbeds for these ideas. We <em>do not</em> aim to answer these questions holistically for all connectomics datasets and possible connectivity features; such an endeavor would be impossible since the answer is likely to depend greatly on the dataset and the question. Rather, we provide a set of guiding principles for which types of features are likely to be variable, and provide tools for other connectomicists to analyze these questions on their own data.</p>
+</section>
+<section id="outline" class="level2">
+<h2 class="anchored" data-anchor-id="outline">Outline</h2>
+<p>We start by clearly defining a set of connectivity features to consider for this work.</p>
+<p>Then, we extract the complete set of proofreading edits performed on a highly curated column of cortical connectivity in a mouse’s visual cortex. We also map each synapse between neurons in this column to the edits it “depends” on, in the sense that those edits had to happen for a statement about soma <span class="math inline">\(i\)</span> to soma <span class="math inline">\(j\)</span> connectivity to be made.</p>
+<p>Using this information, we then construct various “sloppy” networks, instantiated by replaying particular edits over the network and omitting others. These networks vary in their degree of completeness (i.e.&nbsp;some measure of how many of the edits were used) from the original segmentation all the way to the final proofread dataset. We also vary the “proofreader model” used to assign edits to “ON” or “OFF” in some ordering.</p>
 </section>
 </div>
 
