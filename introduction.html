@@ -218,14 +218,13 @@ div.csl-indent {
 </section>
 <section id="why-it-matters" class="level2">
 <h2 class="anchored" data-anchor-id="why-it-matters">Why it matters</h2>
-<ol type="1">
-<li><p>understand what we can trust about the data we have</p></li>
-<li><p>understand how to direct future efforts of proofreading</p></li>
-<li><p>understand</p></li>
-</ol>
+<p>There are several reasons why understanding the variability of connectivity with respect to proofreading is worthwhile for modern connectomics:</p>
+<p>First, understanding the sensitivity of connectivity features to proofreading provides clues as to the technical variability associated with an imperfect reconstruction of an underlying biological network. For instance, if one wanted to compare connectivity feature <code>Y</code> between two datasets, but <code>Y</code> varies drastically based on proofreading level, then it will be challenging to compare <code>Y</code> without ensuring proofreading was done in the exact same way for these two datasets.</p>
+<p>Second, understanding this sensitivity is important for directing future proofreading efforts. Achieving a “perfect connectome” reconstruction is a comforting goal to strive for, but given finite time and resources, it is worthwhile to consider which efforts will actually affect downstream analysis we are interested in. Increasingly, a single connectomics datasets may be used for addressing many questions by directing proofreading toward particular sub-goals. It is worth understanding which questions can be answered “out-of-the-box” with no additional proofreading after the initial segmentation, and which will require further effort to get a trustworth answer.</p>
 </section>
 <section id="our-contribution" class="level2">
 <h2 class="anchored" data-anchor-id="our-contribution">Our contribution</h2>
+<p>In this work, we investigate these questions using large-scale reconstructions of mouse visual cortex as testbeds for these ideas. We <em>do not</em> aim to answer these questions holistically for all connectomics datasets and possible connectivity features; such an endeavor would be impossible since the answer is likely to depend greatly on the dataset and the question. Rather, we provide a set of guiding principles for which types of features are likely to be variable, and provide tools for other connectomicists to analyze these questions on their own data.</p>
 </section>
 </div>
 
