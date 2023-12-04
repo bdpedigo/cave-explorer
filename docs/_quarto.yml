@@ -22,6 +22,11 @@ website:
     contents:
       - abstract.qmd
       - introduction.qmd
+  comments:
+    hypothesis:
+      theme: clean
+      openSidebar: false
+      showHighlights: whenSidebarOpen
 
 format:
   html:

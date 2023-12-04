@@ -16,7 +16,7 @@ However, since this manual proofreading is laborious (for instance, there were [
 
 1.  paper from carey and jovo on power
 
-In @priebe2013, the authors ask whether one should desire lots of "highly proofread" data, or a smaller amount of partially proofread or noisy data. They frame this question from the perspective of statistical hypothesis testing, asking which approach has higher power for distinguishing network parameters under a toy model. This work is an illustrative case for why, at least in theory, it is possible to actually *prefer* lots of unproofread data to a smaller amount of curated data. This is a prospect worth considering, especially in light of costly proofreading endeavors. However, in this work the toy model was set up such that unproofread data had no *bias*, but merely represented a noisier version of a ground truth network. In reality, the unproofread networks we observe in connectomics likely have extreme bias in the way that errors are observed. For instance, one error in segmentation could lead to missing the entire primary axon of a neuron, effectively deleting all of that neurons outputs in one stroke. hi
+In @priebe2013, the authors ask whether one should desire lots of "highly proofread" data, or a smaller amount of partially proofread or noisy data. They frame this question from the perspective of statistical hypothesis testing, asking which approach has higher power for distinguishing network parameters under a toy model. This work is an illustrative case for why, at least in theory, it is possible to actually *prefer* lots of unproofread data to a smaller amount of curated data. This is a prospect worth considering, especially in light of costly proofreading endeavors. However, in this work the toy model was set up such that unproofread data had no *bias*, but merely represented a noisier version of a ground truth network. In reality, the unproofread networks we observe in connectomics likely have extreme bias in the way that errors are observed. For instance, one error in segmentation could lead to missing the entire primary axon of a neuron, effectively deleting all of that neurons outputs in one stroke.
 
 1.  casey paper
 
@@ -26,8 +26,9 @@ In @priebe2013, the authors ask whether one should desire lots of "highly proofr
 
 1.  understand what we can trust about the data we have
 
-1.  understand how to direct future efforts of proofreading
-2.  understand
+2.  understand how to direct future efforts of proofreading
+
+3.  understand
 
 ## Our contribution
 :::
