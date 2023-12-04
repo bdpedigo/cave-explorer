@@ -30,7 +30,7 @@ website:
 
 format:
   html:
-    theme: lux
+    theme: minty
     css: styles.css
     toc: true
 
