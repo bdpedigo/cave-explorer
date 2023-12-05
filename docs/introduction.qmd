@@ -33,9 +33,9 @@ In @schneider-mizell2016, the authors studied how features of neuroanatomy in th
 
 :::
 
-## Why it matters
+## Significance 
 
-There are several reasons why understanding the variability of connectivity with respect to proofreading is worthwhile for modern connectomics:
+There are several reasons why understanding the variability of connectivity with respect to proofreading is worthwhile and timely to consider for modern connectomics:
 
 First, understanding the sensitivity of connectivity features to proofreading provides clues as to the technical variability associated with an imperfect reconstruction of an underlying biological network. This is worth knowing for its own sake, simply to understand how much to trust any particular aspect of a reconstruction. It is also important if one wanted to compare connectivity feature $Y$ between two datasets. If $Y$ varies drastically based on proofreading level, then it will be challenging to compare $Y$ without ensuring proofreading was done in the exact same way for these two datasets or post-hoc correcting for any differences (see commentary above about @schlegel2023).
 
