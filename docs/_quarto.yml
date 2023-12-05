@@ -19,10 +19,10 @@ website:
       - index.qmd
       - introduction.qmd
   comments:
-    # hypothesis:
-    #   theme: clean
-    #   openSidebar: false
-    #   showHighlights: whenSidebarOpen
+    hypothesis:
+      theme: clean
+      openSidebar: false
+      showHighlights: whenSidebarOpen
     giscus: 
       repo: bdpedigo/skedits
 
