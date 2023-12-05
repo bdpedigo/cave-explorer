@@ -23,6 +23,8 @@ website:
       theme: clean
       openSidebar: false
       showHighlights: whenSidebarOpen
+    giscus: 
+      repo: bdpedigo/skedits
 
   repo-url: https://github.com/bdpedigo/skedits
   repo-actions: [edit, issue]
