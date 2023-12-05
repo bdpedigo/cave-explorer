@@ -24,6 +24,9 @@ website:
       openSidebar: false
       showHighlights: whenSidebarOpen
 
+  repo-url: https://github.com/bdpedigo/skedits
+  repo-actions: [edit, issue]
+
 format:
   html:
     theme: minty
