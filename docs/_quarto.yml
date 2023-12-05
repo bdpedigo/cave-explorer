@@ -4,10 +4,6 @@ project:
 website:
   title: "Proofreading retrospective"
   navbar:
-    left:
-      - href: index.qmd
-        text: Home
-      - about.qmd
     tools:
       - icon: github
         menu:
@@ -20,7 +16,7 @@ website:
     style: "docked"
     search: false
     contents:
-      - abstract.qmd
+      - index.qmd
       - introduction.qmd
   comments:
     hypothesis:
