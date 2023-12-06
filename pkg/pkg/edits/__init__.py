@@ -2,6 +2,7 @@ from .changes import (
     NetworkDelta,
     apply_additions,
     apply_edit,
+    collate_edit_info,
     find_supervoxel_component,
     get_changed_edges,
     get_detailed_change_log,
@@ -10,6 +11,7 @@ from .changes import (
     get_level2_lineage_components,
     get_network_edits,
     get_network_metaedits,
+    get_operation_metaoperation_map,
     get_supervoxel_level2_map,
     reverse_edit,
 )

@@ -7,7 +7,12 @@ from neuropull.graph import NetworkFrame
 from requests import HTTPError
 from tqdm import tqdm
 
-from ..utils import get_all_nodes_edges, get_level2_nodes_edges
+from ..utils import (
+    get_all_nodes_edges,
+    get_level2_nodes_edges,
+    get_nucleus_point_nm,
+    pt_to_xyz,
+)
 
 
 def get_changed_edges(before_edges, after_edges):
@@ -262,17 +267,22 @@ def get_network_metaedits(networkdeltas_by_operation, root_id, client):
         for delta in deltas:
             all_metadata[delta.metadata["operation_id"]] = delta.metadata
 
-        is_merges = [
+        is_merge = [
             networkdeltas_by_operation[operation_id].metadata["is_merge"]
+            for operation_id in operation_ids
+        ]
+        is_filtered = [
+            networkdeltas_by_operation[operation_id].metadata["is_filtered"]
             for operation_id in operation_ids
         ]
         meta_networkdelta.metadata = dict(
             meta_operation_id=meta_operation_id,
             root_id=root_id,
             operation_ids=operation_ids,
-            is_merges=is_merges,
-            any_merges=np.any(is_merges),
+            is_merge=is_merge,
+            any_merge=np.any(is_merge),
             is_relevant=is_relevant,
+            is_filtered=is_filtered,
             n_added_nodes=len(meta_networkdelta.added_nodes),
             n_removed_nodes=len(meta_networkdelta.removed_nodes),
             n_modified_nodes=len(meta_networkdelta.added_nodes)
@@ -405,3 +415,82 @@ def get_level2_lineage_components(networkdeltas_by_operation):
     level2_lineage_component_map = pd.Series(level2_lineage_component_map)
 
     return level2_lineage_component_map
+
+
+def get_operation_metaoperation_map(networkdeltas_by_metaoperation):
+    operation_to_metaoperation = {}
+    for metaoperation_id, networkdelta in networkdeltas_by_metaoperation.items():
+        metadata = networkdelta.metadata
+        for operation_id in metadata["operation_ids"]:
+            operation_to_metaoperation[operation_id] = metaoperation_id
+    return operation_to_metaoperation
+
+
+def collate_edit_info(
+    networkdeltas_by_operation, operation_to_metaoperation, root_id, client
+):
+    nuc_pt_nm = get_nucleus_point_nm(root_id, client, method="table")
+
+    raw_modified_nodes = []
+    rows = []
+    for operation_id, networkdelta in networkdeltas_by_operation.items():
+        info = {
+            **networkdelta.metadata,
+            "nuc_pt_nm": nuc_pt_nm,
+            "nuc_x": nuc_pt_nm[0],
+            "nuc_y": nuc_pt_nm[1],
+            "nuc_z": nuc_pt_nm[2],
+            "metaoperation_id": operation_to_metaoperation[operation_id],
+        }
+        rows.append(info)
+
+        modified_nodes = pd.concat(
+            (networkdelta.added_nodes, networkdelta.removed_nodes)
+        )
+        modified_nodes.index.name = "level2_node_id"
+        modified_nodes["root_id"] = root_id
+        modified_nodes["operation_id"] = operation_id
+        modified_nodes["is_merge"] = info["is_merge"]
+        modified_nodes["is_relevant"] = info["is_relevant"]
+        modified_nodes["is_filtered"] = info["is_filtered"]
+        modified_nodes["metaoperation_id"] = info["metaoperation_id"]
+        modified_nodes["is_added"] = modified_nodes.index.isin(
+            networkdelta.added_nodes.index
+        )
+        raw_modified_nodes.append(modified_nodes)
+
+    edit_stats = pd.DataFrame(rows)
+    modified_level2_nodes = pd.concat(raw_modified_nodes)
+
+    raw_node_coords = client.l2cache.get_l2data(
+        np.unique(modified_level2_nodes.index.to_list()), attributes=["rep_coord_nm"]
+    )
+
+    node_coords = pd.DataFrame(raw_node_coords).T
+    node_coords[node_coords["rep_coord_nm"].isna()]
+    node_coords[["x", "y", "z"]] = pt_to_xyz(node_coords["rep_coord_nm"])
+    node_coords.index = node_coords.index.astype(int)
+    node_coords.index.name = "level2_node_id"
+
+    modified_level2_nodes = modified_level2_nodes.join(
+        node_coords, validate="many_to_one"
+    )
+
+    edit_centroids = modified_level2_nodes.groupby("operation_id")[
+        ["x", "y", "z"]
+    ].mean()
+
+    edit_centroids.columns = ["centroid_x", "centroid_y", "centroid_z"]
+
+    edit_stats = edit_stats.set_index("operation_id").join(edit_centroids)
+
+    edit_stats["centroid_distance_to_nuc_nm"] = np.sqrt(
+        (edit_stats["centroid_x"] - edit_stats["nuc_x"]) ** 2
+        + (edit_stats["centroid_y"] - edit_stats["nuc_y"]) ** 2
+        + (edit_stats["centroid_z"] - edit_stats["nuc_z"]) ** 2
+    )
+
+    edit_stats["centroid_distance_to_nuc_um"] = (
+        edit_stats["centroid_distance_to_nuc_nm"] / 1000
+    )
+    return edit_stats, modified_level2_nodes
