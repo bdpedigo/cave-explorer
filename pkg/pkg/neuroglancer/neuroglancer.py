@@ -39,8 +39,38 @@ def generate_neuron_base_builders(root_id, client):
     return state_builders, dataframes
 
 
-def add_level2_edits(state_builders, dataframes, edit_df, final_nf, client):
-    
+def generate_neurons_base_builders(root_ids, client):
+    if isinstance(root_ids, (int, np.integer)):
+        root_ids = [root_ids]
+    # REF: mostly stolen from nglui.statebuilder.helpers
+
+    # find the soma position for setting the view
+    # nuc_pt_nm = get_nucleus_point_nm(root_ids[0], client, method="table")
+
+    # first df is just the root_id
+    dataframes = [pd.DataFrame({"root_id": root_ids})]
+
+    contrast = None
+
+    # generate some generic segmentation/image layers
+    img_layer, seg_layer = from_client(client, contrast=contrast)
+    seg_layer.add_selection_map(selected_ids_column="root_id")
+
+    # set position to the soma
+    # view_kws = {"position": np.array(nuc_pt_nm) / np.array([4, 4, 40])}
+    view_kws = {}
+    base_sb = StateBuilder(
+        layers=[img_layer, seg_layer], client=client, view_kws=view_kws
+    )
+
+    state_builders = [base_sb]
+
+    return state_builders, dataframes
+
+
+def add_level2_edits(
+    state_builders, dataframes, edit_df, client, by="metaoperation_id"
+):
     # level2_graph_mapper = PointMapper(
     #     point_column="rep_coord_nm",
     #     description_column="l2_id",
@@ -62,11 +92,13 @@ def add_level2_edits(state_builders, dataframes, edit_df, final_nf, client):
     # state_builders.append(level2_graph_statebuilder)
     # dataframes.append(final_nf.nodes.reset_index())
 
-    key = "metaoperation_id"
+    if by is None:
+        edit_df["_dummy"] = "all"
+        by = "_dummy"
 
-    colors = sns.color_palette("husl", len(edit_df[key].unique()))
+    colors = sns.color_palette("husl", len(edit_df[by].unique()))
 
-    for i, (operation_id, operation_data) in enumerate(edit_df.groupby(key)):
+    for i, (operation_id, operation_data) in enumerate(edit_df.groupby(by)):
         edit_point_mapper = PointMapper(
             point_column="rep_coord_nm",
             description_column="level2_node_id",
@@ -83,6 +115,9 @@ def add_level2_edits(state_builders, dataframes, edit_df, final_nf, client):
         sb_edits = StateBuilder([edit_layer], client=client)  # view_kws=view_kws)
         state_builders.append(sb_edits)
         dataframes.append(operation_data)
+
+    if by == "_dummy":
+        edit_df.drop(columns="_dummy", inplace=True)
 
     return state_builders, dataframes
 

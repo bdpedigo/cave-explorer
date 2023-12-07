@@ -28,7 +28,7 @@ def get_pre_post_synapses(
     tables = []
     for side in ["pre", "post"]:
         if verbose:
-            print("Querying synapse table...")
+            print(f"Querying synapse table for {side}-synapses...")
 
         # get the pre/post-synapses that correspond to those objects
         t = time.time()
@@ -36,12 +36,15 @@ def get_pre_post_synapses(
             synapse_table,
             filter_in_dict={f"{side}_pt_root_id": latest_roots},
         )
+        syn_df.set_index("id")
         if verbose:
             print(f"Querying synapse table took {time.time() - t:.2f} seconds")
 
         if remove_self:
             syn_df = syn_df.query("pre_pt_root_id != post_pt_root_id")
+
         tables.append(syn_df)
+
     return (tables[0], tables[1])
 
 
@@ -77,7 +80,7 @@ def get_pre_post_synapses(
 
 
 def map_synapse_level2_ids(
-    synapses, level2_lineage_component_map, l2dict_mesh, side, client, verbose=False
+    synapses, level2_lineage_component_map, nodelist, side, client, verbose=False
 ):
     synapses[f"{side}_pt_current_level2_id"] = client.chunkedgraph.get_roots(
         synapses[f"{side}_pt_supervoxel_id"], stop_layer=2
@@ -103,9 +106,7 @@ def map_synapse_level2_ids(
             level2_lineage_component_map == component
         ].index
 
-        candidate_level2_ids = candidate_level2_ids[
-            candidate_level2_ids.isin(l2dict_mesh.keys())
-        ]
+        candidate_level2_ids = candidate_level2_ids[candidate_level2_ids.isin(nodelist)]
 
         winning_level2_id = None
         for candidate_level2_id in candidate_level2_ids:
@@ -123,7 +124,13 @@ def map_synapse_level2_ids(
 
 
 def map_synapses(
-    pre_synapses, post_synapses, networkdeltas_by_operation, l2dict_mesh, client
+    pre_synapses,
+    post_synapses,
+    networkdeltas_by_operation,
+    nodelist,
+    client,
+    l2dict_mesh=None,
+    verbose=False,
 ):
     level2_lineage_component_map = get_level2_lineage_components(
         networkdeltas_by_operation
@@ -131,19 +138,25 @@ def map_synapses(
 
     outs = []
     for side, synapses in zip(["pre", "post"], [pre_synapses, post_synapses]):
+        if verbose:
+            print(f"Mapping {side}-synapses to level2 IDs...")
         # put the level2 IDs into the synapse table, based on current state of neuron
         # as well as the lineage history
         map_synapse_level2_ids(
-            synapses, level2_lineage_component_map, l2dict_mesh, side, client
+            synapses,
+            level2_lineage_component_map,
+            nodelist,
+            side,
+            client,
+            verbose=verbose,
         )
 
         # now we can map each of the synapses to the mesh index, via the level 2 id
-        synapses = synapses.query(
-            f"{side}_pt_level2_id.isin(@l2dict_mesh.keys())"
-        ).copy()
-        synapses[f"{side}_pt_mesh_ind"] = synapses[f"{side}_pt_level2_id"].map(
-            l2dict_mesh
-        )
+        synapses = synapses.query(f"{side}_pt_level2_id.isin(@nodelist)").copy()
+        if l2dict_mesh is not None:
+            synapses[f"{side}_pt_mesh_ind"] = synapses[f"{side}_pt_level2_id"].map(
+                l2dict_mesh
+            )
         outs.append(synapses)
 
     return tuple(outs)

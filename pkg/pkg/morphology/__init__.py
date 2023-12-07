@@ -5,4 +5,9 @@ from .morphology import (
     skeleton_to_treeneuron,
     skeletonize_networkframe,
 )
-from .synapses import apply_synapses, get_pre_post_synapses, map_synapses
+from .synapses import (
+    apply_synapses,
+    get_pre_post_synapses,
+    map_synapse_level2_ids,
+    map_synapses,
+)
