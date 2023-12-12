@@ -1,30 +1,22 @@
 # %%
 import os
-import pickle
-import time
 
 import caveclient as cc
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import pandas as pd
-import seaborn as sns
 import seaborn.objects as so
 from neuropull.graph import NetworkFrame
-from scipy.sparse.csgraph import shortest_path
 from tqdm.autonotebook import tqdm
 
 from pkg.edits import (
-    apply_metaoperation_info,
     collate_edit_info,
-    find_soma_nuc_merge_metaoperation,
-    find_supervoxel_component,
     get_initial_network,
     get_initial_node_ids,
     get_operation_metaoperation_map,
     lazy_load_network_edits,
     pseudo_apply_edit,
-    reverse_edit,
 )
 from pkg.morphology import (
     apply_nucleus,
@@ -59,7 +51,7 @@ os.environ["SKEDITS_RECOMPUTE"] = "False"
 # getting a table of additional metadata for each operation
 # TODO something weird with 3, 6
 
-root_id = query_neurons["pt_root_id"].values[13]
+root_id = query_neurons["pt_root_id"].values[10]
 
 (
     networkdeltas_by_operation,
@@ -95,14 +87,17 @@ initial_nf = get_initial_network(root_id, client, positions=False)
 # %%
 
 nf = initial_nf.copy()
-nf.nodes["operation_added"] = -1
-nf.nodes["operation_added"] = nf.nodes["operation_added"].astype(int)
-nf.edges["operation_added"] = -1
-nf.edges["operation_added"] = nf.edges["operation_added"].astype(int)
-nf.nodes["operation_removed"] = -1
-nf.nodes["operation_removed"] = nf.nodes["operation_removed"].astype(int)
-nf.edges["operation_removed"] = -1
-nf.edges["operation_removed"] = nf.edges["operation_removed"].astype(int)
+
+for col in [
+    "operation_added",
+    "operation_removed",
+    "metaoperation_added",
+    "metaoperation_removed",
+]:
+    nf.nodes[col] = -1
+    nf.nodes[col] = nf.nodes[col].astype(int)
+    nf.edges[col] = -1
+    nf.edges[col] = nf.edges[col].astype(int)
 
 nf.edges.set_index(["source", "target"], inplace=True, drop=False)
 
@@ -118,32 +113,47 @@ for networkdelta in tqdm(networkdeltas_by_operation.values()):
     )
     # TODO what happens here for multiple operations in the same metaoperation?
     # since they by definition are touching some of the same nodes?
+    operation_id = networkdelta.metadata["operation_id"]
     pseudo_apply_edit(
         nf,
         networkdelta,
-        label=networkdelta.metadata["operation_id"],
+        operation_label=operation_id,
+        metaoperation_label=operation_to_metaoperation[operation_id],
     )
 
-print(len(nf))
+# %%
+
+node_positions = get_positions(list(nf.nodes.index), client)
+
+nf.nodes[["rep_coord_nm", "x", "y", "z"]] = node_positions[
+    ["rep_coord_nm", "x", "y", "z"]
+]
 
 # %%
 
 nf.apply_node_features("operation_added", inplace=True)
+nf.apply_node_features("metaoperation_added", inplace=True)
+
 nf.edges["cross_operation"] = (
     nf.edges["source_operation_added"] != nf.edges["target_operation_added"]
+)
+nf.edges["cross_metaoperation"] = (
+    nf.edges["source_metaoperation_added"] != nf.edges["target_metaoperation_added"]
 )
 nf.edges["was_removed"] = nf.edges["operation_removed"] != -1
 nf.nodes["was_removed"] = nf.nodes["operation_removed"] != -1
 
-
-# %%
-nf.n_connected_components()
-
 # %%
 
-no_cross_nf = nf.query_edges("(~cross_operation) & (~was_removed)").query_nodes(
-    "~was_removed"
-)
+meta = True
+if meta:
+    prefix = "meta"
+else:
+    prefix = ""
+
+no_cross_nf = nf.query_edges(
+    f"(~cross_{prefix}operation) & (~was_removed)"
+).query_nodes("~was_removed")
 
 # %%
 
@@ -157,18 +167,20 @@ nf.nodes["component_label"] = -1
 
 i = 2
 for component in tqdm(no_cross_nf.connected_components(), total=n_connected_components):
-    if (component.nodes["operation_added"] == -1).all():
+    if (component.nodes[f"{prefix}operation_added"] == -1).all():
         label = -1 * i
         i += 1
     else:
-        label = component.nodes["operation_added"].iloc[0]
+        label = component.nodes[f"{prefix}operation_added"].iloc[0]
     nf.nodes.loc[component.nodes.index, "component_label"] = label
 
 # %%
 nf.apply_node_features("component_label", inplace=True)
 
 # %%
-cross_nf = nf.query_edges("cross_operation & (~was_removed)").remove_unused_nodes()
+cross_nf = nf.query_edges(
+    f"cross_{prefix}operation & (~was_removed)"
+).remove_unused_nodes()
 # %%
 
 
@@ -185,13 +197,6 @@ component_nodes = pd.DataFrame(index=component_nodelist)
 
 component_nf = NetworkFrame(component_nodes, component_edges)
 
-# %%
-
-node_positions = get_positions(list(nf.nodes.index), client)
-
-nf.nodes[["rep_coord_nm", "x", "y", "z"]] = node_positions[
-    ["rep_coord_nm", "x", "y", "z"]
-]
 
 # %%
 apply_nucleus(nf, root_id, client)
@@ -208,16 +213,6 @@ component_nf.nodes.loc[nuc_component, "nucleus"] = True
 g = component_nf.to_networkx(create_using=nx.DiGraph)
 g = g.to_undirected()
 
-currtime = time.time()
-
-all_paths = []
-for target in tqdm(nx.descendants(g, nuc_component)):
-    for path in nx.all_simple_paths(g, source=nuc_component, target=target):
-        all_paths.append(path)
-
-print(f"{time.time() - currtime:.3f} seconds elapsed.")
-
-
 # %%
 all_paths = []
 dependency_graph = nx.DiGraph()
@@ -229,9 +224,100 @@ for path in nx.all_simple_paths(
 
 print(len(all_paths))
 
-# %%
-tree = nx.bfs_tree(dependency_graph, 873942)
+print("Is a tree?", nx.is_tree(dependency_graph))
 
+# %%
+path_df = pd.Series(all_paths, name="path").to_frame()
+path_df["target"] = path_df["path"].apply(lambda x: x[-1])
+path_df
+
+# %%
+
+operation_path_df = path_df.copy()
+
+
+def remove_non_operations(path):
+    return [node for node in path if node >= 0]
+
+
+operation_path_df["path"] = operation_path_df["path"].apply(remove_non_operations)
+operation_path_df
+
+# %%
+component_dependencies = operation_path_df.groupby("target")["path"].apply(list)
+component_dependencies.name = f"{prefix}operation_dependencies"
+component_dependencies.index.name = "segment"
+component_dependencies = component_dependencies.to_frame()
+component_dependencies["n_dependencies"] = component_dependencies[
+    f"{prefix}operation_dependencies"
+].apply(len)
+component_dependencies
+
+# %%
+import time
+
+from pkg.edits import find_supervoxel_component
+
+all_metaoperations = list(networkdeltas_by_metaoperation.keys())
+
+resolved_synapses_by_sample = {}
+
+# still only takes ~ 3 mins for a neuron, to do 100 samples
+# so 1000 samples would take 30 mins... same order as extracting the edits
+choice_time = 0
+query_time = 0
+find_component_time = 0
+record_time = 0
+for i in tqdm(range(100)):
+    t = time.time()
+    metaoperaion_set = np.random.choice(all_metaoperations, size=10, replace=False)
+    metaoperaion_set = list(metaoperaion_set)
+    metaoperaion_set.append(-1)
+    choice_time += time.time() - t
+
+    t = time.time()
+    sub_nf = (
+        nf.query_nodes(
+            f"{prefix}operation_added.isin(@metaoperaion_set)", local_dict=locals()
+        )
+        .query_edges(
+            f"{prefix}operation_added.isin(@metaoperaion_set)", local_dict=locals()
+        )
+        .remove_unused_nodes()
+    )
+    query_time += time.time() - t
+
+    t = time.time()
+    # this takes up 90% of the time
+    # i think it's from the operation of cycling through connected components
+    nuc_supervoxel = nuc.loc[root_id, "pt_supervoxel_id"]
+    instance_neuron_nf = find_supervoxel_component(nuc_supervoxel, sub_nf, client)
+    find_component_time += time.time() - t
+
+    t = time.time()
+    found_synapses = []
+    for synapses in instance_neuron_nf.nodes["synapses"]:
+        found_synapses.extend(synapses)
+    resolved_synapses_by_sample[i] = found_synapses
+    record_time += time.time() - t
+
+total_time = choice_time + query_time + find_component_time + record_time
+print(f"Total time: {total_time}")
+print(f"Choice time: {choice_time / total_time}")
+print(f"Query time: {query_time / total_time}")
+print(f"Find component time: {find_component_time / total_time}")
+print(f"Record time: {record_time / total_time}")
+
+# %%
+for target, path_group in path_df.groupby("target"):
+    if len(path_group) > 3:
+        # print(len(path_group))
+        print(path_group["path"].values)
+
+# %%
+
+# just in case dep-graph is not a tree
+tree = nx.bfs_tree(dependency_graph, nuc_component)
 
 fig, ax = plt.subplots(1, 1, figsize=(15, 15))
 pos = radial_hierarchy_pos(tree)
@@ -243,7 +329,7 @@ nx.draw_networkx(
     with_labels=True,
     ax=ax,
     node_size=10,
-    font_size=6,
+    font_size=15,
     width=0.2,
 )
 ax.axis("equal")
@@ -282,528 +368,113 @@ for component, component_nodes in nf.nodes.groupby("component_label"):
         all_post_synapses = all_post_synapses.astype(int)
         post_synapses.loc[all_post_synapses, "component_label"] = component
 
-#%% 
+# %%
 # need to visualize all of this to make sure it is working!
-        
-original_node_ids = list(get_initial_node_ids(root_id, client))
-
-state_builders, dataframes = generate_neurons_base_builders(original_node_ids, client)
-
-state_builders, dataframes = add_level2_edits(
-    state_builders, dataframes, modified_level2_nodes.reset_index(), client, by=None
-)
-
-link = finalize_link(state_builders, dataframes, client)
-link
-
-
-# %%
-
-# add annotations for metaoperations to the networkframe
-
-apply_metaoperation_info(nf, networkdeltas_by_metaoperation, edit_stats)
-
-assert nf.nodes["pre_synapses"].apply(len).sum() == len(pre_synapses)
-assert nf.nodes["post_synapses"].apply(len).sum() == len(post_synapses)
-
-# %%
-
-# TODO add something to make this center on the final neuron soma we care about
 
 original_node_ids = list(get_initial_node_ids(root_id, client))
 
 state_builders, dataframes = generate_neurons_base_builders(original_node_ids, client)
 
+sbs, dfs = generate_neurons_base_builders(root_id, client, name="final")
+state_builders.append(sbs[0])
+dataframes.append(dfs[0])
+
 state_builders, dataframes = add_level2_edits(
     state_builders, dataframes, modified_level2_nodes.reset_index(), client, by=None
 )
 
-link = finalize_link(state_builders, dataframes, client)
-link
-
-# %%
-soma_nuc_merge_metaoperation = find_soma_nuc_merge_metaoperation(
-    networkdeltas_by_metaoperation, edit_stats
-)
-
-# %%
-
-# add distance information to edges
-nf = nf.apply_node_features(["x", "y", "z"], axis="both")
-nf.edges["distance_nm"] = np.sqrt(
-    (nf.edges["source_x"] - nf.edges["target_x"]) ** 2
-    + (nf.edges["source_y"] - nf.edges["target_y"]) ** 2
-    + (nf.edges["source_z"] - nf.edges["target_z"]) ** 2
-)
-nf.edges["distance_um"] = nf.edges["distance_nm"] / 1000
-
-# %%
-
-
-def reconstruct_soma_paths(predecessors, keypoints, nodelist, verbose=True):
-    target = keypoints[keypoints["nucleus"]]["iloc"].values[0]
-
-    paths = []
-    for i in tqdm(
-        range(len(keypoints)), desc="Reconstructing paths", disable=not verbose
-    ):
-        query = keypoints["iloc"].values[i]
-        query_predecessors = predecessors[i]
-
-        path = [target]
-        current = target
-
-        while current != query and current != -9999:
-            current = query_predecessors[current]
-            path.append(current)
-
-        path = tuple(nodelist[path])
-        paths.append(path)
-
-    paths = pd.Series(paths, index=keypoints.index)
-
-    # paths = reconstruct_soma_paths(predecessors, keypoints, nf.nodes.index)
-
-    # target = keypoints[keypoints["nucleus"]]["iloc"].values[0]
-
-    soma_path_dists = dists[:, target]
-
-    keypoints["nuc_path_length_um"] = soma_path_dists
-
-    return soma_path_dists, paths
-
-
-def compute_keypoint_soma_paths(nf, keypoints, verbose=True):
-    assert "iloc" in keypoints.columns
-
-    adjacency = nf.to_sparse_adjacency(weight_col="distance_um")
-    # make undirected for the purposes of shortest path lookup
-    adjacency = adjacency + adjacency.T
-
-    if verbose:
-        currtime = time.time()
-        print("Querying shortest paths...")
-
-    dists, predecessors = shortest_path(
-        adjacency,
-        directed=False,
-        indices=keypoints["iloc"],
-        return_predecessors=True,
-        unweighted=False,
-    )
-
-    if verbose:
-        print(f"{time.time() - currtime:.3f} seconds elapsed.")
-        print()
-    return dists, predecessors
-
-
-# select points that have operations, or are the nucleus, or have synapses
-nf.nodes["iloc"] = np.arange(len(nf.nodes))
-keypoints = nf.nodes.query("has_operation | nucleus | has_synapses").copy()
-dists, predecessors = compute_keypoint_soma_paths(nf, keypoints)
-soma_path_dists, paths = reconstruct_soma_paths(predecessors, keypoints, nf.nodes.index)
-
-
-# %%
-
-adjacency = nf.to_sparse_adjacency()
-degree = adjacency.sum(axis=0) + adjacency.sum(axis=1)
-
-# seems like there are many "tips"
-# more than the number of keypoints that I'm looking up...
-len(degree[degree == 1])
-
-# %%
-
-
-# %%
-
-keypoints.groupby("metaoperation_dependencies").size().sort_values(ascending=False)
-
-# %%%
-
-metaoperation_dependencies = {}
-
-metaoperation_points = keypoints.query("metaoperation_id.notna()")
-
-for path, (l2_id, metaoperation) in tqdm(
-    zip(paths, keypoints["metaoperation_id"].items()),
-    total=len(keypoints),
-    desc="Finding metaoperation dependencies",
-):
-    path = pd.Index(path)
-    path = path.intersection(metaoperation_points.index)
-    metaoperation_path = metaoperation_points.loc[path, "metaoperation_id"]
-    if not pd.isna(metaoperation):
-        metaoperation_path = metaoperation_path[metaoperation_path != metaoperation]
-    metaoperation_path = tuple(metaoperation_path.unique().tolist())
-    metaoperation_dependencies[l2_id] = metaoperation_path
-
-keypoints["metaoperation_dependencies"] = pd.Series(metaoperation_dependencies)
-keypoints["n_metaoperation_dependencies"] = keypoints[
-    "metaoperation_dependencies"
-].apply(len)
-
-
-# %%
-
-synapses = keypoints.query("has_synapses")
-
-# %%
-
-metaoperation_keypoints = keypoints.query("has_operation")
-
-predecessors_by_metaoperation = {}
-
-for metaoperation_id, metaoperation_points in metaoperation_keypoints.groupby(
-    "metaoperation_id", dropna=True
-):
-    if metaoperation_id == soma_nuc_merge_metaoperation:
-        continue
-
-    unique_dependency_sets = metaoperation_points["metaoperation_dependencies"].unique()
-    if len(unique_dependency_sets) > 1:
-        print(metaoperation_id)
-        print(unique_dependency_sets)
-        # print(metaoperation_points)
-        print()
-# %%
-keypoints.index.name = "level2_node_id"
-
-viz_index = keypoints.query("metaoperation_id == 151", engine="python").index
-
-query_keypoints = keypoints.loc[viz_index]
-query_keypoints.index.name = "level2_node_id"
-
-viz_metaoperations = set()
-
-for node_id, row in query_keypoints.iterrows():
-    for item in row["metaoperation_dependencies"]:
-        viz_metaoperations.add(item)
-
-viz_metaoperations = list(viz_metaoperations)
-
-viz_keypoints = keypoints.query(
-    "metaoperation_id in @viz_metaoperations", engine="python"
-)
-viz_keypoints.index.name = "level2_node_id"
-
-# %%
 from nglui.statebuilder import (
     AnnotationLayerConfig,
     LineMapper,
+    PointMapper,
     StateBuilder,
 )
 
-state_builders, dataframes = generate_neurons_base_builders(original_node_ids, client)
+# nf.apply_node_features('x', inplace=True)
+# nf.apply_node_features('y', inplace=True)
+# nf.apply_node_features('z', inplace=True)
+
+nf.apply_node_features("rep_coord_nm", inplace=True)
 
 
-for i, (path, query_l2_node) in enumerate(zip(paths[viz_index], viz_index)):
-    path_df = nf.nodes.loc[list(path)].copy()
-    path_df.index.name = "level2_node_id"
-    path_df.reset_index(inplace=True)
+# path_df = nf.nodes.loc[list(path)].copy()
+# path_df.index.name = "level2_node_id"
+# path_df.reset_index(inplace=True)
 
-    # edit_point_mapper = PointMapper(
-    #     point_column="rep_coord_nm",
-    #     description_column="level2_node_id",
-    #     split_positions=False,
-    #     gather_linked_segmentations=False,
-    #     set_position=False,
-    # )
-    # edit_point_layer = AnnotationLayerConfig(
-    #     f"level2-path-nodes-{i}",
-    #     data_resolution=[1, 1, 1],
-    #     color=(0.4, 0.4, 0.4),
-    #     mapping_rules=edit_point_mapper,
-    # )
-    # sb_edits = StateBuilder([edit_point_layer], client=client)  # view_kws=view_kws)
-    # state_builders.append(sb_edits)
-    # dataframes.append(path_df)
+# path_line_df = path_df.iloc[:-1].join(
+#     path_df.iloc[1:].reset_index(drop=True), rsuffix="_target", lsuffix="_source"
+# )
 
-    path_line_df = path_df.iloc[:-1].join(
-        path_df.iloc[1:].reset_index(drop=True), rsuffix="_target", lsuffix="_source"
-    )
+# show_component_labels = [
+#     873944,
+#     -83,
+#     -82,
+#     -91,
+#     -104,
+#     -78,
+#     -82,
+#     -106,
+#     -16,
+#     -105,
+#     873942,
+#     -106,
 
-    edit_line_mapper = LineMapper(
-        point_column_a="rep_coord_nm_source",
-        point_column_b="rep_coord_nm_target",
-        description_column="level2_node_id_source",
-        set_position=False,
-    )
-    edit_line_layer = AnnotationLayerConfig(
-        f"level2-path-lines-{query_l2_node}",
+# ]
+show_component_labels = [54, -722, 104, -837, 118, -854, 64, -687]
+n_colors = len(show_component_labels)
+import seaborn as sns
+
+colors = sns.color_palette("husl", n_colors=n_colors, desat=0.5)
+
+for i, component_label in enumerate(show_component_labels):
+    sub_nf = nf.query_nodes(f"component_label == {component_label}")
+    print(sub_nf)
+    print()
+    if len(sub_nf) == 1:
+        edit_mapper = PointMapper(
+            point_column="rep_coord_nm",
+            set_position=False,
+        )
+        dataframes.append(sub_nf.nodes)
+    else:
+        edit_mapper = LineMapper(
+            point_column_a="source_rep_coord_nm",
+            point_column_b="target_rep_coord_nm",
+            set_position=False,
+        )
+        dataframes.append(sub_nf.edges)
+    edit_layer = AnnotationLayerConfig(
+        f"level2-path-lines-{component_label}",
         data_resolution=[1, 1, 1],
-        color=(0.4, 0.4, 0.4),
-        mapping_rules=edit_line_mapper,
+        color=colors[i],
+        mapping_rules=edit_mapper,
     )
-    sb_edit_lines = StateBuilder([edit_line_layer], client=client)
+    sb_edit_lines = StateBuilder([edit_layer], client=client)
     state_builders.append(sb_edit_lines)
-    dataframes.append(path_line_df)
 
-state_builders, dataframes = add_level2_edits(
-    state_builders, dataframes, query_keypoints.reset_index(), client, by=None
-)
 
-state_builders, dataframes = add_level2_edits(
-    state_builders,
-    dataframes,
-    viz_keypoints.reset_index(),
-    client,
-    by="metaoperation_id",
+cross_nf = nf.query_nodes(
+    "component_label.isin(@show_component_labels)", local_dict=locals()
+).query_edges(f"cross_{prefix}operation & (~was_removed)")
+
+edit_mapper = LineMapper(
+    point_column_a="source_rep_coord_nm",
+    point_column_b="target_rep_coord_nm",
+    set_position=False,
 )
+dataframes.append(cross_nf.edges)
+edit_layer = AnnotationLayerConfig(
+    "cross-edges",
+    data_resolution=[1, 1, 1],
+    color=(0.9, 0, 0),
+    mapping_rules=edit_mapper,
+)
+sb_edit_lines = StateBuilder([edit_layer], client=client)
+state_builders.append(sb_edit_lines)
+
 
 link = finalize_link(state_builders, dataframes, client)
 link
 
 # %%
-
-nf.nodes.loc[list(paths[159896547725673406])]["metaoperation_id"].unique()
-
-
-# %%
-metaoperation_dependencies = nx.DiGraph()
-
-for metaoperation, predecessors in predecessors_by_metaoperation.items():
-    path = predecessors + [metaoperation]
-    if soma_nuc_merge_metaoperation is None:
-        path = [-1] + path
-    nx.add_path(metaoperation_dependencies, path)
-
-is_tree = nx.is_tree(metaoperation_dependencies)
-
-print("Merge dependency graph is a tree: ", is_tree)
-
-
-# %%
-
-nontrivial_metaoperation_dependencies = metaoperation_dependencies.copy()
-out_degrees = metaoperation_dependencies.out_degree()
-
-in_degrees = list(metaoperation_dependencies.in_degree())
-in_degrees = list(zip(*in_degrees))
-in_degrees = pd.Series(index=in_degrees[0], data=in_degrees[1])
-max_degree_node = in_degrees.idxmax()
-
-# %%
-for node_id in metaoperation_dependencies.nodes():
-    in_edges = metaoperation_dependencies.in_edges(node_id)
-    n_edges = len(in_edges)
-    if n_edges == 0:
-        continue
-    first_edge = next(iter(in_edges))
-    if n_edges == 1 and first_edge == (max_degree_node, node_id):
-        nontrivial_metaoperation_dependencies.remove_node(node_id)
-
-# %%
-
-
-fig, ax = plt.subplots(1, 1, figsize=(15, 15))
-pos = radial_hierarchy_pos(metaoperation_dependencies)
-
-nodelist = metaoperation_synapse_dependents.index.to_list()
-if soma_nuc_merge_metaoperation is None:
-    nodelist = [-1] + nodelist
-
-node_sizes = list(metaoperation_synapse_dependents.values)
-if soma_nuc_merge_metaoperation is None:
-    node_sizes = [max(node_sizes) + 1] + node_sizes
-
-nx.draw_networkx(
-    metaoperation_dependencies,
-    nodelist=nodelist,
-    pos=pos,
-    with_labels=True,
-    ax=ax,
-    node_size=node_sizes,
-    font_size=6,
-)
-ax.axis("equal")
-ax.axis("off")
-plt.savefig(f"merge_dependency_tree_root={root_id}.png", bbox_inches="tight", dpi=300)
-
-
-# %%
-
-nuc_supervoxel = nuc.loc[root_id, "pt_supervoxel_id"]
-p_merge_rollbacks = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
-n_samples = 25
-
-nfs_by_sample = {}
-for p_merge_rollback in p_merge_rollbacks:
-    if p_merge_rollback == 0.0 or p_merge_rollback == 1.0:
-        _n_samples = 1
-    else:
-        _n_samples = n_samples
-    for i in tqdm(range(_n_samples)):
-        sampled_metaedits = candidate_metaedits.sample(frac=p_merge_rollback)
-
-        nf = nf.copy()
-        for metaedit in sampled_metaedits:
-            networkdelta = networkdeltas_by_metaoperation[metaedit]
-            reverse_edit(nf, networkdelta)
-
-        nuc_nf = find_supervoxel_component(nuc_supervoxel, nf, client)
-        if p_merge_rollback == 0.0:
-            assert nuc_nf == nf
-        nfs_by_sample[(np.round(1 - p_merge_rollback, 1), i)] = nuc_nf
-
-# %%
-synapses_by_sample = {}
-for key, nf in nfs_by_sample.items():
-    all_synapses = []
-    for idx, node in nf.nodes.iterrows():
-        # TODO I think can safely ignore nodes w/o "synapses" column here since they
-        # were added, but could check this
-        if isinstance(node["synapses"], list):
-            all_synapses += node["synapses"]
-    synapses_by_sample[key] = all_synapses
-
-# %%
-all_postsynaptic_targets = np.unique(pre_synapses["post_pt_root_id"])
-connectivity_df = pd.DataFrame(
-    columns=all_postsynaptic_targets, index=synapses_by_sample.keys()
-).fillna(0)
-connectivity_df.index.names = ["p_merge", "sample"]
-
-for key, synapses in synapses_by_sample.items():
-    for synapse in synapses:
-        post_root_id = pre_synapses.loc[synapse, "post_pt_root_id"]
-        connectivity_df.loc[key, post_root_id] += 1
-
-
-# %%
-p_found = connectivity_df.sum(axis=0)
-p_found = p_found.sort_values(ascending=False)
-
-connectivity_df = connectivity_df[p_found.index]
-# %%
-fig, ax = plt.subplots(1, 1, figsize=(15, 9))
-sns.heatmap(connectivity_df, ax=ax, cmap="Blues", xticklabels=False)
-
-# %%
-mtypes = client.materialize.query_table("aibs_metamodel_mtypes_v661_v2")
-
-# %%
-mtypes["target_id"].isin(nuc["id"]).mean()
-
-# %%
-new_root_ids = mtypes["target_id"].map(nuc.reset_index().set_index("id")["pt_root_id"])
-mtypes["root_id"] = new_root_ids
-
-root_id_counts = mtypes["root_id"].value_counts().sort_values(ascending=False)
-
-root_id_dups = root_id_counts[root_id_counts > 1].index
-
-# %%
-mtypes = mtypes.query("~root_id.isin(@root_id_dups)")
-
-# %%
-mtypes.set_index("root_id", inplace=True)
-
-# %%
-connectivity_df.columns.isin(mtypes.index).mean()
-
-# %%
-
-connectivity_df.groupby(by=mtypes["cell_type"], axis=1).sum()
-
-# %%
-p_connectivity_df = connectivity_df / connectivity_df.sum(axis=1).values[:, None]
-
-p_connectivity_df.sum(axis=1)
-
-# %%
-group_connectivity_df = connectivity_df.groupby(by=mtypes["cell_type"], axis=1).sum()
-group_connectivity_df = group_connectivity_df.reindex(
-    labels=np.unique(mtypes["cell_type"]), axis=1
-).fillna(0)
-
-group_p_connectivity_df = (
-    group_connectivity_df / group_connectivity_df.sum(axis=1).values[:, None]
-)
-
-# %%
-exc_group_p_connectivity_df = group_p_connectivity_df.drop(
-    ["DTC", "ITC", "PTC", "STC"], axis=1
-)
-exc_group_p_connectivity_df = exc_group_p_connectivity_df.sort_index(axis=1)
-
-exc_group_connectivity_df = group_connectivity_df.drop(
-    ["DTC", "ITC", "PTC", "STC"], axis=1
-)
-exc_group_connectivity_df = exc_group_connectivity_df.sort_index(axis=1)
-# %%
-fig, ax = plt.subplots(1, 1, figsize=(10, 5))
-sns.heatmap(exc_group_p_connectivity_df, cmap="Blues", ax=ax)
-
-# %%
-
-palette_file = "data/ctype_hues.pkl"
-
-with open(palette_file, "rb") as f:
-    ctype_hues = pickle.load(f)
-
-ctype_hues = {ctype: tuple(ctype_hues[ctype]) for ctype in ctype_hues.keys()}
-
-
-# %%
-exc_group_connectivity_tidy = pd.melt(
-    exc_group_connectivity_df.reset_index(),
-    id_vars=["p_merge", "sample"],
-    value_name="n_synapses",
-)
-exc_group_p_connectivity_tidy = pd.melt(
-    exc_group_p_connectivity_df.reset_index(),
-    id_vars=["p_merge", "sample"],
-    value_name="p_synapses",
-)
-
-
-fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-fig.suptitle(
-    f"Root ID {root_id}, Motif group: {query_neurons.set_index('pt_root_id').loc[root_id, 'cell_type']}"
-)
-plot1 = (
-    so.Plot(
-        exc_group_connectivity_tidy,
-        x="p_merge",
-        y="n_synapses",
-        color="cell_type",
-    )
-    .add(so.Dots(pointsize=3, alpha=0.5), so.Jitter())
-    .add(so.Line(), so.Agg())
-    .add(so.Band(), so.Est())
-    .label(
-        x="Proportion of filtered merges used",
-        y="Number of synapses",
-        # title=f"Root ID {root_id}, Motif group: {query_neurons.set_index('pt_root_id').loc[root_id, 'cell_type']}",
-        color="Target M-type",
-    )
-    .layout(engine="tight")
-    .scale(color=ctype_hues)
-    .on(axs[0])
-    # .show()
-    .save(f"exc_group_connectivity_root={root_id}.png", bbox_inches="tight")
-)
-plot2 = (
-    so.Plot(
-        exc_group_p_connectivity_tidy, x="p_merge", y="p_synapses", color="cell_type"
-    )
-    .add(so.Dots(pointsize=3, alpha=0.5), so.Jitter())
-    .add(so.Line(), so.Agg())
-    .add(so.Band(), so.Est())
-    .label(
-        x="Proportion of filtered merges used",
-        y="Proportion of known outputs",
-        # title=f"Root ID {root_id}, Motif group: {query_neurons.set_index('pt_root_id').loc[root_id, 'cell_type']}",
-        color="Target M-type",
-    )
-    .layout(engine="tight")
-    .scale(color=so.Nominal(ctype_hues))
-    .on(axs[1])
-    # .show()
-    .save(f"exc_group_connectivity_root={root_id}.png", bbox_inches="tight")
-)
-
-# %%
+nx.cycle_basis(g)

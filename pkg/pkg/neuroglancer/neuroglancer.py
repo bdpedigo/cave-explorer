@@ -41,7 +41,7 @@ def generate_neuron_base_builders(root_id, client):
     return state_builders, dataframes
 
 
-def generate_neurons_base_builders(root_ids, client):
+def generate_neurons_base_builders(root_ids, client, name="seg"):
     if isinstance(root_ids, (int, np.integer)):
         root_ids = [root_ids]
     # REF: mostly stolen from nglui.statebuilder.helpers
@@ -53,16 +53,16 @@ def generate_neurons_base_builders(root_ids, client):
     dataframes = [pd.DataFrame({"root_id": root_ids})]
 
     # generate some generic segmentation/image layers
-    img_layer = ImageLayerConfig(client.info.image_source())
-    seg_layer = SegmentationLayerConfig(client.info.segmentation_source(), alpha_3d=0.3)
+    # img_layer = ImageLayerConfig(client.info.image_source())
+    seg_layer = SegmentationLayerConfig(
+        client.info.segmentation_source(), alpha_3d=0.3, name=name
+    )
     seg_layer.add_selection_map(selected_ids_column="root_id")
 
     # set position to the soma
     # view_kws = {"position": np.array(nuc_pt_nm) / np.array([4, 4, 40])}
     view_kws = {}
-    base_sb = StateBuilder(
-        layers=[img_layer, seg_layer], client=client, view_kws=view_kws
-    )
+    base_sb = StateBuilder(layers=[seg_layer], client=client, view_kws=view_kws)
 
     state_builders = [base_sb]
 
@@ -97,7 +97,8 @@ def add_level2_edits(
         edit_df["_dummy"] = "all"
         by = "_dummy"
 
-    colors = sns.color_palette("husl", len(edit_df[by].unique()))
+    colors = sns.color_palette("ch:start=.2,rot=-.3", len(edit_df[by].unique()))
+    
 
     for i, (operation_id, operation_data) in enumerate(edit_df.groupby(by)):
         edit_point_mapper = PointMapper(

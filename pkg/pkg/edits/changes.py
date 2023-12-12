@@ -392,7 +392,8 @@ def apply_edit(
 def pseudo_apply_edit(
     network_frame: NetworkFrame,
     network_delta,
-    label=None,
+    operation_label=None,
+    metaoperation_label=None,
     label_dtype=int,
     copy=False,
 ):
@@ -400,21 +401,42 @@ def pseudo_apply_edit(
         network_delta.added_nodes = network_delta.added_nodes.copy()
         network_delta.added_edges = network_delta.added_edges.copy()
 
-    network_delta.added_nodes["operation_added"] = label
-    network_delta.added_edges["operation_added"] = label
-    network_delta.added_nodes["operation_removed"] = -1
-    network_delta.added_edges["operation_removed"] = -1
-    network_delta.added_nodes = network_delta.added_nodes.astype(label_dtype)
-    network_delta.added_edges = network_delta.added_edges.astype(label_dtype)
+    for col in [
+        "operation_added",
+        "operation_removed",
+        "metaoperation_added",
+        "metaoperation_removed",
+    ]:
+        network_delta.added_nodes[col] = -1
+        network_delta.added_nodes[col] = network_delta.added_nodes[col].astype(
+            label_dtype
+        )
+        network_delta.added_edges[col] = -1
+        network_delta.added_edges[col] = network_delta.added_edges[col].astype(
+            label_dtype
+        )
+
+    for df in [network_delta.added_nodes, network_delta.added_edges]:
+        df["operation_added"] = operation_label
+        df["operation_removed"] = -1
+        df["metaoperation_added"] = metaoperation_label
+        df["metaoperation_removed"] = -1
+
     network_frame.add_nodes(network_delta.added_nodes, inplace=True)
     network_frame.add_edges(network_delta.added_edges, inplace=True)
 
     network_frame.nodes.loc[
         network_delta.removed_nodes.index, "operation_removed"
-    ] = label
+    ] = operation_label
     network_frame.edges.loc[
         network_delta.removed_edges.index, "operation_removed"
-    ] = label
+    ] = operation_label
+    network_frame.nodes.loc[
+        network_delta.removed_nodes.index, "metaoperation_removed"
+    ] = metaoperation_label
+    network_frame.edges.loc[
+        network_delta.removed_edges.index, "metaoperation_removed"
+    ] = metaoperation_label
 
 
 def apply_additions(
