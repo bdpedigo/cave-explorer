@@ -4,10 +4,12 @@ import seaborn as sns
 from nglui.statebuilder import (
     AnnotationLayerConfig,
     ChainedStateBuilder,
+    ImageLayerConfig,
     PointMapper,
+    SegmentationLayerConfig,
     StateBuilder,
 )
-from nglui.statebuilder.helpers import from_client, package_state
+from nglui.statebuilder.helpers import package_state
 
 from ..utils import get_nucleus_point_nm
 
@@ -22,10 +24,10 @@ def generate_neuron_base_builders(root_id, client):
     root_ids = [root_id]
     dataframes = [pd.DataFrame({"root_id": root_ids})]
 
-    contrast = None
-
     # generate some generic segmentation/image layers
-    img_layer, seg_layer = from_client(client, contrast=contrast)
+    # img_layer, seg_layer = from_client(client, contrast=contrast)
+    img_layer = ImageLayerConfig(client.info.image_source())
+    seg_layer = SegmentationLayerConfig(client.info.segmentation_source(), alpha_3d=0.3)
     seg_layer.add_selection_map(selected_ids_column="root_id")
 
     # set position to the soma
@@ -50,10 +52,9 @@ def generate_neurons_base_builders(root_ids, client):
     # first df is just the root_id
     dataframes = [pd.DataFrame({"root_id": root_ids})]
 
-    contrast = None
-
     # generate some generic segmentation/image layers
-    img_layer, seg_layer = from_client(client, contrast=contrast)
+    img_layer = ImageLayerConfig(client.info.image_source())
+    seg_layer = SegmentationLayerConfig(client.info.segmentation_source(), alpha_3d=0.3)
     seg_layer.add_selection_map(selected_ids_column="root_id")
 
     # set position to the soma

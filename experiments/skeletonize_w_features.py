@@ -6,7 +6,14 @@ t0 = time.time()
 
 import os
 
+import caveclient as cc
 import matplotlib.pyplot as plt
+from meshparty import meshwork
+from neuropull.graph import NetworkFrame
+from pcg_skel import features
+from skeleton_plot.plot_tools import plot_mw_skel
+from tqdm.autonotebook import tqdm
+
 from pkg.edits import (
     apply_edit,
     find_supervoxel_component,
@@ -16,20 +23,13 @@ from pkg.edits import (
 from pkg.morphology import (
     apply_compartments,
     apply_synapses,
-    get_pre_post_synapses,
+    get_alltime_synapses,
     get_soma_point,
-    map_synapses,
+    map_synapses_to_spatial_graph,
     skeletonize_networkframe,
 )
 from pkg.plot import clean_axis
 from pkg.utils import get_level2_nodes_edges
-from tqdm.autonotebook import tqdm
-
-import caveclient as cc
-from meshparty import meshwork
-from neuropull.graph import NetworkFrame
-from pcg_skel import features
-from skeleton_plot.plot_tools import plot_mw_skel
 
 # %%
 
@@ -92,9 +92,9 @@ plot_mw_skel(nrn, plot_postsyn=False, plot_presyn=False, plot_soma=True)
 
 # %%
 
-pre_synapses, post_synapses = get_pre_post_synapses(root_id, client)
+pre_synapses, post_synapses = get_alltime_synapses(root_id, client)
 
-pre_synapses, post_synapses = map_synapses(
+pre_synapses, post_synapses = map_synapses_to_spatial_graph(
     pre_synapses, post_synapses, networkdeltas_by_operation, l2dict_mesh, client
 )
 apply_synapses(nrn, pre_synapses, post_synapses)

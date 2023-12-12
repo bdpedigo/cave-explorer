@@ -2,7 +2,9 @@ from .changes import (
     NetworkDelta,
     apply_additions,
     apply_edit,
+    apply_metaoperation_info,
     collate_edit_info,
+    find_soma_nuc_merge_metaoperation,
     find_supervoxel_component,
     get_changed_edges,
     get_detailed_change_log,
@@ -13,6 +15,7 @@ from .changes import (
     get_network_metaedits,
     get_operation_metaoperation_map,
     get_supervoxel_level2_map,
+    pseudo_apply_edit,
     reverse_edit,
 )
 from .io import (

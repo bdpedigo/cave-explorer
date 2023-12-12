@@ -1,14 +1,15 @@
+import caveclient as cc
 import numpy as np
 import pandas as pd
-import tqdm.autonotebook as tqdm
+import pcg_skel.skel_utils as sk_utils
 from meshparty import skeletonize, trimesh_io
 from meshparty.skeleton import Skeleton
 from navis import TreeNeuron
-
-import pcg_skel.skel_utils as sk_utils
+from neuropull.graph import NetworkFrame
 from pcg_skel.chunk_tools import build_spatial_graph
+from sklearn.metrics import pairwise_distances_argmin
 
-from ..edits import get_initial_network
+from ..utils import get_nucleus_point_nm
 
 
 def skeletonize_networkframe(
@@ -73,3 +74,20 @@ def get_soma_point(
     soma_point_resolution = np.array(soma_point_resolution)
     soma_point = np.array(soma_point) * soma_point_resolution
     return soma_point
+
+
+# %%
+
+
+def apply_nucleus(nf: NetworkFrame, root_id: int, client: cc.CAVEclient):
+    """annotate a point on the level2 graph as the nucleus; whatever is closest"""
+
+    nuc_pt_nm = get_nucleus_point_nm(root_id, client, method="table")
+
+    pos_nodes = nf.nodes[["x", "y", "z"]]
+    pos_nodes = pos_nodes[pos_nodes.notna().all(axis=1)]
+
+    ind = pairwise_distances_argmin(nuc_pt_nm.reshape(1, -1), pos_nodes)[0]
+    nuc_level2_id = pos_nodes.index[ind]
+    nf.nodes["nucleus"] = False
+    nf.nodes.loc[nuc_level2_id, "nucleus"] = True

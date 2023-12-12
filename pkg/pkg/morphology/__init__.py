@@ -1,5 +1,6 @@
 from .compartments import apply_compartments
 from .morphology import (
+    apply_nucleus,
     get_soma_point,
     get_soma_row,
     skeleton_to_treeneuron,
@@ -7,7 +8,8 @@ from .morphology import (
 )
 from .synapses import (
     apply_synapses,
-    get_pre_post_synapses,
+    apply_synapses_to_meshwork,
+    get_alltime_synapses,
     map_synapse_level2_ids,
-    map_synapses,
+    map_synapses_to_spatial_graph,
 )

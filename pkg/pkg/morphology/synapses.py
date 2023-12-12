@@ -1,11 +1,13 @@
 import time
 
+import caveclient as cc
 import pandas as pd
+from neuropull.graph import NetworkFrame
 
 from ..edits import get_level2_lineage_components
 
 
-def get_pre_post_synapses(
+def get_alltime_synapses(
     root_id, client, synapse_table=None, remove_self=True, verbose=False
 ):
     if synapse_table is None:
@@ -123,7 +125,7 @@ def map_synapse_level2_ids(
     synapses[f"{side}_pt_level2_id"] = synapses[f"{side}_pt_level2_id"].astype(int)
 
 
-def map_synapses(
+def map_synapses_to_spatial_graph(
     pre_synapses,
     post_synapses,
     networkdeltas_by_operation,
@@ -162,7 +164,7 @@ def map_synapses(
     return tuple(outs)
 
 
-def apply_synapses(meshwork, pre_synapses, post_synapses, overwrite=True):
+def apply_synapses_to_meshwork(meshwork, pre_synapses, post_synapses, overwrite=True):
     # apply these synapse -> mesh index mappings to the meshwork
     for side, synapses in zip(["pre", "post"], [pre_synapses, post_synapses]):
         meshwork.anno.add_annotations(
@@ -174,3 +176,42 @@ def apply_synapses(meshwork, pre_synapses, post_synapses, overwrite=True):
             overwrite=overwrite,
         )
     return meshwork
+
+
+def apply_synapses(
+    nf: NetworkFrame,
+    networkdeltas_by_operation: dict,
+    root_id: int,
+    client: cc.CAVEclient,
+    verbose: bool = True,
+):
+    # map synapses onto the network
+    # this involves looking at the entire set of synapses at any point in time so to speak
+
+    pre_synapses, post_synapses = get_alltime_synapses(root_id, client, verbose=verbose)
+
+    pre_synapses, post_synapses = map_synapses_to_spatial_graph(
+        pre_synapses,
+        post_synapses,
+        networkdeltas_by_operation,
+        nf.nodes.index,
+        client,
+        verbose=verbose,
+    )
+
+    # record this mapping onto the networkframe
+    nf.nodes["synapses"] = [[] for _ in range(len(nf.nodes))]
+    nf.nodes["pre_synapses"] = [[] for _ in range(len(nf.nodes))]
+    nf.nodes["post_synapses"] = [[] for _ in range(len(nf.nodes))]
+
+    for idx, synapse in pre_synapses.iterrows():
+        nf.nodes.loc[synapse["pre_pt_current_level2_id"], "synapses"].append(idx)
+        nf.nodes.loc[synapse["pre_pt_current_level2_id"], "pre_synapses"].append(idx)
+
+    for idx, synapse in post_synapses.iterrows():
+        nf.nodes.loc[synapse["post_pt_current_level2_id"], "synapses"].append(idx)
+        nf.nodes.loc[synapse["post_pt_current_level2_id"], "post_synapses"].append(idx)
+
+    nf.nodes["has_synapses"] = nf.nodes["synapses"].apply(len) > 0
+
+    return pre_synapses, post_synapses

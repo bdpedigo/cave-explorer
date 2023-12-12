@@ -367,14 +367,67 @@ def get_supervoxel_level2_map(root_id, networkdeltas_by_operation, client):
     return supervoxel_map
 
 
-def apply_edit(network_frame: NetworkFrame, network_delta):
+def apply_edit(
+    network_frame: NetworkFrame,
+    network_delta,
+    key=None,
+    label=None,
+    label_dtype=int,
+    copy=False,
+):
+    if copy:
+        network_delta.added_nodes = network_delta.added_nodes.copy()
+        network_delta.added_edges = network_delta.added_edges.copy()
+    if key is not None:
+        network_delta.added_nodes[key] = label
+        network_delta.added_edges[key] = label
+        network_delta.added_nodes = network_delta.added_nodes.astype(label_dtype)
+        network_delta.added_edges = network_delta.added_edges.astype(label_dtype)
     network_frame.add_nodes(network_delta.added_nodes, inplace=True)
     network_frame.add_edges(network_delta.added_edges, inplace=True)
     network_frame.remove_nodes(network_delta.removed_nodes, inplace=True)
     network_frame.remove_edges(network_delta.removed_edges, inplace=True)
 
 
-def apply_additions(network_frame, network_delta):
+def pseudo_apply_edit(
+    network_frame: NetworkFrame,
+    network_delta,
+    label=None,
+    label_dtype=int,
+    copy=False,
+):
+    if copy:
+        network_delta.added_nodes = network_delta.added_nodes.copy()
+        network_delta.added_edges = network_delta.added_edges.copy()
+
+    network_delta.added_nodes["operation_added"] = label
+    network_delta.added_edges["operation_added"] = label
+    network_delta.added_nodes["operation_removed"] = -1
+    network_delta.added_edges["operation_removed"] = -1
+    network_delta.added_nodes = network_delta.added_nodes.astype(label_dtype)
+    network_delta.added_edges = network_delta.added_edges.astype(label_dtype)
+    network_frame.add_nodes(network_delta.added_nodes, inplace=True)
+    network_frame.add_edges(network_delta.added_edges, inplace=True)
+
+    network_frame.nodes.loc[
+        network_delta.removed_nodes.index, "operation_removed"
+    ] = label
+    network_frame.edges.loc[
+        network_delta.removed_edges.index, "operation_removed"
+    ] = label
+
+
+def apply_additions(
+    network_frame, network_delta, key=None, label=None, label_dtype=int, copy=False
+):
+    if copy:
+        network_delta.added_nodes = network_delta.added_nodes.copy()
+        network_delta.added_edges = network_delta.added_edges.copy()
+    if key is not None:
+        network_delta.added_nodes[key] = label
+        network_delta.added_edges[key] = label
+        network_delta.added_nodes = network_delta.added_nodes.astype(label_dtype)
+        network_delta.added_edges = network_delta.added_edges.astype(label_dtype)
     network_frame.add_nodes(network_delta.added_nodes, inplace=True)
     network_frame.add_edges(network_delta.added_edges, inplace=True)
 
@@ -494,3 +547,67 @@ def collate_edit_info(
         edit_stats["centroid_distance_to_nuc_nm"] / 1000
     )
     return edit_stats, modified_level2_nodes
+
+
+def apply_metaoperation_info(
+    nf: NetworkFrame, networkdeltas_by_metaoperation: dict, edit_stats: pd.DataFrame
+):
+    nf.nodes["metaoperation_id"] = np.nan
+    nf.nodes["metaoperation_id"] = nf.nodes["metaoperation_id"].astype("Int64")
+
+    for metaoperation_id, networkdelta in networkdeltas_by_metaoperation.items():
+        # TODO more robustly deal with add->removes in the metaedits
+        # TODO maybe just take the intersection with the final network as a shortcut
+        #      Since some of the metaedits might not have merges which are relevant so added
+        #      nodes get removed later or something...
+        net_added_node_ids = networkdelta.added_nodes.index.difference(
+            networkdelta.removed_nodes.index
+        )
+
+        net_added_node_ids = networkdelta.added_nodes.index.intersection(nf.nodes.index)
+
+        if len(net_added_node_ids) == 0:
+            print(networkdelta.metadata["is_merges"])
+            for operation_id in networkdelta.metadata["operation_ids"]:
+                print(edit_stats.loc[operation_id, "is_filtered"])
+            print()
+
+        if not nf.nodes.loc[net_added_node_ids, "metaoperation_id"].isna().all():
+            raise AssertionError("Some nodes already exist")
+        else:
+            nf.nodes.loc[net_added_node_ids, "metaoperation_id"] = metaoperation_id
+
+    nf.nodes["has_operation"] = nf.nodes["metaoperation_id"].notna()
+
+
+# %%
+
+
+def find_soma_nuc_merge_metaoperation(
+    networkdeltas_by_metaoperation: dict,
+    edit_stats: pd.DataFrame,
+    nuc_dist_threshold=10,
+    n_modified_nodes_threshold=10,
+):
+    soma_nuc_merge_metaoperation = None
+
+    for metaoperation_id, networkdelta in networkdeltas_by_metaoperation.items():
+        metadata = networkdelta.metadata
+        operation_ids = metadata["operation_ids"]
+
+        for operation_id in operation_ids:
+            # check if any of the operations in this metaoperation are a soma/nucleus merge
+            is_merge = edit_stats.loc[operation_id, "is_merge"]
+            if is_merge:
+                dist_um = edit_stats.loc[operation_id, "centroid_distance_to_nuc_um"]
+                n_modified_nodes = edit_stats.loc[operation_id, "n_modified_nodes"]
+                if (
+                    dist_um < nuc_dist_threshold
+                    and n_modified_nodes >= n_modified_nodes_threshold
+                ):
+                    soma_nuc_merge_metaoperation = metaoperation_id
+                    print("Found soma/nucleus merge operation: ", operation_id)
+                    print("Found soma/nucleus merge metaoperation: ", metaoperation_id)
+                    break
+
+    return soma_nuc_merge_metaoperation
