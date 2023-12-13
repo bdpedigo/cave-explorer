@@ -103,7 +103,10 @@ nf.edges.set_index(["source", "target"], inplace=True, drop=False)
 
 # %%
 
-
+# go through all of the edits/metaedits
+# add nodes that were added, but don't remove any nodes
+# mark nodes/edges with when they were added/removed
+# things that were never removed/added get -1
 for networkdelta in tqdm(networkdeltas_by_operation.values()):
     networkdelta.added_edges = networkdelta.added_edges.set_index(
         ["source", "target"], drop=False
@@ -123,17 +126,19 @@ for networkdelta in tqdm(networkdeltas_by_operation.values()):
 
 # %%
 
+# apply positions to the final node-set
 node_positions = get_positions(list(nf.nodes.index), client)
-
 nf.nodes[["rep_coord_nm", "x", "y", "z"]] = node_positions[
     ["rep_coord_nm", "x", "y", "z"]
 ]
 
 # %%
 
+# give the edges info about when those nodes were added
 nf.apply_node_features("operation_added", inplace=True)
 nf.apply_node_features("metaoperation_added", inplace=True)
 
+# label edges which cross operations/metaoperations
 nf.edges["cross_operation"] = (
     nf.edges["source_operation_added"] != nf.edges["target_operation_added"]
 )
@@ -151,6 +156,7 @@ if meta:
 else:
     prefix = ""
 
+# now, create a view of the graph such that we are only looking at edges which 
 no_cross_nf = nf.query_edges(
     f"(~cross_{prefix}operation) & (~was_removed)"
 ).query_nodes("~was_removed")
@@ -181,6 +187,9 @@ nf.apply_node_features("component_label", inplace=True)
 cross_nf = nf.query_edges(
     f"cross_{prefix}operation & (~was_removed)"
 ).remove_unused_nodes()
+
+# %%
+nf.query_edges(f"cross_{prefix}operation")
 # %%
 
 
@@ -276,14 +285,10 @@ for i in tqdm(range(100)):
     choice_time += time.time() - t
 
     t = time.time()
-    sub_nf = (
-        nf.query_nodes(
-            f"{prefix}operation_added.isin(@metaoperaion_set)", local_dict=locals()
-        )
-        .query_edges(
-            f"{prefix}operation_added.isin(@metaoperaion_set)", local_dict=locals()
-        )
-        .remove_unused_nodes()
+    sub_nf = nf.query_nodes(
+        f"{prefix}operation_added.isin(@metaoperaion_set)", local_dict=locals()
+    ).query_edges(
+        f"{prefix}operation_added.isin(@metaoperaion_set)", local_dict=locals()
     )
     query_time += time.time() - t
 
