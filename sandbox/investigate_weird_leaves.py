@@ -4,28 +4,17 @@ import time
 
 t0 = time.time()
 
-from datetime import timedelta
 
 import caveclient as cc
 import numpy as np
+import pandas as pd
+from tqdm.auto import tqdm
+
 from pkg.edits import (
-    find_supervoxel_component,
-    get_initial_network,
     get_network_edits,
     get_network_metaedits,
 )
 from pkg.utils import get_level2_nodes_edges
-from tqdm.autonotebook import tqdm
-from pcg_skel.chunk_tools import build_spatial_graph
-import pcg_skel.skel_utils as sk_utils
-from meshparty import trimesh_io
-from graspologic.layouts.colors import _get_colors
-from meshparty import trimesh_vtk
-from meshparty import skeletonize
-import networkx as nx
-
-from neuropull.graph import NetworkFrame
-import pandas as pd
 
 # %%
 
@@ -74,7 +63,6 @@ print()
 
 # %%
 from pkg.edits import get_lineage_tree
-from requests.exceptions import HTTPError
 
 positions = False
 lineage_root = get_lineage_tree(root_id, client, flip=True, order="edits")
@@ -142,8 +130,8 @@ for other_node in tqdm(lineage_root.leaves):
 
 # %%
 
-import pcg_skel
 import navis
+import pcg_skel
 
 
 def get_tree_neuron(root_id, client):
@@ -193,12 +181,12 @@ treeplot(
     rec_lineage_tree,
     node_hue="status",
 )
-#%%
+# %%
 
-for leaf in np.unique(rec_lineage_tree.leaves): 
+for leaf in np.unique(rec_lineage_tree.leaves):
     print(leaf.name)
 
-#%%
+# %%
 
 
 # %%

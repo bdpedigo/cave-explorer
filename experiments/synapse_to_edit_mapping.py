@@ -11,7 +11,7 @@ import pandas as pd
 import seaborn as sns
 import seaborn.objects as so
 from scipy.sparse.csgraph import shortest_path
-from tqdm.autonotebook import tqdm
+from tqdm.auto import tqdm
 
 from pkg.edits import (
     apply_additions,
@@ -376,9 +376,9 @@ state_builders, dataframes = add_level2_edits(
 link = finalize_link(state_builders, dataframes, client)
 link
 
-#%%
+# %%
 
-nf.nodes.loc[list(paths[159896547725673406])]['metaoperation_id'].unique()
+nf.nodes.loc[list(paths[159896547725673406])]["metaoperation_id"].unique()
 
 
 # %%

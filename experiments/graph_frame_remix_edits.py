@@ -8,6 +8,9 @@ from datetime import timedelta
 
 import caveclient as cc
 import numpy as np
+from networkframe import NetworkFrame
+from tqdm.auto import tqdm
+
 from pkg.edits import (
     find_supervoxel_component,
     get_initial_network,
@@ -15,11 +18,6 @@ from pkg.edits import (
     get_network_metaedits,
 )
 from pkg.utils import get_level2_nodes_edges
-from tqdm.autonotebook import tqdm
-from pkg.edits import get_lineage_tree
-from anytree import PreOrderIter
-
-from neuropull.graph import NetworkFrame
 
 # %%
 
@@ -81,7 +79,6 @@ print()
 # %%
 
 import pandas as pd
-
 
 mod_sets = {}
 for edit_id, delta in networkdeltas_by_operation.items():

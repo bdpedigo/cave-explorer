@@ -1,37 +1,37 @@
 [tool.poetry]
+authors = ["Ben Pedigo <ben.pedigo@alleninstitute.org>"]
+description = ""
 name = "skedits"
 version = "0.1.0"
-description = ""
-authors = ["Ben Pedigo <ben.pedigo@alleninstitute.org>"]
 
 [tool.poetry.dependencies]
-python = "3.11.*"
-scikit-learn = "1.2.2"
-caveclient = "^5.11.0"
-graspologic = "^3.3.0"
-matplotlib-venn = "^0.11.9"
-urllib3 = "^1.26.17"
-brotlicffi = "^1.1.0.0"
-cloud-volume = "^8.27.0"
-meshparty = "^1.16.14"
-pcg-skel = {path = "../pcg_skel", develop = true}
-skeleton-plot = {path = "../skeleton_plot", develop = true}
 Jinja2 = ">=3.1.2"
-nglui = "^2.14.3"
-ipython = ">8.16.0"
-neuropull = {path = "../neuropull", develop = true}
-ipykernel = "^6.25.2"
-navis = "^1.5.0"
 POT = "^0.9.1"
-axon-id = {path = "../axon_id", develop = true}
-apical-classifier = {path = "../apical_classifier", develop = true}
-task-queue = "^2.13.0"
-tables = {git = "https://github.com/PyTables/PyTables"}
+apical-classifier = { path = "../apical_classifier", develop = true }
+axon-id = { path = "../axon_id", develop = true }
+brotlicffi = "^1.1.0.0"
+caveclient = "^5.11.0"
+cloud-volume = "^8.27.0"
 glasbey = "^0.2.0"
+graspologic = "^3.3.0"
+ipykernel = "^6.25.2"
+ipython = ">8.16.0"
+matplotlib-venn = "^0.11.9"
+meshparty = "^1.16.14"
+navis = "^1.5.0"
+nglui = "^2.14.3"
+pcg-skel = { path = "../pcg_skel", develop = true }
+python = ">3.11.0,<3.12.0"
+scikit-learn = "1.2.2"
+skeleton-plot = { path = "../skeleton_plot", develop = true }
+tables = { git = "https://github.com/PyTables/PyTables" }
+task-queue = "^2.13.0"
+urllib3 = "^1.26.17"
+networkframe = {path = "../networkframe"}
 
 [tool.poetry.group.dev]
 optional = true
 
 [tool.poetry.group.dev.dependencies]
 jupyter = "^1.0.0"
-pkg = {path = "pkg", develop = true}
+pkg = { path = "pkg", develop = true }

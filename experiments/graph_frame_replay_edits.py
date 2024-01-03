@@ -9,19 +9,18 @@ from datetime import datetime
 import caveclient as cc
 import matplotlib.pyplot as plt
 import networkx as nx
+import numpy as np
 import pandas as pd
 import seaborn as sns
-from anytree import PreOrderIter
+from anytree import PreOrderIter, find_by_attr
+from networkframe import NetworkFrame
+from requests import HTTPError
+from tqdm.auto import tqdm
+
 from pkg.edits import get_changed_edges, get_detailed_change_log
 from pkg.paths import FIG_PATH, OUT_PATH
 from pkg.plot import treeplot
 from pkg.utils import get_all_nodes_edges, get_level2_nodes_edges, get_lineage_tree
-from requests import HTTPError
-from tqdm.autonotebook import tqdm
-import numpy as np
-from anytree import find_by_attr
-
-from neuropull.graph import NetworkFrame
 
 # %%
 

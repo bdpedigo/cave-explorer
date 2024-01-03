@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 from matplotlib_venn import venn2
-from tqdm.autonotebook import tqdm
+from tqdm.auto import tqdm
 
 # %%
 client = cc.CAVEclient("minnie65_phase3_v1")

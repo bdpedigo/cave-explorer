@@ -7,8 +7,8 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 import seaborn.objects as so
-from neuropull.graph import NetworkFrame
-from tqdm.autonotebook import tqdm
+from networkframe import NetworkFrame
+from tqdm.auto import tqdm
 
 from pkg.edits import (
     collate_edit_info,
@@ -156,7 +156,11 @@ if meta:
 else:
     prefix = ""
 
-# now, create a view of the graph such that we are only looking at edges which 
+# now, create a view of the graph such that we are only looking at edges which go
+# between nodes that were added at the same time AND which were never removed later.
+# this should give us a set of connected components which are meaningful "chunks" of
+# neuron that share the same edit history/relationship to the nucleus in terms of
+# operations.
 no_cross_nf = nf.query_edges(
     f"(~cross_{prefix}operation) & (~was_removed)"
 ).query_nodes("~was_removed")
@@ -167,7 +171,7 @@ n_connected_components = no_cross_nf.n_connected_components()
 
 # %%
 
-# create labels for these different pieces
+# create labels for these different connected component pieces
 
 nf.nodes["component_label"] = -1
 
@@ -184,12 +188,10 @@ for component in tqdm(no_cross_nf.connected_components(), total=n_connected_comp
 nf.apply_node_features("component_label", inplace=True)
 
 # %%
-cross_nf = nf.query_edges(
-    f"cross_{prefix}operation & (~was_removed)"
-).remove_unused_nodes()
+# this used to have (~was_removed)
+cross_nf = nf.query_edges(f"cross_{prefix}operation").remove_unused_nodes()
 
-# %%
-nf.query_edges(f"cross_{prefix}operation")
+
 # %%
 
 
@@ -262,56 +264,6 @@ component_dependencies["n_dependencies"] = component_dependencies[
 ].apply(len)
 component_dependencies
 
-# %%
-import time
-
-from pkg.edits import find_supervoxel_component
-
-all_metaoperations = list(networkdeltas_by_metaoperation.keys())
-
-resolved_synapses_by_sample = {}
-
-# still only takes ~ 3 mins for a neuron, to do 100 samples
-# so 1000 samples would take 30 mins... same order as extracting the edits
-choice_time = 0
-query_time = 0
-find_component_time = 0
-record_time = 0
-for i in tqdm(range(100)):
-    t = time.time()
-    metaoperaion_set = np.random.choice(all_metaoperations, size=10, replace=False)
-    metaoperaion_set = list(metaoperaion_set)
-    metaoperaion_set.append(-1)
-    choice_time += time.time() - t
-
-    t = time.time()
-    sub_nf = nf.query_nodes(
-        f"{prefix}operation_added.isin(@metaoperaion_set)", local_dict=locals()
-    ).query_edges(
-        f"{prefix}operation_added.isin(@metaoperaion_set)", local_dict=locals()
-    )
-    query_time += time.time() - t
-
-    t = time.time()
-    # this takes up 90% of the time
-    # i think it's from the operation of cycling through connected components
-    nuc_supervoxel = nuc.loc[root_id, "pt_supervoxel_id"]
-    instance_neuron_nf = find_supervoxel_component(nuc_supervoxel, sub_nf, client)
-    find_component_time += time.time() - t
-
-    t = time.time()
-    found_synapses = []
-    for synapses in instance_neuron_nf.nodes["synapses"]:
-        found_synapses.extend(synapses)
-    resolved_synapses_by_sample[i] = found_synapses
-    record_time += time.time() - t
-
-total_time = choice_time + query_time + find_component_time + record_time
-print(f"Total time: {total_time}")
-print(f"Choice time: {choice_time / total_time}")
-print(f"Query time: {query_time / total_time}")
-print(f"Find component time: {find_component_time / total_time}")
-print(f"Record time: {record_time / total_time}")
 
 # %%
 for target, path_group in path_df.groupby("target"):
@@ -372,6 +324,61 @@ for component, component_nodes in nf.nodes.groupby("component_label"):
     if len(all_post_synapses) > 0:
         all_post_synapses = all_post_synapses.astype(int)
         post_synapses.loc[all_post_synapses, "component_label"] = component
+
+# %%
+import time
+
+from pkg.edits import find_supervoxel_component
+
+all_metaoperations = list(networkdeltas_by_metaoperation.keys())
+
+resolved_synapses_by_sample = {}
+
+# still only takes ~ 0.5 mins for a neuron, to do 100 samples
+# so 1000 samples would take 5 mins... same order as extracting the edits
+choice_time = 0
+query_time = 0
+find_component_time = 0
+record_time = 0
+for i in tqdm(range(100)):
+    t = time.time()
+    metaoperation_set = np.random.choice(all_metaoperations, size=10, replace=False)
+    metaoperation_set = list(metaoperation_set)
+    # add -1; this denotes the initial state of the neuron i.e. things not added
+    metaoperation_set.append(-1)
+    choice_time += time.time() - t
+
+    t = time.time()
+    sub_nf = nf.query_nodes(
+        f"{prefix}operation_added.isin(@metaoperation_set)", local_dict=locals()
+    ).query_edges(
+        f"{prefix}operation_added.isin(@metaoperation_set)", local_dict=locals()
+    )
+    query_time += time.time() - t
+
+    t = time.time()
+    # this takes up 90% of the time
+    # i think it's from the operation of cycling through connected components
+    nuc_supervoxel = nuc.loc[root_id, "pt_supervoxel_id"]
+    instance_neuron_nf = find_supervoxel_component(nuc_supervoxel, sub_nf, client)
+    find_component_time += time.time() - t
+
+    t = time.time()
+    found_synapses = []
+    for synapses in instance_neuron_nf.nodes["synapses"]:
+        found_synapses.extend(synapses)
+
+    metaoperation_set = metaoperation_set[:-1]
+    metaoperation_set = tuple(np.unique(metaoperation_set))
+    resolved_synapses_by_sample[metaoperation_set] = found_synapses
+    record_time += time.time() - t
+
+total_time = choice_time + query_time + find_component_time + record_time
+print(f"Total time: {total_time}")
+print(f"Choice time: {choice_time / total_time}")
+print(f"Query time: {query_time / total_time}")
+print(f"Find component time: {find_component_time / total_time}")
+print(f"Record time: {record_time / total_time}")
 
 # %%
 # need to visualize all of this to make sure it is working!

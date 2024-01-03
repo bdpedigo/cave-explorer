@@ -3,7 +3,7 @@ import json
 import networkx as nx
 import numpy as np
 import pandas as pd
-from neuropull.graph import NetworkFrame
+from networkframe import NetworkFrame
 from requests import HTTPError
 from tqdm import tqdm
 
@@ -298,11 +298,16 @@ def get_network_metaedits(networkdeltas_by_operation, root_id, client):
 
 
 def find_supervoxel_component(supervoxel: int, nf: NetworkFrame, client):
+    # supervoxel_l2_id = client.chunkedgraph.get_root_id(supervoxel, level2=True)
+    # for component in nf.connected_components():
+    #     if supervoxel_l2_id in component.nodes.index:
+    #         return component
+    # return None
+    query_nf = nf.label_nodes_by_component()
     supervoxel_l2_id = client.chunkedgraph.get_root_id(supervoxel, level2=True)
-    for component in nf.connected_components():
-        if supervoxel_l2_id in component.nodes.index:
-            return component
-    return None
+    query_component = query_nf.nodes.loc[supervoxel_l2_id, "component"]
+    query_nf = query_nf.query_nodes(f"component == {query_component}")
+    return query_nf
 
 
 def get_initial_node_ids(root_id, client):

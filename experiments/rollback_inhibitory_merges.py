@@ -9,9 +9,9 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import seaborn.objects as so
-from neuropull.graph import NetworkFrame
+from networkframe import NetworkFrame
 from sklearn.metrics import pairwise_distances_argmin
-from tqdm.autonotebook import tqdm
+from tqdm.auto import tqdm
 
 from pkg.edits import (
     find_supervoxel_component,

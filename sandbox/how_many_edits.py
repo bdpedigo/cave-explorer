@@ -19,7 +19,7 @@ mtypes = mtypes.join(nucs["pt_root_id"], lsuffix="_current")
 mtypes.sample(1000)
 
 # %%
-from tqdm.autonotebook import tqdm
+from tqdm.auto import tqdm
 
 n = 1000
 rows = []

@@ -8,7 +8,7 @@ import pandas as pd
 import seaborn.objects as so
 from IPython.display import display
 from nglui.statebuilder import make_neuron_neuroglancer_link
-from tqdm.autonotebook import tqdm
+from tqdm.auto import tqdm
 
 from pkg.edits import (
     find_supervoxel_component,

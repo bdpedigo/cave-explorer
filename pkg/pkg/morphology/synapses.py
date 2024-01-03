@@ -2,7 +2,7 @@ import time
 
 import caveclient as cc
 import pandas as pd
-from neuropull.graph import NetworkFrame
+from networkframe import NetworkFrame
 
 from ..edits import get_level2_lineage_components
 

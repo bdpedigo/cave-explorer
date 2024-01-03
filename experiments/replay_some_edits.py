@@ -20,7 +20,7 @@ from pkg.edits import (
 )
 from pkg.paths import OUT_PATH, FIG_PATH
 from plotly.subplots import make_subplots
-from tqdm.autonotebook import tqdm
+from tqdm.auto import tqdm
 
 import pcg_skel.skel_utils as sk_utils
 from pcg_skel.chunk_tools import build_spatial_graph

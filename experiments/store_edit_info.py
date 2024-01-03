@@ -9,6 +9,9 @@ from datetime import timedelta
 import caveclient as cc
 import numpy as np
 from cloudfiles import CloudFiles
+from networkframe import NetworkFrame
+from tqdm.auto import tqdm
+
 from pkg.edits import (
     NetworkDelta,
     find_supervoxel_component,
@@ -18,9 +21,6 @@ from pkg.edits import (
 )
 from pkg.paths import OUT_PATH
 from pkg.utils import get_level2_nodes_edges
-from tqdm.autonotebook import tqdm
-
-from neuropull.graph import NetworkFrame
 
 # %%
 recompute = False

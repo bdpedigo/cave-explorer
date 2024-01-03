@@ -5,7 +5,7 @@ from pathlib import Path
 import caveclient as cc
 import matplotlib.pyplot as plt
 import pandas as pd
-from tqdm.autonotebook import tqdm
+from tqdm.auto import tqdm
 
 import pcg_skel
 import skeleton_plot

@@ -5,7 +5,7 @@ import pcg_skel.skel_utils as sk_utils
 from meshparty import skeletonize, trimesh_io
 from meshparty.skeleton import Skeleton
 from navis import TreeNeuron
-from neuropull.graph import NetworkFrame
+from networkframe import NetworkFrame
 from pcg_skel.chunk_tools import build_spatial_graph
 from sklearn.metrics import pairwise_distances_argmin
 

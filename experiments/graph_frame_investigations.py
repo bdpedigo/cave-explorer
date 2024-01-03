@@ -3,12 +3,12 @@
 import caveclient as cc
 import networkx as nx
 import pandas as pd
+from anytree import Node
+from networkframe import NetworkFrame
+from tqdm.auto import tqdm
+
 from pkg.edits import get_changed_edges, get_detailed_change_log
 from pkg.utils import get_all_nodes_edges, get_level2_nodes_edges
-from tqdm.autonotebook import tqdm
-from anytree import Node
-
-from neuropull.graph import NetworkFrame
 
 # %%
 
@@ -155,8 +155,9 @@ for meta_operation_id, operation_ids in meta_operation_map.items():
 
 # %%
 
-from pkg.utils import get_lineage_tree
 import numpy as np
+
+from pkg.utils import get_lineage_tree
 
 root = get_lineage_tree(root_id, client, flip=True)
 
@@ -302,9 +303,10 @@ hue = "x"
 node.__getattribute__(hue)
 
 # %%
-from pkg.plot import treeplot
 from anytree import PreOrderIter
 from anytree.search import find_by_attr
+
+from pkg.plot import treeplot
 
 root = get_lineage_tree(root_id, client, flip=True, order="edits")
 node_ids = [node.name for node in PreOrderIter(root)]
@@ -361,7 +363,6 @@ root = get_lineage_tree(root_id, client, flip=True, order="edits")
 
 from requests.exceptions import HTTPError
 
-
 all_nodes = []
 all_edges = []
 for i, leaf in enumerate(tqdm(root.leaves)):
@@ -385,10 +386,12 @@ nodes, edges = get_level2_nodes_edges(leaf.name, client, positions=True)
 
 # %%
 
-from pkg.plot import networkplot
-import seaborn as sns
 from random import shuffle
+
 import matplotlib.pyplot as plt
+import seaborn as sns
+
+from pkg.plot import networkplot
 
 colors = sns.color_palette("husl", len(root.leaves))
 shuffle(colors)

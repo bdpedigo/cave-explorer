@@ -7,25 +7,22 @@ t0 = time.time()
 from datetime import timedelta
 
 import caveclient as cc
+import networkx as nx
 import numpy as np
+import pandas as pd
+import pcg_skel.skel_utils as sk_utils
+from graspologic.layouts.colors import _get_colors
+from meshparty import skeletonize, trimesh_io, trimesh_vtk
+from networkframe import NetworkFrame
+from pcg_skel.chunk_tools import build_spatial_graph
+from tqdm.auto import tqdm
+
 from pkg.edits import (
-    find_supervoxel_component,
     get_initial_network,
     get_network_edits,
     get_network_metaedits,
 )
 from pkg.utils import get_level2_nodes_edges
-from tqdm.autonotebook import tqdm
-from pcg_skel.chunk_tools import build_spatial_graph
-import pcg_skel.skel_utils as sk_utils
-from meshparty import trimesh_io
-from graspologic.layouts.colors import _get_colors
-from meshparty import trimesh_vtk
-from meshparty import skeletonize
-import networkx as nx
-
-from neuropull.graph import NetworkFrame
-import pandas as pd
 
 # %%
 
@@ -223,8 +220,8 @@ for i, sk in tqdm(skeletons_per_object.items()):
 
 # %%
 
-from meshparty.trimesh_vtk import _setup_renderer
 import vtk
+from meshparty.trimesh_vtk import _setup_renderer
 
 
 class vtkTimerCallback:

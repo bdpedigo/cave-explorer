@@ -8,7 +8,7 @@ import seaborn as sns
 from anytree import Node, Walker
 from anytree.iterators import PreOrderIter
 from requests import HTTPError
-from tqdm.autonotebook import tqdm
+from tqdm.auto import tqdm
 import pcg_skel
 import skeleton_plot
 

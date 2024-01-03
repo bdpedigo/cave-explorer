@@ -5,29 +5,26 @@ import time
 t0 = time.time()
 
 import caveclient as cc
+import matplotlib.pyplot as plt
 import navis
 import numpy as np
 import pandas as pd
-import plotly.graph_objs as go
+import pcg_skel.skel_utils as sk_utils
 from cloudfiles import CloudFiles
 from meshparty import skeletonize, trimesh_io
+from networkframe import NetworkFrame
+from pcg_skel.chunk_tools import build_spatial_graph
+from sklearn.neighbors import NearestNeighbors
+
 from pkg.edits import (
     NetworkDelta,
-    find_supervoxel_component,
     get_initial_network,
     get_network_edits,
     get_network_metaedits,
 )
-from pkg.paths import OUT_PATH, FIG_PATH
-from plotly.subplots import make_subplots
-from tqdm.autonotebook import tqdm
+from pkg.paths import OUT_PATH
 from pkg.plot import networkplot
-import matplotlib.pyplot as plt
-import pcg_skel.skel_utils as sk_utils
-from pcg_skel.chunk_tools import build_spatial_graph
-from neuropull.graph import NetworkFrame
 from pkg.utils import get_positions
-from sklearn.neighbors import NearestNeighbors
 
 # %%
 recompute = False

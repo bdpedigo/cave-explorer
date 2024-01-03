@@ -9,10 +9,10 @@ import os
 import caveclient as cc
 import matplotlib.pyplot as plt
 from meshparty import meshwork
-from neuropull.graph import NetworkFrame
+from networkframe import NetworkFrame
 from pcg_skel import features
 from skeleton_plot.plot_tools import plot_mw_skel
-from tqdm.autonotebook import tqdm
+from tqdm.auto import tqdm
 
 from pkg.edits import (
     apply_edit,

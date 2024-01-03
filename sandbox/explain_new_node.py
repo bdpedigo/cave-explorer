@@ -6,7 +6,7 @@ import caveclient as cc
 import numpy as np
 import pandas as pd
 
-from tqdm.autonotebook import tqdm
+from tqdm.auto import tqdm
 
 
 # %%
