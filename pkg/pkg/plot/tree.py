@@ -108,8 +108,8 @@ def treeplot(
     return ax
 
 
-def radial_hierarchy_pos(g):
-    pos = hierarchy_pos(g, width=2 * math.pi)
+def radial_hierarchy_pos(g, **kwargs):
+    pos = hierarchy_pos(g, width=2 * math.pi, **kwargs)
     new_pos = {
         u: (r * math.cos(theta), r * math.sin(theta)) for u, (theta, r) in pos.items()
     }

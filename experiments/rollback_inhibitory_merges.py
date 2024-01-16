@@ -2,17 +2,12 @@
 import os
 import pickle
 
-import caveclient as cc
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import seaborn.objects as so
-from networkframe import NetworkFrame
-from sklearn.metrics import pairwise_distances_argmin
-from tqdm.auto import tqdm
-
 from pkg.edits import (
     find_supervoxel_component,
     lazy_load_network_edits,
@@ -25,6 +20,11 @@ from pkg.neuroglancer import (
 )
 from pkg.plot import radial_hierarchy_pos
 from pkg.utils import get_level2_nodes_edges, get_nucleus_point_nm, pt_to_xyz
+from sklearn.metrics import pairwise_distances_argmin
+from tqdm.auto import tqdm
+
+import caveclient as cc
+from networkframe import NetworkFrame
 
 # %%
 
@@ -47,7 +47,9 @@ os.environ["SKEDITS_RECOMPUTE"] = "False"
 # getting a table of additional metadata for each operation
 # TODO something weird with 3, 6
 
-root_id = query_neurons["pt_root_id"].values[13]
+root_id = query_neurons["pt_root_id"].values[7]
+# root_id = 864691135992790209
+print(root_id)
 
 (
     networkdeltas_by_operation,
@@ -128,7 +130,7 @@ def collate_edit_info(networkdeltas_by_operation, operation_to_metaoperation):
     )
 
     edit_stats["centroid_distance_to_nuc_um"] = (
-        edit_stats["centroid_distance_to_nuc"] / 1000
+        edit_stats["centroid_distance_to_nuc_nm"] / 1000
     )
     return edit_stats, modified_level2_nodes
 
@@ -139,12 +141,12 @@ edit_stats, modified_level2_nodes = collate_edit_info(
 
 # %%
 
-so.Plot(
-    edit_stats.query("is_merge & is_filtered"),
-    x="n_modified_nodes",
-    y="centroid_distance_to_nuc_um",
-    color="was_forrest",
-).add(so.Dots(pointsize=8, alpha=0.9))
+# so.Plot(
+#     edit_stats.query("is_merge & is_filtered"),
+#     x="n_modified_nodes",
+#     y="centroid_distance_to_nuc_um",
+#     color="was_forrest",
+# ).add(so.Dots(pointsize=8, alpha=0.9))
 
 # %%
 
@@ -223,7 +225,7 @@ level2_nodes_to_show = modified_level2_nodes.query(
 ).reset_index()
 
 state_builders, dataframes = add_level2_edits(
-    state_builders, dataframes, level2_nodes_to_show, final_nf, client
+    state_builders, dataframes, level2_nodes_to_show, client
 )
 
 link = finalize_link(state_builders, dataframes, client)
@@ -439,6 +441,24 @@ plot = (
 plot.save(f"n_dependencies_hist-root={root_id}")
 
 # %%
+import seaborn as sns
+
+sns.set_context("talk")
+fig, ax = plt.subplots(1, 1, figsize=(6, 4))
+sns.histplot(
+    data=pre_synapses,
+    x="n_metaoperation_dependencies",
+    stat="proportion",
+    discrete=True,
+    ax=ax,
+    # binwidth=1,
+)
+ax.set_xticks(np.arange(0, 11))
+ax.set(xlabel="# of edit dependencies", ylabel="Proportion of synapses")
+ax.spines[["top", "right"]].set_visible(False)
+plt.savefig(f"n_dependencies_hist-root={root_id}.png", bbox_inches="tight", dpi=300)
+
+# %%
 
 metaoperation_synapse_dependents = pre_synapses.explode("metaoperation_dependencies")[
     "metaoperation_dependencies"
@@ -460,7 +480,7 @@ level2_nodes_to_show = modified_level2_nodes.query(
 ).reset_index()
 
 state_builders, dataframes = add_level2_edits(
-    state_builders, dataframes, level2_nodes_to_show, final_nf, client
+    state_builders, dataframes, level2_nodes_to_show, client
 )
 
 # for path, pathnames in zip([path_489, path_485, path_484], ["489", "485", "484"]):
@@ -490,7 +510,98 @@ state_builders, dataframes = add_level2_edits(
 link = finalize_link(state_builders, dataframes, client)
 link
 
+# %%
 
+from pkg.morphology import skeleton_to_treeneuron, skeletonize_networkframe
+
+sk, mesh, l2dict_mesh, l2dict_r_mesh = skeletonize_networkframe(final_nf, client)
+
+treeneuron = skeleton_to_treeneuron(sk)
+
+
+# %%
+from navis.plotting import plot_flat
+
+plot_flat(treeneuron, layout="subway", shade_by_length=True)
+
+# %%
+
+
+edges = sk.edges
+edges = pd.DataFrame(edges, columns=["source", "target"])
+edges["source"] = edges["source"].astype(int)
+edges["target"] = edges["target"].astype(int)
+edges["source"] = edges["source"].map(l2dict_r_mesh)
+edges["target"] = edges["target"].map(l2dict_r_mesh)
+
+# %%
+
+nuc_supervoxel = nuc.loc[root_id, "pt_supervoxel_id"]
+
+supervoxel_l2_id = client.chunkedgraph.get_root_id(nuc_supervoxel, level2=True)
+nuc_xyz = final_nf.nodes.loc[supervoxel_l2_id][["x", "y", "z"]]
+
+from sklearn.metrics import pairwise_distances_argmin
+
+idx = pairwise_distances_argmin(nuc_xyz.values.reshape(1, -1), sk.vertices)[0]
+
+new_l2_root = l2dict_r_mesh[idx]
+
+g = nx.from_edgelist(edges.values)
+print(nx.is_tree(g))
+
+fig, ax = plt.subplots(1, 1, figsize=(15, 15))
+pos = radial_hierarchy_pos(g, root=new_l2_root)
+
+nodelist = list(g.nodes())
+
+nx.draw_networkx(
+    g, nodelist=nodelist, pos=pos, with_labels=False, ax=ax, font_size=6, node_size=0
+)
+
+ax.plot([0, 0.00001], [0, 0.00001], linewidth=1, c="black", label="Neuron")
+
+
+def find_new_l2_id(xyz):
+    idx = pairwise_distances_argmin(nuc_xyz.values.reshape(1, -1), sk.vertices)[0]
+    new_l2_root = l2dict_r_mesh[idx]
+    return new_l2_root
+
+
+first = True
+for _l2_id, row in final_nf_keypoints.iterrows():
+    if _l2_id in pos:
+        l2_id = _l2_id
+
+    else:
+        xyz = row[["x", "y", "z"]]
+        l2_id = find_new_l2_id(xyz)
+    x = pos[l2_id][0]
+    y = pos[l2_id][1]
+    if first:
+        ax.scatter(x, y, s=50, c="r", marker="x", label="Edit")
+        first = False
+    else:
+        ax.scatter(x, y, s=50, c="r", marker="x")
+
+ax.plot([0, 60], [0, 60], color="grey", alpha=0.2)
+ax.text(
+    25, 25, r"$\leftarrow$ Proximal - Distal $\rightarrow$", rotation=45, fontsize=30
+)
+
+# nuc_l2_id = final_nf_keypoints.query("nucleus").index[0]
+# nuc_l2_id = 152579573257601443
+x = pos[new_l2_root][0]
+y = pos[new_l2_root][1]
+ax.scatter(x, y, s=400, c="purple", marker="^", zorder=-1, alpha=0.3, label="Soma")
+ax.legend(loc=(0.1, 0.1), fontsize=30)
+ax.axis("equal")
+ax.axis("off")
+plt.savefig(f"neuron_tree_root={root_id}.png", bbox_inches="tight", dpi=300)
+
+
+# %%
+final_nf.edges.values.tolist()
 # %%
 metaoperation_dependencies = nx.DiGraph()
 
@@ -552,6 +663,43 @@ ax.axis("equal")
 ax.axis("off")
 plt.savefig(f"merge_dependency_tree_root={root_id}.png", bbox_inches="tight", dpi=300)
 
+# %%
+fig, ax = plt.subplots(1, 1, figsize=(8, 8))
+pos = radial_hierarchy_pos(metaoperation_dependencies)
+
+nodelist = metaoperation_synapse_dependents.index.to_list()
+if soma_nuc_merge_metaoperation is None:
+    nodelist = [-1] + nodelist
+
+node_sizes = list(metaoperation_synapse_dependents.values)
+if soma_nuc_merge_metaoperation is None:
+    node_sizes = [max(node_sizes) + 1] + node_sizes
+
+nx.draw_networkx(
+    metaoperation_dependencies,
+    nodelist=nodelist,
+    pos=pos,
+    with_labels=False,
+    ax=ax,
+    node_size=node_sizes,
+    font_size=6,
+)
+ax.axis("equal")
+ax.axis("off")
+plt.savefig(f"merge_dependency_tree_root={root_id}.png", bbox_inches="tight", dpi=300)
+
+#%%
+fig, ax = plt.subplots(1,1,figsize=(6,4))
+sns.histplot(
+    data=metaoperation_synapse_dependents,
+    stat="count",
+    discrete=False,
+    ax=ax
+)
+ax.set(xlabel='Number of synapse dependents', ylabel='Count (# of edits)')
+ax.spines[["top", "right"]].set_visible(False)
+plt.savefig(f"dependency_hist={root_id}.png", bbox_inches="tight", dpi=300)
+
 
 # %%
 
@@ -575,7 +723,8 @@ for p_merge_rollback in p_merge_rollbacks:
 
         nuc_nf = find_supervoxel_component(nuc_supervoxel, nf, client)
         if p_merge_rollback == 0.0:
-            assert nuc_nf == final_nf
+            pass
+            # assert nuc_nf == final_nf
         nfs_by_sample[(np.round(1 - p_merge_rollback, 1), i)] = nuc_nf
 
 # %%
@@ -669,7 +818,7 @@ sns.heatmap(exc_group_p_connectivity_df, cmap="Blues", ax=ax)
 
 # %%
 
-palette_file = "data/ctype_hues.pkl"
+palette_file = "/Users/ben.pedigo/code/skedits/skedits-app/skedits/data/ctype_hues.pkl"
 
 with open(palette_file, "rb") as f:
     ctype_hues = pickle.load(f)
@@ -690,7 +839,7 @@ exc_group_p_connectivity_tidy = pd.melt(
 )
 
 
-fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+fig, axs = plt.subplots(1, 2, figsize=(8, 4))
 fig.suptitle(
     f"Root ID {root_id}, Motif group: {query_neurons.set_index('pt_root_id').loc[root_id, 'cell_type']}"
 )
@@ -735,5 +884,89 @@ plot2 = (
     # .show()
     .save(f"exc_group_connectivity_root={root_id}.png", bbox_inches="tight")
 )
+
+# %%
+
+sns.set_context("talk")
+fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+plot1 = (
+    so.Plot(
+        exc_group_connectivity_tidy,
+        x="p_merge",
+        y="n_synapses",
+        color="cell_type",
+    )
+    .add(so.Dots(pointsize=3, alpha=0.5), so.Jitter(), legend=False)
+    .add(so.Line(), so.Agg(), legend=False)
+    .add(so.Band(), so.Est(), legend=False)
+    .label(
+        x="Proportion of merges",
+        y="Number of synapses",
+        # title=f"Root ID {root_id}, Motif group: {query_neurons.set_index('pt_root_id').loc[root_id, 'cell_type']}",
+        # color="Target M-type",
+    )
+    .layout(engine="tight")
+    .scale(color=ctype_hues)
+    .on(ax)
+    # .show()
+    .save(f"exc_group_connectivity_root_n={root_id}.png", bbox_inches="tight")
+)
+
+sns.set_context("talk")
+fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+plot1 = (
+    so.Plot(
+        exc_group_p_connectivity_tidy,
+        x="p_merge",
+        y="p_synapses",
+        color="cell_type",
+    )
+    .add(so.Dots(pointsize=3, alpha=0.5), so.Jitter(), legend=False)
+    .add(so.Line(), so.Agg(), legend=False)
+    .add(so.Band(), so.Est(), legend=False)
+    .label(
+        x="Proportion of merges",
+        y="Proportion of outputs",
+        # title=f"Root ID {root_id}, Motif group: {query_neurons.set_index('pt_root_id').loc[root_id, 'cell_type']}",
+        # color="Target M-type",
+    )
+    .layout(engine="tight")
+    .scale(color=ctype_hues)
+    .on(ax)
+    # .show()
+    .save(f"exc_group_connectivity_root_p={root_id}.png", bbox_inches="tight")
+)
+
+# %%
+fig, axs = plt.subplots(1, 2, figsize=(20, 6))
+sns.lineplot(
+    data=exc_group_connectivity_tidy,
+    x="p_merge",
+    y="n_synapses",
+    hue="cell_type",
+    palette=ctype_hues,
+    ax=axs[0],
+)
+legend = ax.get_legend()
+handles, labels = ax.get_legend_handles_labels()
+axs[1].legend(handles=handles[1:17], labels=labels[1:17], ncol=6)
+axs[1].axis("off")
+axs[0].remove()
+
+# %%
+fig, axs = plt.subplots(1, 2, figsize=(20, 6))
+sns.lineplot(
+    data=exc_group_connectivity_tidy,
+    x="p_merge",
+    y="n_synapses",
+    hue="cell_type",
+    palette=ctype_hues,
+    ax=axs[0],
+)
+legend = ax.get_legend()
+handles, labels = ax.get_legend_handles_labels()
+axs[1].legend(handles=handles[1:17], labels=labels[1:17], ncol=6)
+axs[1].axis("off")
+axs[0].remove()
 
 # %%

@@ -28,10 +28,10 @@ tables = { git = "https://github.com/PyTables/PyTables" }
 task-queue = "^2.13.0"
 urllib3 = "^1.26.17"
 networkframe = {path = "../networkframe"}
+pkg = {path = "pkg"}
 
 [tool.poetry.group.dev]
 optional = true
 
 [tool.poetry.group.dev.dependencies]
 jupyter = "^1.0.0"
-pkg = { path = "pkg", develop = true }

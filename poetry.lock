@@ -4154,7 +4154,7 @@ description = "Local package"
 optional = false
 python-versions = "*"
 files = []
-develop = true
+develop = false
 
 [package.dependencies]
 matplotlib = "*"
@@ -6331,4 +6331,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">3.11.0,<3.12.0"
-content-hash = "9fb8d6da9ecf6ebb08a7ee086a1ecaf1919e32a8eb35fb15579dae7f908c943c"
+content-hash = "f93314a9e2b9afdc46d4ae40b4347ddf5e70b12c37db17fd8fde624d229757a8"

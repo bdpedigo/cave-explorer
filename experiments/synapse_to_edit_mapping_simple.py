@@ -1,15 +1,11 @@
 # %%
 import os
 
-import caveclient as cc
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import pandas as pd
 import seaborn.objects as so
-from networkframe import NetworkFrame
-from tqdm.auto import tqdm
-
 from pkg.edits import (
     collate_edit_info,
     get_initial_network,
@@ -29,6 +25,10 @@ from pkg.neuroglancer import (
 )
 from pkg.plot import radial_hierarchy_pos
 from pkg.utils import get_positions
+from tqdm.auto import tqdm
+
+import caveclient as cc
+from networkframe import NetworkFrame
 
 # %%
 
@@ -173,7 +173,7 @@ n_connected_components = no_cross_nf.n_connected_components()
 
 # create labels for these different connected component pieces
 
-nf.nodes["component_label"] = -1
+nf.nodes["component_label"] = 0
 
 i = 2
 for component in tqdm(no_cross_nf.connected_components(), total=n_connected_components):
@@ -182,7 +182,18 @@ for component in tqdm(no_cross_nf.connected_components(), total=n_connected_comp
         i += 1
     else:
         label = component.nodes[f"{prefix}operation_added"].iloc[0]
+    if not (
+        component.nodes[f"{prefix}operation_added"]
+        == component.nodes[f"{prefix}operation_added"].iloc[0]
+    ).all():
+        print(component.nodes[f"{prefix}operation_added"])
+    if label == -1:
+        print("here")
     nf.nodes.loc[component.nodes.index, "component_label"] = label
+
+# %%
+
+# TODO there are nodes here which NEVER show up in the connected components of no_cross_nf
 
 # %%
 nf.apply_node_features("component_label", inplace=True)
@@ -213,11 +224,12 @@ component_nf = NetworkFrame(component_nodes, component_edges)
 apply_nucleus(nf, root_id, client)
 
 # %%
-nuc_component = nf.nodes.query("nucleus").iloc[0]["component_label"]
+nuc_component_label = nf.nodes.query("nucleus").iloc[0]["component_label"]
+
 
 # %%
 component_nf.nodes["nucleus"] = False
-component_nf.nodes.loc[nuc_component, "nucleus"] = True
+component_nf.nodes.loc[nuc_component_label, "nucleus"] = True
 
 # %%
 
@@ -228,7 +240,7 @@ g = g.to_undirected()
 all_paths = []
 dependency_graph = nx.DiGraph()
 for path in nx.all_simple_paths(
-    g, source=nuc_component, target=nx.descendants(g, nuc_component)
+    g, source=nuc_component_label, target=nx.descendants(g, nuc_component_label)
 ):
     all_paths.append(path)
     nx.add_path(dependency_graph, path)
@@ -274,7 +286,7 @@ for target, path_group in path_df.groupby("target"):
 # %%
 
 # just in case dep-graph is not a tree
-tree = nx.bfs_tree(dependency_graph, nuc_component)
+tree = nx.bfs_tree(dependency_graph, nuc_component_label)
 
 fig, ax = plt.subplots(1, 1, figsize=(15, 15))
 pos = radial_hierarchy_pos(tree)
@@ -490,3 +502,37 @@ link
 
 # %%
 nx.cycle_basis(g)
+
+# %%
+
+# write some code to take the final state of the network after all of the edits
+# and then find the shortest path length back to the soma from each metaoperation
+
+final_nf = nf.query_edges("~was_removed").query_nodes("~was_removed")
+final_nf = find_supervoxel_component(nuc_supervoxel, final_nf, client)
+
+# %%
+from pkg.utils import get_level2_nodes_edges
+
+final_nodes, final_edges = get_level2_nodes_edges(root_id, client)
+
+# %%
+final_nf.nodes.index.isin(final_nodes.index).all()
+
+# %%
+
+# not all of the metaoperations are represented here.
+
+# %%
+metaoperation_dists = (
+    edit_stats.groupby("metaoperation_id")["centroid_distance_to_nuc_um"]
+    .min()
+    .sort_values()
+)
+
+metaoperation_dists
+
+# %%
+sns.histplot(metaoperation_dists, bins=20)
+
+# %%
