@@ -34,11 +34,11 @@ def get_alltime_synapses(
 
         # get the pre/post-synapses that correspond to those objects
         t = time.time()
-        syn_df = client.materialize.query_table(
+        syn_df: pd.DataFrame = client.materialize.query_table(
             synapse_table,
             filter_in_dict={f"{side}_pt_root_id": latest_roots},
         )
-        syn_df.set_index("id")
+        syn_df.set_index("id", inplace=True)
         if verbose:
             print(f"Querying synapse table took {time.time() - t:.2f} seconds")
 
