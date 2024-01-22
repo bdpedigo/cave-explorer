@@ -2,9 +2,13 @@
 import os
 import time
 
+import caveclient as cc
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+from networkframe import NetworkFrame
+from tqdm.auto import tqdm
+
 from pkg.edits import (
     collate_edit_info,
     get_initial_network,
@@ -12,17 +16,9 @@ from pkg.edits import (
     lazy_load_network_edits,
     pseudo_apply_edit,
 )
-from pkg.morphology import (
-    apply_nucleus,
-    apply_synapses,
-    find_nucleus_component,
-)
+from pkg.morphology import apply_nucleus, apply_synapses, find_component_by_l2_id
 from pkg.plot import savefig
 from pkg.utils import get_positions
-from tqdm.auto import tqdm
-
-import caveclient as cc
-from networkframe import NetworkFrame
 
 # %%
 
@@ -55,17 +51,6 @@ nuc_row = client.materialize.query_table(
 ) = lazy_load_network_edits(root_id, client=client)
 
 # %%
-client.materialize.query_table(
-    "nucleus_detection_v0",
-    filter_equal_dict={"pt_root_id": root_id},
-    # select_columns=["pt_supervoxel_id"],
-)
-
-# %%
-type(client.materialize)
-
-
-# %%
 
 operation_to_metaoperation = get_operation_metaoperation_map(
     networkdeltas_by_metaoperation
@@ -79,17 +64,25 @@ edit_stats, modified_level2_nodes = collate_edit_info(
 
 # %%
 
+edit_stats["datetime"] = pd.to_datetime(edit_stats["timestamp"], format="ISO8601")
+edit_stats["time"] = edit_stats["datetime"].dt.strftime("%Y-%m-%d %H:%M:%S")
+
+
+# %%
+
 metaoperation_stats = edit_stats.groupby("metaoperation_id").agg(
     {
         "centroid_x": "mean",
         "centroid_y": "mean",
         "centroid_z": "mean",
         "centroid_distance_to_nuc_um": "min",
+        "datetime": "max",  # using the latest edit in a bunch as the time
     }
 )
 
-metaoperation_stats.sort_values("centroid_distance_to_nuc_um", inplace=True)
-metaoperation_stats
+metaoperation_stats["time"] = metaoperation_stats["datetime"].dt.strftime(
+    "%Y-%m-%d %H:%M:%S"
+)
 
 
 # %%
@@ -176,7 +169,10 @@ apply_nucleus(nf, root_id, client)
 
 # %%
 
-# generate edit selections
+# generate edit selections, ordered by distance
+
+metaoperation_stats.sort_values("centroid_distance_to_nuc_um", inplace=True)
+metaoperation_stats
 
 edit_selections = {}
 for i in range(len(metaoperation_stats) + 1):
@@ -202,10 +198,21 @@ def resolve_synapses_from_edit_order(
     resolved_pre_synapses = {}
     resolved_post_synapses = {}
 
+    nuc = client.materialize.query_table(
+        "nucleus_detection_v0",
+        filter_equal_dict={"pt_root_id": root_id},
+        select_columns=["pt_supervoxel_id", "pt_root_id", "pt_position"],
+    ).set_index("pt_root_id")
+    nuc_supervoxel = nuc.loc[root_id, "pt_supervoxel_id"]
+    current_nuc_level2 = client.chunkedgraph.get_roots([nuc_supervoxel], stop_layer=2)[
+        0
+    ]
+
     choice_time = 0
     query_time = 0
     find_component_time = 0
     record_time = 0
+    first = True
     for selection_name, edit_selection in tqdm(edit_selections.items()):
         if not isinstance(edit_selection, list):
             edit_selection = list(edit_selection)
@@ -214,20 +221,25 @@ def resolve_synapses_from_edit_order(
         if -1 not in edit_selection:
             edit_selection.append(-1)
 
-        print("At query nodes...")
+        if first:
+            print("Querying nodes...")
+            print("Edit selection: ", edit_selection)
         t = time.time()
         sub_nf = nf.query_nodes(
-            f"{prefix}operation_added.isin(@edit_selection)", local_dict=locals()
+            f"{prefix}operation_added.isin(@edit_selection)",
+            local_dict=locals(),
         ).query_edges(
-            f"{prefix}operation_added.isin(@edit_selection)", local_dict=locals()
+            f"{prefix}operation_added.isin(@edit_selection)",
+            local_dict=locals(),
         )
         query_time += time.time() - t
 
         t = time.time()
-        print("At find component...")
+        if first:
+            print("Finding component...")
         # this takes up 90% of the time
         # i think it's from the operation of cycling through connected components
-        instance_neuron_nf = find_nucleus_component(sub_nf, root_id, client)
+        instance_neuron_nf = find_component_by_l2_id(sub_nf, current_nuc_level2)
 
         if instance_neuron_nf is None:
             print("Missing nucleus component, assuming no synapses...")
@@ -253,6 +265,8 @@ def resolve_synapses_from_edit_order(
 
         record_time += time.time() - t
 
+        first = False
+
     total_time = choice_time + query_time + find_component_time + record_time
     print(f"Total time: {total_time}")
     print(f"Choice time: {choice_time / total_time}")
@@ -266,7 +280,6 @@ def resolve_synapses_from_edit_order(
 resolved_pre_synapses, resolved_post_synapses = resolve_synapses_from_edit_order(
     nf, edit_selections, root_id, client
 )
-
 
 # %%
 mtypes = client.materialize.query_table("aibs_metamodel_mtypes_v661_v2")
@@ -285,43 +298,62 @@ post_synapses["pre_mtype"] = post_synapses["pre_pt_root_id"].map(mtypes["cell_ty
 # %%
 
 
-post_mtype_counts_by_sample = []
-for i, key in enumerate(resolved_pre_synapses.keys()):
-    sample_resolved_synapses = resolved_pre_synapses[key]
+def count_synapses_by_sample(
+    synapses: pd.DataFrame, resolved_pre_synapses: dict, by: str
+) -> pd.DataFrame:
+    """
+    Count number of synapses belonging to some group (`by`) for each sample.
 
-    sample_post_mtype_counts = (
-        pre_synapses.loc[sample_resolved_synapses].groupby("post_mtype").size()
-    )
-    sample_post_mtype_counts.name = i
-    post_mtype_counts_by_sample.append(sample_post_mtype_counts)
+    Parameters
+    ----------
+    synapses : pd.DataFrame
+        Synapses table.
+    resolved_pre_synapses : dict
+        Dictionary of resolved synapses by edit selection. Keys are edit selection
+        identifiers, values are lists of synapse ids.
+    by : str
+        Column name to group by. Synapses will be grouped by this column, within each
+        sample.
+    """
+    counts_by_sample = []
+    for i, key in enumerate(resolved_pre_synapses.keys()):
+        sample_resolved_synapses = resolved_pre_synapses[key]
 
-post_mtype_counts = (
-    pd.concat(post_mtype_counts_by_sample, axis=1).fillna(0).astype(int).T
+        sample_counts = synapses.loc[sample_resolved_synapses].groupby(by).size()
+        sample_counts.name = i
+        counts_by_sample.append(sample_counts)
+
+    count = pd.concat(counts_by_sample, axis=1).fillna(0).astype(int).T
+    count.index.name = "sample"
+    count
+    return count
+
+
+post_mtype_counts = count_synapses_by_sample(
+    pre_synapses, resolved_pre_synapses, "post_mtype"
 )
-post_mtype_counts.index.name = "sample"
-post_mtype_counts
 # %%
-post_mtype_counts_tidy = post_mtype_counts.reset_index().melt(
+post_mtype_stats_tidy = post_mtype_counts.reset_index().melt(
     var_name="post_mtype", value_name="count", id_vars="sample"
 )
-post_mtype_counts_tidy["metaoperation"] = (
-    (post_mtype_counts_tidy["sample"] - 1)
+post_mtype_stats_tidy["metaoperation"] = (
+    (post_mtype_stats_tidy["sample"] - 1)
     .map(metaoperation_stats.index.to_series().reset_index(drop=True))
     .fillna(-1)
     .astype(int)
 )
-post_mtype_counts_tidy["distance_to_nuc_um"] = (
-    post_mtype_counts_tidy["metaoperation"]
+post_mtype_stats_tidy["distance_to_nuc_um"] = (
+    post_mtype_stats_tidy["metaoperation"]
     .map(metaoperation_stats["centroid_distance_to_nuc_um"])
     .fillna(0)
 )
-post_mtype_counts_tidy
+post_mtype_stats_tidy
 # %%
 
 fig, ax = plt.subplots(figsize=(6, 6))
 sns.set_context("talk")
 sns.lineplot(
-    data=post_mtype_counts_tidy,
+    data=post_mtype_stats_tidy,
     x="sample",
     y="count",
     hue="post_mtype",
@@ -335,7 +367,7 @@ savefig(
 fig, ax = plt.subplots(figsize=(6, 6))
 sns.set_context("talk")
 sns.lineplot(
-    data=post_mtype_counts_tidy,
+    data=post_mtype_stats_tidy,
     x="distance_to_nuc_um",
     y="count",
     hue="post_mtype",
@@ -344,7 +376,7 @@ sns.lineplot(
     linewidth=1,
 )
 sns.scatterplot(
-    data=post_mtype_counts_tidy,
+    data=post_mtype_stats_tidy,
     x="distance_to_nuc_um",
     y="count",
     hue="post_mtype",
@@ -417,3 +449,127 @@ savefig(
 
 
 # %%
+metaoperation_stats = metaoperation_stats.sort_values("time")
+
+# %%
+edit_selections = {}
+for i in range(len(metaoperation_stats) + 1):
+    edit_selections[i] = metaoperation_stats.index[:i].tolist()
+
+# %%
+resolved_pre_synapses, resolved_post_synapses = resolve_synapses_from_edit_order(
+    nf, edit_selections, root_id, client
+)
+
+# %%
+post_mtype_counts = count_synapses_by_sample(
+    pre_synapses, resolved_pre_synapses, "post_mtype"
+)
+
+post_mtype_stats_tidy = post_mtype_counts.reset_index().melt(
+    var_name="post_mtype", value_name="count", id_vars="sample"
+)
+
+post_mtype_probs = post_mtype_counts / post_mtype_counts.sum(axis=1).values[:, None]
+post_mtype_probs.fillna(0, inplace=True)
+post_mtype_probs_tidy = post_mtype_probs.reset_index().melt(
+    var_name="post_mtype", value_name="prob", id_vars="sample"
+)
+
+post_mtype_stats_tidy["metaoperation_added"] = (
+    (post_mtype_stats_tidy["sample"] - 1)
+    .map(metaoperation_stats.index.to_series().reset_index(drop=True))
+    .fillna(-1)
+    .astype(int)
+)
+
+post_mtype_stats_tidy["prob"] = post_mtype_probs_tidy["prob"]
+
+# %%
+operation_feature_key = "time"
+operation_key = "metaoperation_added"
+fillna = metaoperation_stats[operation_feature_key].min()
+
+post_mtype_stats_tidy["time"] = (
+    post_mtype_stats_tidy[operation_key]
+    .map(metaoperation_stats[operation_feature_key])
+    .fillna(fillna)
+)
+
+if "time" in operation_feature_key:
+    post_mtype_stats_tidy[operation_feature_key] = pd.to_datetime(
+        post_mtype_stats_tidy[operation_feature_key]
+    )
+
+
+# %%
+sns.set_context("talk")
+
+name_map = {
+    "count": "Synapse count",
+    "prob": "Output proportion",
+    "time": "Time",
+}
+
+
+def apply_name(name):
+    if name in name_map:
+        return name_map[name]
+    else:
+        return name
+
+
+def editplot(stats, x, y, hue="post_mtype", figsize=(6, 6)):
+    fig, ax = plt.subplots(figsize=figsize)
+
+    sns.lineplot(
+        data=stats,
+        x=x,
+        y=y,
+        hue=hue,
+        ax=ax,
+        legend=False,
+        linewidth=1,
+    )
+    sns.scatterplot(
+        data=stats,
+        x=x,
+        y=y,
+        hue=hue,
+        ax=ax,
+        legend=False,
+        s=10,
+    )
+
+    ax.set_xlabel(apply_name(ax.get_xlabel()))
+    ax.set_ylabel(apply_name(ax.get_ylabel()))
+
+    return fig, ax
+
+
+def rotate_set_ticks(ax):
+    ax.set_xticks(ax.get_xticks())
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
+
+
+root_id_time_map = {
+    864691135995711402: (pd.to_datetime("2023-04-17"), pd.to_datetime("2023-04-27"))
+}
+
+if root_id in root_id_time_map:
+    spans = [None, root_id_time_map[root_id]]
+else:
+    spans = [None]
+
+x = "time"
+hue = "post_mtype"
+
+for y in ["count", "prob"]:
+    for span in spans:
+        name = f"{y}_vs_{x}_by_{hue}-root_id={root_id}"
+        fig, ax = editplot(post_mtype_stats_tidy, x, y, hue=hue)
+        if span is not None:
+            ax.set_xlim(*span)
+            name += "-span"
+        rotate_set_ticks(ax)
+        savefig(name, fig, folder="edit_replay_ordering")
