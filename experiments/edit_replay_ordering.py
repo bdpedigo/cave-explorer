@@ -2,16 +2,11 @@
 import os
 import time
 
-import caveclient as cc
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import seaborn as sns
-from tqdm.auto import tqdm
-
 from pkg.edits import (
     collate_edit_info,
-    find_supervoxel_component,
     get_initial_network,
     get_operation_metaoperation_map,
     lazy_load_network_edits,
@@ -20,9 +15,14 @@ from pkg.edits import (
 from pkg.morphology import (
     apply_nucleus,
     apply_synapses,
+    find_nucleus_component,
 )
 from pkg.plot import savefig
 from pkg.utils import get_positions
+from tqdm.auto import tqdm
+
+import caveclient as cc
+from networkframe import NetworkFrame
 
 # %%
 
@@ -31,7 +31,6 @@ client = cc.CAVEclient("minnie65_phase3_v1")
 query_neurons = client.materialize.query_table("connectivity_groups_v507")
 query_neurons.sort_values("id", inplace=True)
 
-nuc = client.materialize.query_table("nucleus_detection_v0").set_index("pt_root_id")
 
 # %%
 
@@ -40,12 +39,31 @@ os.environ["SKEDITS_RECOMPUTE"] = "False"
 
 # %%
 
-root_id = query_neurons["pt_root_id"].values[10]
+# 10 looked "unstable"
+# 11 looked "stable"
 
+root_id = query_neurons["pt_root_id"].values[13]
+
+nuc_row = client.materialize.query_table(
+    "nucleus_detection_v0", filter_equal_dict={"pt_root_id": root_id}
+)
+
+# %%
 (
     networkdeltas_by_operation,
     networkdeltas_by_metaoperation,
 ) = lazy_load_network_edits(root_id, client=client)
+
+# %%
+client.materialize.query_table(
+    "nucleus_detection_v0",
+    filter_equal_dict={"pt_root_id": root_id},
+    # select_columns=["pt_supervoxel_id"],
+)
+
+# %%
+type(client.materialize)
+
 
 # %%
 
@@ -120,6 +138,13 @@ for networkdelta in tqdm(networkdeltas_by_operation.values()):
         metaoperation_label=operation_to_metaoperation[operation_id],
     )
 
+# TODO is it worth just caching the whole networkframe at this stage?
+
+# %%
+nuc_supervoxel = nuc_row["pt_supervoxel_id"].values[0]
+current_nuc_level2 = client.chunkedgraph.get_roots([nuc_supervoxel], stop_layer=2)[0]
+current_nuc_level2 in nf.nodes.index
+
 # %%
 
 # apply positions to the final node-set
@@ -135,13 +160,6 @@ nf.nodes[["rep_coord_nm", "x", "y", "z"]] = node_positions[
 nf.apply_node_features("operation_added", inplace=True)
 nf.apply_node_features("metaoperation_added", inplace=True)
 
-# label edges which cross operations/metaoperations
-nf.edges["cross_operation"] = (
-    nf.edges["source_operation_added"] != nf.edges["target_operation_added"]
-)
-nf.edges["cross_metaoperation"] = (
-    nf.edges["source_metaoperation_added"] != nf.edges["target_metaoperation_added"]
-)
 nf.edges["was_removed"] = nf.edges["operation_removed"] != -1
 nf.nodes["was_removed"] = nf.nodes["operation_removed"] != -1
 
@@ -158,123 +176,96 @@ apply_nucleus(nf, root_id, client)
 
 # %%
 
-# NOTE: this is the "random sets of synapses" approach
-all_metaoperations = list(networkdeltas_by_metaoperation.keys())
+# generate edit selections
 
-resolved_synapses_by_sample = {}
+edit_selections = {}
+for i in range(len(metaoperation_stats) + 1):
+    edit_selections[i] = metaoperation_stats.index[:i].tolist()
 
-prefix = "meta"
-# still only takes ~ 0.5 mins for a neuron, to do 100 samples
-# so 1000 samples would take 5 mins... same order as extracting the edits
-choice_time = 0
-query_time = 0
-find_component_time = 0
-record_time = 0
-for i in tqdm(range(100)):
-    t = time.time()
-    metaoperation_set = np.random.choice(all_metaoperations, size=10, replace=False)
-    metaoperation_set = list(metaoperation_set)
-    # add -1; this denotes the initial state of the neuron i.e. things not added
-    metaoperation_set.append(-1)
-    choice_time += time.time() - t
-
-    t = time.time()
-    sub_nf = nf.query_nodes(
-        f"{prefix}operation_added.isin(@metaoperation_set)", local_dict=locals()
-    ).query_edges(
-        f"{prefix}operation_added.isin(@metaoperation_set)", local_dict=locals()
-    )
-    query_time += time.time() - t
-
-    t = time.time()
-    # this takes up 90% of the time
-    # i think it's from the operation of cycling through connected components
-    nuc_supervoxel = nuc.loc[root_id, "pt_supervoxel_id"]
-    instance_neuron_nf = find_supervoxel_component(nuc_supervoxel, sub_nf, client)
-    find_component_time += time.time() - t
-
-    t = time.time()
-    found_synapses = []
-    for synapses in instance_neuron_nf.nodes["synapses"]:
-        found_synapses.extend(synapses)
-
-    metaoperation_set = metaoperation_set[:-1]
-    metaoperation_set = tuple(np.unique(metaoperation_set))
-    resolved_synapses_by_sample[metaoperation_set] = found_synapses
-    record_time += time.time() - t
-
-total_time = choice_time + query_time + find_component_time + record_time
-print(f"Total time: {total_time}")
-print(f"Choice time: {choice_time / total_time}")
-print(f"Query time: {query_time / total_time}")
-print(f"Find component time: {find_component_time / total_time}")
-print(f"Record time: {record_time / total_time}")
 
 # %%
 
-# TODO write function to do this as a function of an input ordering of metaoperations
 
-# NOTE: this is the synapses ordered by distance to nucleus approach
+def resolve_synapses_from_edit_order(
+    nf: NetworkFrame,
+    edit_selections: dict,
+    root_id: int,
+    client: cc.CAVEclient,
+    prefix="meta",
+):
+    """
+    Assumes that several steps have been run prior to this
 
-resolved_pre_synapses_by_sample = {}
-resolved_post_synapses_by_sample = {}
+    - operation_added has been set on nodes and edges
+    """
+
+    resolved_pre_synapses = {}
+    resolved_post_synapses = {}
+
+    choice_time = 0
+    query_time = 0
+    find_component_time = 0
+    record_time = 0
+    for selection_name, edit_selection in tqdm(edit_selections.items()):
+        if not isinstance(edit_selection, list):
+            edit_selection = list(edit_selection)
+
+        # -1 for the initial state of the neuron
+        if -1 not in edit_selection:
+            edit_selection.append(-1)
+
+        print("At query nodes...")
+        t = time.time()
+        sub_nf = nf.query_nodes(
+            f"{prefix}operation_added.isin(@edit_selection)", local_dict=locals()
+        ).query_edges(
+            f"{prefix}operation_added.isin(@edit_selection)", local_dict=locals()
+        )
+        query_time += time.time() - t
+
+        t = time.time()
+        print("At find component...")
+        # this takes up 90% of the time
+        # i think it's from the operation of cycling through connected components
+        instance_neuron_nf = find_nucleus_component(sub_nf, root_id, client)
+
+        if instance_neuron_nf is None:
+            print("Missing nucleus component, assuming no synapses...")
+            # this can happen if the lack of edits means the nucleus is no longer
+            # connected
+            found_pre_synapses = []
+            found_post_synapses = []
+        else:
+            found_pre_synapses = []
+            for synapses in instance_neuron_nf.nodes["pre_synapses"]:
+                found_pre_synapses.extend(synapses)
+
+            found_post_synapses = []
+            for synapses in instance_neuron_nf.nodes["post_synapses"]:
+                found_post_synapses.extend(synapses)
+
+        find_component_time += time.time() - t
+
+        t = time.time()
+
+        resolved_pre_synapses[selection_name] = found_pre_synapses
+        resolved_post_synapses[selection_name] = found_post_synapses
+
+        record_time += time.time() - t
+
+    total_time = choice_time + query_time + find_component_time + record_time
+    print(f"Total time: {total_time}")
+    print(f"Choice time: {choice_time / total_time}")
+    print(f"Query time: {query_time / total_time}")
+    print(f"Find component time: {find_component_time / total_time}")
+    print(f"Record time: {record_time / total_time}")
+
+    return resolved_pre_synapses, resolved_post_synapses
 
 
-prefix = "meta"
-# still only takes ~ 0.5 mins for a neuron, to do 100 samples
-# so 1000 samples would take 5 mins... same order as extracting the edits
-choice_time = 0
-query_time = 0
-find_component_time = 0
-record_time = 0
-for i in tqdm(range(len(metaoperation_stats) + 1)):
-    t = time.time()
-    metaoperation_set = metaoperation_stats.index[:i]
-    metaoperation_set = list(metaoperation_set)
-    # add -1; this denotes the initial state of the neuron i.e. things not added
-    metaoperation_set.append(-1)
-    choice_time += time.time() - t
-
-    t = time.time()
-    sub_nf = nf.query_nodes(
-        f"{prefix}operation_added.isin(@metaoperation_set)", local_dict=locals()
-    ).query_edges(
-        f"{prefix}operation_added.isin(@metaoperation_set)", local_dict=locals()
-    )
-    query_time += time.time() - t
-
-    t = time.time()
-    # this takes up 90% of the time
-    # i think it's from the operation of cycling through connected components
-    nuc_supervoxel = nuc.loc[root_id, "pt_supervoxel_id"]
-    instance_neuron_nf = find_supervoxel_component(nuc_supervoxel, sub_nf, client)
-    find_component_time += time.time() - t
-
-    t = time.time()
-
-    found_pre_synapses = []
-    for synapses in instance_neuron_nf.nodes["pre_synapses"]:
-        found_pre_synapses.extend(synapses)
-
-    found_post_synapses = []
-    for synapses in instance_neuron_nf.nodes["post_synapses"]:
-        found_post_synapses.extend(synapses)
-
-    metaoperation_set = metaoperation_set[:-1]
-    metaoperation_set = tuple(np.unique(metaoperation_set))
-
-    resolved_synapses_by_sample[metaoperation_set] = found_synapses
-    resolved_pre_synapses_by_sample[metaoperation_set] = found_pre_synapses
-    resolved_post_synapses_by_sample[metaoperation_set] = found_post_synapses
-
-    record_time += time.time() - t
-
-total_time = choice_time + query_time + find_component_time + record_time
-print(f"Total time: {total_time}")
-print(f"Choice time: {choice_time / total_time}")
-print(f"Query time: {query_time / total_time}")
-print(f"Find component time: {find_component_time / total_time}")
-print(f"Record time: {record_time / total_time}")
+resolved_pre_synapses, resolved_post_synapses = resolve_synapses_from_edit_order(
+    nf, edit_selections, root_id, client
+)
 
 
 # %%
@@ -295,8 +286,8 @@ post_synapses["pre_mtype"] = post_synapses["pre_pt_root_id"].map(mtypes["cell_ty
 
 
 post_mtype_counts_by_sample = []
-for i, key in enumerate(resolved_pre_synapses_by_sample.keys()):
-    sample_resolved_synapses = resolved_pre_synapses_by_sample[key]
+for i, key in enumerate(resolved_pre_synapses.keys()):
+    sample_resolved_synapses = resolved_pre_synapses[key]
 
     sample_post_mtype_counts = (
         pre_synapses.loc[sample_resolved_synapses].groupby("post_mtype").size()
@@ -337,7 +328,9 @@ sns.lineplot(
     ax=ax,
     legend=False,
 )
-savefig("post_mtype_counts_vs_sample", fig, folder="edit_replay_ordering")
+savefig(
+    f"post_mtype_counts_vs_sample-root_id={root_id}", fig, folder="edit_replay_ordering"
+)
 
 fig, ax = plt.subplots(figsize=(6, 6))
 sns.set_context("talk")
@@ -359,7 +352,9 @@ sns.scatterplot(
     legend=False,
     s=10,
 )
-savefig("post_mtype_counts_vs_sample", fig, folder="edit_replay_ordering")
+savefig(
+    f"post_mtype_counts_vs_sample-root_id={root_id}", fig, folder="edit_replay_ordering"
+)
 
 
 # %%
@@ -391,7 +386,9 @@ sns.lineplot(
     legend=False,
 )
 
-savefig("post_mtype_probs_vs_sample", fig, folder="edit_replay_ordering")
+savefig(
+    f"post_mtype_probs_vs_sample-root_id={root_id}", fig, folder="edit_replay_ordering"
+)
 
 
 fig, ax = plt.subplots(figsize=(6, 6))
@@ -414,7 +411,9 @@ sns.scatterplot(
     legend=False,
     s=10,
 )
-savefig("post_mtype_prob_vs_sample", fig, folder="edit_replay_ordering")
+savefig(
+    f"post_mtype_prob_vs_sample-root_id={root_id}", fig, folder="edit_replay_ordering"
+)
 
 
 # %%

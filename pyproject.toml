@@ -27,7 +27,7 @@ skeleton-plot = { path = "../skeleton_plot", develop = true }
 tables = { git = "https://github.com/PyTables/PyTables" }
 task-queue = "^2.13.0"
 urllib3 = "^1.26.17"
-networkframe = {path = "../networkframe"}
+networkframe = {path = "../networkframe", develop = true}
 pkg = {path = "pkg"}
 
 [tool.poetry.group.dev]

@@ -5,6 +5,7 @@ from .morphology import (
     get_soma_row,
     skeleton_to_treeneuron,
     skeletonize_networkframe,
+    find_nucleus_component
 )
 from .synapses import (
     apply_synapses,

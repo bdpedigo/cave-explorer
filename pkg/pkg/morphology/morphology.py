@@ -1,14 +1,13 @@
+import caveclient as cc
 import numpy as np
 import pandas as pd
-from navis import TreeNeuron
-from sklearn.metrics import pairwise_distances_argmin
-
-import caveclient as cc
 import pcg_skel.skel_utils as sk_utils
 from meshparty import skeletonize, trimesh_io
 from meshparty.skeleton import Skeleton
+from navis import TreeNeuron
 from networkframe import NetworkFrame
 from pcg_skel.chunk_tools import build_spatial_graph
+from sklearn.metrics import pairwise_distances_argmin
 
 from ..utils import get_nucleus_point_nm
 
@@ -77,9 +76,6 @@ def get_soma_point(
     return soma_point
 
 
-# %%
-
-
 def apply_nucleus(nf: NetworkFrame, root_id: int, client: cc.CAVEclient):
     """annotate a point on the level2 graph as the nucleus; whatever is closest"""
 
@@ -92,3 +88,23 @@ def apply_nucleus(nf: NetworkFrame, root_id: int, client: cc.CAVEclient):
     nuc_level2_id = pos_nodes.index[ind]
     nf.nodes["nucleus"] = False
     nf.nodes.loc[nuc_level2_id, "nucleus"] = True
+
+
+def find_nucleus_component(nf: NetworkFrame, root_id: int, client: cc.CAVEclient):
+    nuc = client.materialize.query_table(
+        "nucleus_detection_v0",
+        filter_equal_dict={"pt_root_id": root_id},
+        select_columns=["pt_supervoxel_id", "pt_root_id", "pt_position"],
+    ).set_index("pt_root_id")
+    nuc_supervoxel = nuc.loc[root_id, "pt_supervoxel_id"]
+    current_nuc_level2 = client.chunkedgraph.get_roots([nuc_supervoxel], stop_layer=2)[
+        0
+    ]
+    if current_nuc_level2 not in nf.nodes.index:
+        return None
+    # query_nf = nf.select_component_from_node(current_nuc_level2, directed=False)
+    print("Doing component lookup...")
+    query_nf = nf.label_nodes_by_component()
+    nuc_component = query_nf.nodes.loc[current_nuc_level2, "component"]
+    query_nf = query_nf.query_nodes(f"component == {nuc_component}")
+    return query_nf
