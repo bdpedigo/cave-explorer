@@ -9,9 +9,7 @@ from .morphology import (
     apply_positions
 )
 from .synapses import (
-    apply_synapses,
     apply_synapses_to_meshwork,
     get_alltime_synapses,
-    map_synapse_level2_ids,
-    map_synapses_to_spatial_graph,
+    map_synapse_level2_ids
 )

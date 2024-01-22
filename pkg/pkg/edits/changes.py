@@ -8,7 +8,11 @@ from networkframe import NetworkFrame
 from requests import HTTPError
 from tqdm import tqdm
 
-from ..morphology import find_component_by_l2_id
+from ..morphology import (
+    find_component_by_l2_id,
+    get_alltime_synapses,
+    map_synapse_level2_ids,
+)
 from ..utils import (
     get_all_nodes_edges,
     get_level2_nodes_edges,
@@ -771,3 +775,111 @@ def resolve_synapses_from_edit_selections(
         first = False
 
     return resolved_pre_synapses, resolved_post_synapses
+
+
+def count_synapses_by_sample(
+    synapses: pd.DataFrame, resolved_pre_synapses: dict, by: str
+) -> pd.DataFrame:
+    """
+    Count number of synapses belonging to some group (`by`) for each sample.
+
+    Parameters
+    ----------
+    synapses : pd.DataFrame
+        Synapses table.
+    resolved_pre_synapses : dict
+        Dictionary of resolved synapses by edit selection. Keys are edit selection
+        identifiers, values are lists of synapse ids.
+    by : str
+        Column name to group by. Synapses will be grouped by this column, within each
+        sample.
+    """
+    counts_by_sample = []
+    for i, key in enumerate(resolved_pre_synapses.keys()):
+        sample_resolved_synapses = resolved_pre_synapses[key]
+
+        sample_counts = synapses.loc[sample_resolved_synapses].groupby(by).size()
+        sample_counts.name = i
+        counts_by_sample.append(sample_counts)
+
+    count = pd.concat(counts_by_sample, axis=1).fillna(0).astype(int).T
+    count.index.name = "sample"
+    return count
+
+
+def map_synapses_to_spatial_graph(
+    pre_synapses,
+    post_synapses,
+    networkdeltas_by_operation,
+    nodelist,
+    client,
+    l2dict_mesh=None,
+    verbose=False,
+):
+    level2_lineage_component_map = get_level2_lineage_components(
+        networkdeltas_by_operation
+    )
+
+    outs = []
+    for side, synapses in zip(["pre", "post"], [pre_synapses, post_synapses]):
+        if verbose:
+            print(f"Mapping {side}-synapses to level2 IDs...")
+        # put the level2 IDs into the synapse table, based on current state of neuron
+        # as well as the lineage history
+        map_synapse_level2_ids(
+            synapses,
+            level2_lineage_component_map,
+            nodelist,
+            side,
+            client,
+            verbose=verbose,
+        )
+
+        # now we can map each of the synapses to the mesh index, via the level 2 id
+        synapses = synapses.query(f"{side}_pt_level2_id.isin(@nodelist)").copy()
+        if l2dict_mesh is not None:
+            synapses[f"{side}_pt_mesh_ind"] = synapses[f"{side}_pt_level2_id"].map(
+                l2dict_mesh
+            )
+        outs.append(synapses)
+
+    return tuple(outs)
+
+
+def apply_synapses(
+    nf: NetworkFrame,
+    networkdeltas_by_operation: dict,
+    root_id: int,
+    client: cc.CAVEclient,
+    verbose: bool = True,
+):
+    # map synapses onto the network
+    # this involves looking at the entire set of synapses at any point in time so to speak
+
+    pre_synapses, post_synapses = get_alltime_synapses(root_id, client, verbose=verbose)
+
+    pre_synapses, post_synapses = map_synapses_to_spatial_graph(
+        pre_synapses,
+        post_synapses,
+        networkdeltas_by_operation,
+        nf.nodes.index,
+        client,
+        verbose=verbose,
+    )
+
+    # record this mapping onto the networkframe
+    nf.nodes["synapses"] = [[] for _ in range(len(nf.nodes))]
+    nf.nodes["pre_synapses"] = [[] for _ in range(len(nf.nodes))]
+    nf.nodes["post_synapses"] = [[] for _ in range(len(nf.nodes))]
+
+    for idx, synapse in pre_synapses.iterrows():
+        nf.nodes.loc[synapse["pre_pt_current_level2_id"], "synapses"].append(idx)
+        nf.nodes.loc[synapse["pre_pt_current_level2_id"], "pre_synapses"].append(idx)
+
+    for idx, synapse in post_synapses.iterrows():
+        nf.nodes.loc[synapse["post_pt_current_level2_id"], "synapses"].append(idx)
+        nf.nodes.loc[synapse["post_pt_current_level2_id"], "post_synapses"].append(idx)
+
+    nf.nodes["has_synapses"] = nf.nodes["synapses"].apply(len) > 0
+
+    return pre_synapses, post_synapses

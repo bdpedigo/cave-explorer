@@ -18,7 +18,10 @@ from .changes import (
     pseudo_apply_edit,
     reverse_edit,
     apply_edit_history,
-    resolve_synapses_from_edit_selections
+    resolve_synapses_from_edit_selections,
+    count_synapses_by_sample, 
+    apply_synapses,
+    map_synapses_to_spatial_graph
 )
 from .io import (
     get_cloud_paths,
