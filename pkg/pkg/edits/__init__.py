@@ -17,6 +17,8 @@ from .changes import (
     get_supervoxel_level2_map,
     pseudo_apply_edit,
     reverse_edit,
+    apply_edit_history,
+    resolve_synapses_from_edit_selections
 )
 from .io import (
     get_cloud_paths,

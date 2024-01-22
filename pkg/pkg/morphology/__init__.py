@@ -5,7 +5,8 @@ from .morphology import (
     get_soma_row,
     skeleton_to_treeneuron,
     skeletonize_networkframe,
-    find_component_by_l2_id
+    find_component_by_l2_id,
+    apply_positions
 )
 from .synapses import (
     apply_synapses,

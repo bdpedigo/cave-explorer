@@ -1,5 +1,6 @@
 import json
 
+import caveclient as cc
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -7,6 +8,7 @@ from networkframe import NetworkFrame
 from requests import HTTPError
 from tqdm import tqdm
 
+from ..morphology import find_component_by_l2_id
 from ..utils import (
     get_all_nodes_edges,
     get_level2_nodes_edges,
@@ -573,7 +575,25 @@ def collate_edit_info(
     edit_stats["centroid_distance_to_nuc_um"] = (
         edit_stats["centroid_distance_to_nuc_nm"] / 1000
     )
-    return edit_stats, modified_level2_nodes
+
+    edit_stats["datetime"] = pd.to_datetime(edit_stats["timestamp"], format="ISO8601")
+    edit_stats["time"] = edit_stats["datetime"].dt.strftime("%Y-%m-%d %H:%M:%S")
+
+    metaoperation_stats = edit_stats.groupby("metaoperation_id").agg(
+        {
+            "centroid_x": "mean",
+            "centroid_y": "mean",
+            "centroid_z": "mean",
+            "centroid_distance_to_nuc_um": "min",
+            "datetime": "max",  # using the latest edit in a bunch as the time
+        }
+    )
+
+    metaoperation_stats["time"] = metaoperation_stats["datetime"].dt.strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+
+    return edit_stats, metaoperation_stats, modified_level2_nodes
 
 
 def apply_metaoperation_info(
@@ -607,7 +627,45 @@ def apply_metaoperation_info(
     nf.nodes["has_operation"] = nf.nodes["metaoperation_id"].notna()
 
 
-# %%
+def apply_edit_history(nf, networkdeltas_by_operation, operation_to_metaoperation):
+    for col in [
+        "operation_added",
+        "operation_removed",
+        "metaoperation_added",
+        "metaoperation_removed",
+    ]:
+        nf.nodes[col] = -1
+        nf.nodes[col] = nf.nodes[col].astype(int)
+        nf.edges[col] = -1
+        nf.edges[col] = nf.edges[col].astype(int)
+
+    nf.edges.set_index(["source", "target"], inplace=True, drop=False)
+
+    for networkdelta in tqdm(networkdeltas_by_operation.values()):
+        # this step is necessary to match the indexing set above
+        networkdelta.added_edges = networkdelta.added_edges.set_index(
+            ["source", "target"], drop=False
+        )
+        networkdelta.removed_edges = networkdelta.removed_edges.set_index(
+            ["source", "target"], drop=False
+        )
+
+        # TODO what happens here for multiple operations in the same metaoperation?
+        # since they by definition are touching some of the same nodes?
+        operation_id = networkdelta.metadata["operation_id"]
+        pseudo_apply_edit(
+            nf,
+            networkdelta,
+            operation_label=operation_id,
+            metaoperation_label=operation_to_metaoperation[operation_id],
+        )
+
+    # give the edges info about when those nodes were added
+    nf.apply_node_features("operation_added", inplace=True)
+    nf.apply_node_features("metaoperation_added", inplace=True)
+
+    nf.edges["was_removed"] = nf.edges["operation_removed"] != -1
+    nf.nodes["was_removed"] = nf.nodes["operation_removed"] != -1
 
 
 def find_soma_nuc_merge_metaoperation(
@@ -638,3 +696,78 @@ def find_soma_nuc_merge_metaoperation(
                     break
 
     return soma_nuc_merge_metaoperation
+
+
+def resolve_synapses_from_edit_selections(
+    nf: NetworkFrame,
+    edit_selections: dict,
+    root_id: int,
+    client: cc.CAVEclient,
+    prefix="meta",
+):
+    """
+    Assumes that several steps have been run prior to this
+
+    - operation_added has been set on nodes and edges
+    """
+
+    resolved_pre_synapses = {}
+    resolved_post_synapses = {}
+
+    nuc = client.materialize.query_table(
+        "nucleus_detection_v0",
+        filter_equal_dict={"pt_root_id": root_id},
+        select_columns=["pt_supervoxel_id", "pt_root_id", "pt_position"],
+    ).set_index("pt_root_id")
+    nuc_supervoxel = nuc.loc[root_id, "pt_supervoxel_id"]
+    current_nuc_level2 = client.chunkedgraph.get_roots([nuc_supervoxel], stop_layer=2)[
+        0
+    ]
+
+    first = True
+    for selection_name, edit_selection in tqdm(edit_selections.items()):
+        if not isinstance(edit_selection, list):
+            edit_selection = list(edit_selection)
+
+        # -1 for the initial state of the neuron
+        if -1 not in edit_selection:
+            edit_selection.append(-1)
+
+        if first:
+            print("Querying nodes...")
+            print("Edit selection: ", edit_selection)
+        sub_nf = nf.query_nodes(
+            f"{prefix}operation_added.isin(@edit_selection)",
+            local_dict=locals(),
+        ).query_edges(
+            f"{prefix}operation_added.isin(@edit_selection)",
+            local_dict=locals(),
+        )
+
+        if first:
+            print("Finding component...")
+        # this takes up 90% of the time
+        # i think it's from the operation of cycling through connected components
+        instance_neuron_nf = find_component_by_l2_id(sub_nf, current_nuc_level2)
+
+        if instance_neuron_nf is None:
+            print("Missing nucleus component, assuming no synapses...")
+            # this can happen if the lack of edits means the nucleus is no longer
+            # connected
+            found_pre_synapses = []
+            found_post_synapses = []
+        else:
+            found_pre_synapses = []
+            for synapses in instance_neuron_nf.nodes["pre_synapses"]:
+                found_pre_synapses.extend(synapses)
+
+            found_post_synapses = []
+            for synapses in instance_neuron_nf.nodes["post_synapses"]:
+                found_post_synapses.extend(synapses)
+
+        resolved_pre_synapses[selection_name] = found_pre_synapses
+        resolved_post_synapses[selection_name] = found_post_synapses
+
+        first = False
+
+    return resolved_pre_synapses, resolved_post_synapses

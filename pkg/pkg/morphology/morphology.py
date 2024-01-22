@@ -9,7 +9,7 @@ from networkframe import NetworkFrame
 from pcg_skel.chunk_tools import build_spatial_graph
 from sklearn.metrics import pairwise_distances_argmin
 
-from ..utils import get_nucleus_point_nm
+from ..utils import get_nucleus_point_nm, get_positions
 
 
 def skeletonize_networkframe(
@@ -98,3 +98,10 @@ def find_component_by_l2_id(nf: NetworkFrame, l2_id: int):
     # nuc_component = query_nf.nodes.loc[l2_id, "component"]
     # query_nf = query_nf.query_nodes(f"component == {nuc_component}")
     return query_nf
+
+
+def apply_positions(nf: NetworkFrame, client: cc.CAVEclient):
+    node_positions = get_positions(list(nf.nodes.index), client)
+    nf.nodes[["rep_coord_nm", "x", "y", "z"]] = node_positions[
+        ["rep_coord_nm", "x", "y", "z"]
+    ]
