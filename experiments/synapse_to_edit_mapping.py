@@ -16,6 +16,7 @@ from tqdm.auto import tqdm
 from pkg.edits import (
     apply_additions,
     apply_metaoperation_info,
+    apply_synapses,
     collate_edit_info,
     find_soma_nuc_merge_metaoperation,
     find_supervoxel_component,
@@ -27,7 +28,6 @@ from pkg.edits import (
 )
 from pkg.morphology import (
     apply_nucleus,
-    apply_synapses,
 )
 from pkg.neuroglancer import (
     add_level2_edits,

@@ -1,12 +1,17 @@
 # %%
 import os
 
+import caveclient as cc
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import pandas as pd
 import seaborn.objects as so
+from networkframe import NetworkFrame
+from tqdm.auto import tqdm
+
 from pkg.edits import (
+    apply_synapses,
     collate_edit_info,
     get_initial_network,
     get_initial_node_ids,
@@ -16,7 +21,6 @@ from pkg.edits import (
 )
 from pkg.morphology import (
     apply_nucleus,
-    apply_synapses,
 )
 from pkg.neuroglancer import (
     add_level2_edits,
@@ -25,10 +29,6 @@ from pkg.neuroglancer import (
 )
 from pkg.plot import radial_hierarchy_pos
 from pkg.utils import get_positions
-from tqdm.auto import tqdm
-
-import caveclient as cc
-from networkframe import NetworkFrame
 
 # %%
 
@@ -66,7 +66,7 @@ operation_to_metaoperation = get_operation_metaoperation_map(
 
 # %%
 
-edit_stats, modified_level2_nodes = collate_edit_info(
+edit_stats, metaoperation_stats, modified_level2_nodes = collate_edit_info(
     networkdeltas_by_operation, operation_to_metaoperation, root_id, client
 )
 

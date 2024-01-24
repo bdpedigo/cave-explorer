@@ -88,6 +88,7 @@ def apply_nucleus(nf: NetworkFrame, root_id: int, client: cc.CAVEclient):
     nuc_level2_id = pos_nodes.index[ind]
     nf.nodes["nucleus"] = False
     nf.nodes.loc[nuc_level2_id, "nucleus"] = True
+    return nuc_level2_id
 
 
 def find_component_by_l2_id(nf: NetworkFrame, l2_id: int):
