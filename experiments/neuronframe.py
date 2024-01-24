@@ -233,13 +233,15 @@ class NeuronFrame(NetworkFrame):
         """activate edits by id"""
         pass
         # self.edits.loc[edit_ids, "active"] = True
-    
+
     def deactivate_edits(self, edit_ids: Union[list[int], int]):
         """deactivate edits by id"""
         pass
         # self.edits.loc[edit_ids, "active"] = False
-    
-    
+
+    def resolve_synapses(self):
+        """resolve synapses based on active edits"""
+        pass
 
 
 NeuronFrame(nodes=nf.nodes, edges=nf.edges, nucleus_id=nuc_level2_id, neuron_id=root_id)
