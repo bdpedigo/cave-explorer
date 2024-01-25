@@ -1,1 +1,1 @@
-Sitemap: https://github.com/bdpedigo/skedits/sitemap.xml
+Sitemap: https://bdpedigo.github.io/skedits/sitemap.xml
