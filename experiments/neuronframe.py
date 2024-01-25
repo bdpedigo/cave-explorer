@@ -1,7 +1,6 @@
 # %%
 import os
 import pickle
-from typing import Union
 
 import caveclient as cc
 import matplotlib.pyplot as plt
@@ -106,145 +105,44 @@ nuc_level2_id = apply_nucleus(nf, root_id, client)
 
 # %%
 
-from typing import Optional
-
-from networkframe import NetworkFrame
-
-
-class NeuronFrame(NetworkFrame):
-    def __init__(
-        self,
-        nodes: pd.DataFrame,
-        edges: pd.DataFrame,
-        pre_synapses: Optional[pd.DataFrame] = None,
-        post_synapses: Optional[pd.DataFrame] = None,
-        edits: Optional[pd.DataFrame] = None,
-        nucleus_id: Optional[int] = None,
-        neuron_id: Optional[int] = None,
-        pre_synapse_mapping_col: str = "pre_pt_level2_id",
-        post_synapse_mapping_col: str = "post_pt_level2_id",
-        **kwargs,
-    ):
-        super().__init__(nodes, edges, **kwargs)
-
-        if pre_synapses is None:
-            pre_synapses = pd.DataFrame()
-        if post_synapses is None:
-            post_synapses = pd.DataFrame()
-        if edits is None:
-            edits = pd.DataFrame()
-
-        self.pre_synapses = pre_synapses
-        self.post_synapses = post_synapses
-        self.edits = edits
-        self.nucleus_id = nucleus_id
-        self.neuron_id = neuron_id
-
-        # TODO if the pre/post synapses are not empty, then we should check that the
-        # column exists
-        self.pre_synapse_mapping_col = pre_synapse_mapping_col
-        self.post_synapse_mapping_col = post_synapse_mapping_col
-
-    def __repr__(self) -> str:
-        out = (
-            "NeuronFrame(\n"
-            + f"    neuron_id={self.neuron_id},\n"
-            + f"    nodes={self.nodes.shape},\n"
-            + f"    edges={self.edges.shape},\n"
-            + f"    pre_synapses={self.pre_synapses.shape},\n"
-            + f"    post_synapses={self.post_synapses.shape},\n"
-            + f"    edits={self.edits.shape},\n"
-            + f"    nucleus_id={self.nucleus_id}\n"
-            + ")"
-        )
-        return out
-
-    @property
-    def nucleus_id(self) -> int:
-        return self._nucleus_id
-
-    @nucleus_id.setter
-    def nucleus_id(self, nucleus_id):
-        if nucleus_id not in self.nodes.index:
-            raise ValueError(f"nucleus_id {nucleus_id} not in nodes table index")
-        self._nucleus_id = nucleus_id
-
-    @property
-    def has_pre_synapses(self) -> bool:
-        return not self.pre_synapses.empty
-
-    @property
-    def has_post_synapses(self) -> bool:
-        return not self.post_synapses.empty
-
-    @property
-    def has_edits(self) -> bool:
-        return not self.edits.empty
-
-    @property
-    def pre_synapse_mapping_col(self) -> str:
-        return self._pre_synapse_mapping_col
-
-    @pre_synapse_mapping_col.setter
-    def pre_synapse_mapping_col(self, pre_synapse_mapping_col: str):
-        # check if the column exists
-        if self.has_pre_synapses and (
-            pre_synapse_mapping_col not in self.pre_synapses.columns
-        ):
-            raise ValueError(
-                f"pre_synapse_mapping_col '{pre_synapse_mapping_col}' not in pre_synapses table columns"
-            )
-
-        # check if all elements in the column are in the nodes index
-        if not self.pre_synapses[pre_synapse_mapping_col].isin(self.nodes.index).all():
-            raise ValueError(
-                f"pre_synapse_mapping_col '{pre_synapse_mapping_col}' contains values not in nodes index"
-            )
-
-        self._pre_synapse_mapping_col = pre_synapse_mapping_col
-
-    @property
-    def post_synapse_mapping_col(self) -> str:
-        return self._post_synapse_mapping_col
-
-    @post_synapse_mapping_col.setter
-    def post_synapse_mapping_col(self, post_synapse_mapping_col: str):
-        # check if the column exists
-        if self.has_post_synapses and (
-            post_synapse_mapping_col not in self.post_synapses.columns
-        ):
-            raise ValueError(
-                f"post_synapse_mapping_col '{post_synapse_mapping_col}' not in post_synapses table columns"
-            )
-
-        # check if all elements in the column are in the nodes index
-        if (
-            not self.post_synapses[post_synapse_mapping_col]
-            .isin(self.nodes.index)
-            .all()
-        ):
-            raise ValueError(
-                f"post_synapse_mapping_col '{post_synapse_mapping_col}' contains values not in nodes index"
-            )
-
-        self._post_synapse_mapping_col = post_synapse_mapping_col
-
-    def activate_edits(self, edit_ids: Union[list[int], int]):
-        """activate edits by id"""
-        pass
-        # self.edits.loc[edit_ids, "active"] = True
-
-    def deactivate_edits(self, edit_ids: Union[list[int], int]):
-        """deactivate edits by id"""
-        pass
-        # self.edits.loc[edit_ids, "active"] = False
-
-    def resolve_synapses(self):
-        """resolve synapses based on active edits"""
-        pass
+# linkages between dataframes to consider:
+#
+# nodes index <-> edges "source"/"target" (also its index)
+# one to many
+#
+# nodes index <-> pre_synapses "pre_pt_root_id"
+# one to many
+#
+# nodes index <-> post_synapses "post_pt_root_id"
+# one to many
+#
+# nodes index <-> modified_level2_nodes index
+# one to one
+#
+# nodes index <-> edit_stats "modified_nodes"
+# many to one
 
 
-NeuronFrame(nodes=nf.nodes, edges=nf.edges, nucleus_id=nuc_level2_id, neuron_id=root_id)
+# %%
+from pkg.neuronframe import NeuronFrame
+
+full_neuron = NeuronFrame(
+    nodes=nf.nodes,
+    edges=nf.edges,
+    nucleus_id=nuc_level2_id,
+    neuron_id=root_id,
+    pre_synapses=pre_synapses,
+    post_synapses=post_synapses,
+    edits=edit_stats,
+)
+full_neuron
+#%%
+
+# %%
+edited_neuron = full_neuron.set_edits(edit_stats.index[:4], inplace=False)
+edited_neuron.select_nucleus_component(inplace=True)
+edited_neuron.remove_unused_synapses(inplace=True)
+edited_neuron
 
 # %%
 mtypes = client.materialize.query_table("aibs_metamodel_mtypes_v661_v2")

@@ -87,9 +87,6 @@ apply_edit_history(nf, networkdeltas_by_operation, operation_to_metaoperation)
 
 apply_positions(nf, client)
 
-# %%
-
-
 
 # %%
 
