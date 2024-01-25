@@ -136,14 +136,18 @@ full_neuron = NeuronFrame(
     edits=edit_stats,
 )
 full_neuron
-#%%
 
 # %%
-edited_neuron = full_neuron.set_edits(edit_stats.index[:4], inplace=False)
+edited_neuron = full_neuron.set_edits(edit_stats.index[:100], inplace=False)
 edited_neuron.select_nucleus_component(inplace=True)
 edited_neuron.remove_unused_synapses(inplace=True)
-edited_neuron
-
+edited_neuron.generate_neuroglancer_link(client)
+#%%
+merges = edited_neuron.edits.query("is_merge").index
+merge_df = edited_neuron.edges.query(
+    "operation_added.isin(@merges)", local_dict=locals()
+)
+merge_df
 # %%
 mtypes = client.materialize.query_table("aibs_metamodel_mtypes_v661_v2")
 root_id_counts = mtypes["pt_root_id"].value_counts()
