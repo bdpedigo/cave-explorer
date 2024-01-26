@@ -138,10 +138,12 @@ full_neuron = NeuronFrame(
 full_neuron
 
 # %%
-edited_neuron = full_neuron.set_edits(edit_stats.index[:100], inplace=False)
+edited_neuron = full_neuron.set_edits(edit_stats.index[:20], inplace=False)
 edited_neuron.select_nucleus_component(inplace=True)
 edited_neuron.remove_unused_synapses(inplace=True)
 edited_neuron.generate_neuroglancer_link(client)
+
+
 #%%
 merges = edited_neuron.edits.query("is_merge").index
 merge_df = edited_neuron.edges.query(

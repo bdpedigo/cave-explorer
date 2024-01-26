@@ -200,14 +200,14 @@ class NeuronFrame(NetworkFrame):
         sbs.append(base_sb)
         dfs.append(base_df)
 
-        # show level 2 graph in gray
+        # show unmodified level 2 graph in gray
         line_mapper = statebuilder.LineMapper(
             point_column_a="source_rep_coord_nm",
             point_column_b="target_rep_coord_nm",
             set_position=True,
         )
         line_layer = statebuilder.AnnotationLayerConfig(
-            name="level 2 graph",
+            name="level 2 graph og",
             color="#d3d3d3",
             data_resolution=[1, 1, 1],
             mapping_rules=line_mapper,
@@ -244,6 +244,39 @@ class NeuronFrame(NetworkFrame):
         )
         sbs.append(merge_sb)
         dfs.append(merge_df)
+
+        # show splits in red
+        split_mapper = statebuilder.LineMapper(
+            point_column_a="source_rep_coord_nm",
+            point_column_b="target_rep_coord_nm",
+            set_position=False,
+        )
+        split_layer = statebuilder.AnnotationLayerConfig(
+            name="splits",
+            color="#ff0000",
+            data_resolution=[1, 1, 1],
+            mapping_rules=split_mapper,
+        )
+        split_sb = statebuilder.StateBuilder(
+            [split_layer],
+            client=client,
+            resolution=viewer_resolution,
+        )
+        splits = self.edits.query("~is_merge").index
+        split_df = self.edges.query(
+            "operation_added.isin(@splits)", local_dict=locals()
+        )
+        sbs.append(split_sb)
+        dfs.append(split_df)
+
+        check = self.edges.query(
+            "operation_added != -1 & ~operation_added.isin(@merges) & ~operation_added.isin(@splits)"
+        )
+        if len(check) > 0:
+            raise ValueError(
+                "There are edges that are not from a merge, split, or original segmentation. "
+                "This seems to be an error."
+            )
 
         sb = statebuilder.ChainedStateBuilder(sbs)
         return statebuilder.helpers.package_state(
