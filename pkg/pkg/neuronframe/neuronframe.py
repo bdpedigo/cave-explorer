@@ -1,6 +1,7 @@
-from typing import Literal, Optional, Union
+from typing import Literal, Optional, Self, Union
 
 import caveclient as cc
+import numpy as np
 import pandas as pd
 from networkframe import NetworkFrame
 
@@ -173,6 +174,35 @@ class NeuronFrame(NetworkFrame):
             self.nucleus_id, directed=False, inplace=inplace
         )
 
+    def select_by_ball(self, radius: Union[float, int], inplace: bool = False) -> Self:
+        """Select nodes within a ball of radius `radius` around the nucleus.
+
+        Parameters
+        ----------
+        radius :
+            Radius of the ball in nanometers.
+        inplace :
+            Whether to modify the current object or return a new one, by default False
+
+        Returns
+        -------
+        Self
+            NeuronFrame with selected nodes and edges, only returned if `inplace=False`.
+        """
+        from sklearn.metrics import pairwise_distances
+
+        positions = self.nodes[["x", "y", "z"]].values
+        nucleus_loc = self.nodes.loc[self.nucleus_id, ["x", "y", "z"]].values.reshape(
+            1, 3
+        )
+        dists = np.squeeze(pairwise_distances(positions, nucleus_loc))
+
+        return self.query_nodes(
+            "index in @self.nodes.index[@dists < @radius]",
+            inplace=inplace,
+            local_dict=locals(),
+        )
+
     def generate_neuroglancer_link(self, client: cc.CAVEclient, return_as="html"):
         from nglui import statebuilder
 
@@ -190,13 +220,15 @@ class NeuronFrame(NetworkFrame):
         if ("source_rep_coord_nm" not in self.edges.columns) or (
             "target_rep_coord_nm" not in self.edges.columns
         ):
-            self.apply_node_features("rep_coord_nm", inplace=True)
+            me = self.apply_node_features("rep_coord_nm", inplace=False)
+        else: 
+            me = self
         base_sb = statebuilder.StateBuilder(
             [img_layer, seg_layer],
             client=client,
             resolution=viewer_resolution,
         )
-        base_df = pd.DataFrame({"root_id": [self.neuron_id]})
+        base_df = pd.DataFrame({"root_id": [me.neuron_id]})
         sbs.append(base_sb)
         dfs.append(base_df)
 
@@ -217,7 +249,7 @@ class NeuronFrame(NetworkFrame):
             client=client,
             resolution=viewer_resolution,
         )
-        line_df = self.edges.query("operation_added == -1")
+        line_df = me.edges.query("operation_added == -1")
         sbs.append(line_sb)
         dfs.append(line_df)
 
@@ -238,8 +270,8 @@ class NeuronFrame(NetworkFrame):
             client=client,
             resolution=viewer_resolution,
         )
-        merges = self.edits.query("is_merge").index
-        merge_df = self.edges.query(
+        merges = me.edits.query("is_merge").index
+        merge_df = me.edges.query(
             "operation_added.isin(@merges)", local_dict=locals()
         )
         sbs.append(merge_sb)
@@ -262,14 +294,14 @@ class NeuronFrame(NetworkFrame):
             client=client,
             resolution=viewer_resolution,
         )
-        splits = self.edits.query("~is_merge").index
-        split_df = self.edges.query(
+        splits = me.edits.query("~is_merge").index
+        split_df = me.edges.query(
             "operation_added.isin(@splits)", local_dict=locals()
         )
         sbs.append(split_sb)
         dfs.append(split_df)
 
-        check = self.edges.query(
+        check = me.edges.query(
             "operation_added != -1 & ~operation_added.isin(@merges) & ~operation_added.isin(@splits)"
         )
         if len(check) > 0:
@@ -277,8 +309,6 @@ class NeuronFrame(NetworkFrame):
                 "There are edges that are not from a merge, split, or original segmentation. "
                 "This seems to be an error."
             )
-
-        
 
         sb = statebuilder.ChainedStateBuilder(sbs)
         return statebuilder.helpers.package_state(
