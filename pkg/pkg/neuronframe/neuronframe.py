@@ -1,3 +1,4 @@
+import random
 from typing import Literal, Optional, Self, Union
 
 import caveclient as cc
@@ -203,7 +204,7 @@ class NeuronFrame(NetworkFrame):
             local_dict=locals(),
         )
 
-    def generate_neuroglancer_link(self, client: cc.CAVEclient, return_as="html"):
+    def _generate_link_bases(self, client: cc.CAVEclient):
         from nglui import statebuilder
 
         sbs = []
@@ -217,20 +218,31 @@ class NeuronFrame(NetworkFrame):
         )
         seg_layer.add_selection_map(selected_ids_column="root_id")
 
-        if ("source_rep_coord_nm" not in self.edges.columns) or (
-            "target_rep_coord_nm" not in self.edges.columns
-        ):
-            me = self.apply_node_features("rep_coord_nm", inplace=False)
-        else: 
-            me = self
         base_sb = statebuilder.StateBuilder(
             [img_layer, seg_layer],
             client=client,
             resolution=viewer_resolution,
         )
-        base_df = pd.DataFrame({"root_id": [me.neuron_id]})
+        base_df = pd.DataFrame({"root_id": [self.neuron_id]})
         sbs.append(base_sb)
         dfs.append(base_df)
+
+        return sbs, dfs
+
+    def generate_neuroglancer_link(
+        self, client: cc.CAVEclient, color_edits=True, return_as="html"
+    ):
+        from nglui import statebuilder
+
+        sbs, dfs = self._generate_link_bases(client)
+        viewer_resolution = client.info.viewer_resolution()
+
+        if ("source_rep_coord_nm" not in self.edges.columns) or (
+            "target_rep_coord_nm" not in self.edges.columns
+        ):
+            edges = self.apply_node_features("rep_coord_nm", inplace=False).edges
+        else:
+            edges = self.edges
 
         # show unmodified level 2 graph in gray
         line_mapper = statebuilder.LineMapper(
@@ -249,7 +261,7 @@ class NeuronFrame(NetworkFrame):
             client=client,
             resolution=viewer_resolution,
         )
-        line_df = me.edges.query("operation_added == -1")
+        line_df = edges.query("operation_added == -1")
         sbs.append(line_sb)
         dfs.append(line_df)
 
@@ -270,10 +282,8 @@ class NeuronFrame(NetworkFrame):
             client=client,
             resolution=viewer_resolution,
         )
-        merges = me.edits.query("is_merge").index
-        merge_df = me.edges.query(
-            "operation_added.isin(@merges)", local_dict=locals()
-        )
+        merges = self.edits.query("is_merge").index
+        merge_df = edges.query("operation_added.isin(@merges)", local_dict=locals())
         sbs.append(merge_sb)
         dfs.append(merge_df)
 
@@ -294,14 +304,12 @@ class NeuronFrame(NetworkFrame):
             client=client,
             resolution=viewer_resolution,
         )
-        splits = me.edits.query("~is_merge").index
-        split_df = me.edges.query(
-            "operation_added.isin(@splits)", local_dict=locals()
-        )
+        splits = self.edits.query("~is_merge").index
+        split_df = edges.query("operation_added.isin(@splits)", local_dict=locals())
         sbs.append(split_sb)
         dfs.append(split_df)
 
-        check = me.edges.query(
+        check = edges.query(
             "operation_added != -1 & ~operation_added.isin(@merges) & ~operation_added.isin(@splits)"
         )
         if len(check) > 0:
@@ -315,7 +323,112 @@ class NeuronFrame(NetworkFrame):
             dfs, sb, client=client, return_as=return_as
         )
 
-        # return sb.render_state(return_as=return_as)
+    def generate_neuroglancer_link_by_component(
+        self, client: cc.CAVEclient, return_as="html", key="component_label"
+    ):
+        from nglui import statebuilder
+
+        sbs, dfs = self._generate_link_bases(client)
+        viewer_resolution = client.info.viewer_resolution()
+
+        if ("source_rep_coord_nm" not in self.edges.columns) or (
+            "target_rep_coord_nm" not in self.edges.columns
+        ):
+            edges = (
+                self.apply_node_features("rep_coord_nm", inplace=False)
+                .apply_node_features(key, inplace=False)
+                .edges
+            )
+        else:
+            edges = self.edges
+
+        within_edges = edges.query(f"source_{key} == target_{key}")
+
+        groups = within_edges.groupby(f"source_{key}")
+        # colors = sns.color_palette("husl", n_colors=len(groups.groups)).as_hex()
+        colors = [random_hex() for _ in range(len(groups.groups))]
+        print(len(groups.groups))
+        for i, (group_label, within_group) in enumerate(groups):
+            line_mapper = statebuilder.LineMapper(
+                point_column_a="source_rep_coord_nm",
+                point_column_b="target_rep_coord_nm",
+                set_position=True,
+            )
+            line_layer = statebuilder.AnnotationLayerConfig(
+                name=f"level 2 graph og {group_label}",
+                color=colors[i],
+                data_resolution=[1, 1, 1],
+                mapping_rules=line_mapper,
+            )
+            line_sb = statebuilder.StateBuilder(
+                [line_layer],
+                client=client,
+                resolution=viewer_resolution,
+            )
+            line_df = within_group.query("operation_added == -1")
+            sbs.append(line_sb)
+            dfs.append(line_df)
+
+        between_edges = edges.query(f"source_{key} != target_{key}")
+
+        merge_ids = self.edits.query("is_merge").index
+        merges = between_edges.query(
+            "operation_added.isin(@merge_ids)", local_dict=locals()
+        )
+        merge_mapper = statebuilder.LineMapper(
+            point_column_a="source_rep_coord_nm",
+            point_column_b="target_rep_coord_nm",
+            set_position=False,
+        )
+        merge_layer = statebuilder.AnnotationLayerConfig(
+            name="merges",
+            color="#0000ff",
+            data_resolution=[1, 1, 1],
+            mapping_rules=merge_mapper,
+        )
+        merge_sb = statebuilder.StateBuilder(
+            [merge_layer],
+            client=client,
+            resolution=viewer_resolution,
+        )
+        sbs.append(merge_sb)
+        dfs.append(merges)
+
+        split_ids = self.edits.query("~is_merge").index
+        splits = between_edges.query(
+            "operation_added.isin(@split_ids)", local_dict=locals()
+        )
+        split_mapper = statebuilder.LineMapper(
+            point_column_a="source_rep_coord_nm",
+            point_column_b="target_rep_coord_nm",
+            set_position=False,
+        )
+        split_layer = statebuilder.AnnotationLayerConfig(
+            name="splits",
+            color="#ff0000",
+            data_resolution=[1, 1, 1],
+            mapping_rules=split_mapper,
+        )
+        split_sb = statebuilder.StateBuilder(
+            [split_layer],
+            client=client,
+            resolution=viewer_resolution,
+        )
+        sbs.append(split_sb)
+        dfs.append(splits)
+
+        sb = statebuilder.ChainedStateBuilder(sbs)
+        return statebuilder.helpers.package_state(
+            dfs, sb, client=client, return_as=return_as
+        )
 
     def remove_unused_edits(self):
         pass
+
+
+def random_rgb():
+    return tuple(random.randint(0, 255) for _ in range(3))
+
+
+def random_hex():
+    return "#%02X%02X%02X" % random_rgb()

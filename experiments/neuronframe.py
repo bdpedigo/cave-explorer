@@ -3,6 +3,8 @@ import os
 import pickle
 
 import caveclient as cc
+import pandas as pd
+from tqdm.auto import tqdm
 
 from pkg.edits import (
     apply_edit_history,
@@ -146,10 +148,11 @@ sub.generate_neuroglancer_link(client)
 
 # label edges which cross operations/metaoperations
 full_neuron.edges["cross_operation"] = (
-    nf.edges["source_operation_added"] != full_neuron.edges["target_operation_added"]
+    full_neuron.edges["source_operation_added"]
+    != full_neuron.edges["target_operation_added"]
 )
 full_neuron.edges["cross_metaoperation"] = (
-    nf.edges["source_metaoperation_added"]
+    full_neuron.edges["source_metaoperation_added"]
     != full_neuron.edges["target_metaoperation_added"]
 )
 full_neuron.edges["was_removed"] = full_neuron.edges["operation_removed"] != -1
@@ -167,6 +170,44 @@ else:
 # neuron that share the same edit history/relationship to the nucleus in terms of
 # operations.
 
+full_neuron.apply_node_features("component_label", inplace=True)
+
+cross_neuron = full_neuron.query_edges(f"cross_{prefix}operation").remove_unused_nodes()
+
+component_edges = cross_neuron.edges.copy()
+component_edges.reset_index(drop=True, inplace=True)
+component_edges.rename(
+    columns={
+        "source_component_label": "source",
+        "target_component_label": "target",
+        "source": "source_l2_id",
+        "target": "target_l2_id",
+    },
+    inplace=True,
+)
+component_nodelist = full_neuron.nodes["component_label"].unique()
+component_nodes = pd.DataFrame(index=component_nodelist)
+
+component_nodes[["x", "y", "z"]] = full_neuron.nodes.groupby("component_label")[
+    ["x", "y", "z"]
+].mean()
+component_nodes["rep_coord_nm"] = [
+    [x, y, z]
+    for x, y, z in zip(component_nodes["x"], component_nodes["y"], component_nodes["z"])
+]
+
+nuc_component_id = full_neuron.nodes.loc[full_neuron.nucleus_id, "component_label"]
+
+component_neuron = NeuronFrame(
+    nodes=component_nodes,
+    edges=component_edges,
+    nucleus_id=nuc_component_id,
+    neuron_id=root_id,
+    edits=edit_stats,
+)
+component_neuron.select_by_ball(100_000).generate_neuroglancer_link(client)
+
+
 # %%
 full_neuron.select_nucleus_component().select_by_ball(
     50_000
@@ -176,14 +217,145 @@ og_neuron = full_neuron.set_edits([], inplace=False)
 og_neuron.select_nucleus_component().select_by_ball(50_000).generate_neuroglancer_link(
     client
 )
+
 # %%
+new_neuron = full_neuron.set_edits(full_neuron.edits.index[:50], inplace=False)
+new_neuron.select_nucleus_component().select_by_ball(50_000).generate_neuroglancer_link(
+    client
+)
+
+# %%
+
 prefix = ""
 no_cross_neuron = full_neuron.query_edges(
     f"(~cross_{prefix}operation) & (~was_removed)"
-).query_nodes("~was_removed")
+)  # .query_nodes("~was_removed")
 n_connected_components = no_cross_neuron.n_connected_components()
 
+full_neuron.nodes["component_label"] = 0
+
+i = 2
+for component in tqdm(
+    no_cross_neuron.connected_components(), total=n_connected_components
+):
+    if (component.nodes[f"{prefix}operation_added"] == -1).all():
+        label = -1 * i
+        i += 1
+    else:
+        label = component.nodes[f"{prefix}operation_added"].iloc[0]
+    if not (
+        component.nodes[f"{prefix}operation_added"]
+        == component.nodes[f"{prefix}operation_added"].iloc[0]
+    ).all():
+        print(component.nodes[f"{prefix}operation_added"])
+
+    full_neuron.nodes.loc[component.nodes.index, "component_label"] = label
+
+# nodes that get removed later have 0
+# nodes that are not touched have a negative number
+# nodes that are added have a positive number corresponding to the operation
+
+# %%
+full_neuron.nodes.query("component_label == 0")["was_removed"].mean()
+
+# %%
+full_neuron.select_by_ball(40_000).generate_neuroglancer_link_by_component(client)
+
+
+# %%
+
+full_neuron.edits.sort_values("datetime", inplace=True)
+
+merge_op_ids = full_neuron.edits.query("is_merge").index
+split_op_ids = full_neuron.edits.query("~is_merge").index
+applied_op_ids = list(split_op_ids)
+
+pruned_neuron = full_neuron.set_edits(split_op_ids, inplace=False)
+
+neuron_list = []
+applied_merges = []
+for i in range(len(merge_op_ids) + 1):
+    # apply the next operation
+    current_neuron = full_neuron.set_edits(applied_op_ids, inplace=False)
+    current_neuron.select_nucleus_component(inplace=True)
+    current_neuron.remove_unused_synapses(inplace=True)
+    neuron_list.append(current_neuron)
+
+    # select the next operation to apply
+    out_edges = full_neuron.edges.query(
+        "source.isin(@current_neuron.nodes.index) | target.isin(@current_neuron.nodes.index)"
+    )
+    # print(len(out_edges), "out edges")
+
+    out_edges = out_edges.drop(current_neuron.edges.index)
+
+    # print(len(out_edges), "out edges after removing current edges")
+
+    possible_operations = out_edges["operation_added"].unique()
+    # print(len(possible_operations), "possible operations")
+
+    ordered_ops = merge_op_ids[merge_op_ids.isin(possible_operations)]
+    applied_op_ids.append(ordered_ops[0])
+    applied_merges.append(ordered_ops[0])
+    print(ordered_ops[0], "applied operation")
+    if len(possible_operations) == 64:
+        break
+
+# %%
+import numpy as np
+
+full_neuron.edits.loc[np.unique(applied_op_ids), "metaoperation_id"]
+
+metaop_counts = (
+    full_neuron.edits.loc[np.unique(applied_op_ids)].groupby("metaoperation_id").size()
+)
+
+metaop_counts[metaop_counts > 1]
+
+# issue - when doing this with the operations and not metaoperations, some things get
+# messy when played out of order
+
+# not sure whether to switch to metaoperations, or actually deal with that messiness
+
+# one option is to just add nodes when i encounter them in the branching process
+
+
+# %%
+current_neuron.generate_neuroglancer_link(client)
+
+# %%
+
+# import the display function for ipython
+from IPython.display import display
+
+for neuron in neuron_list:
+    display(neuron.generate_neuroglancer_link(client))
+
+# %%
+is_merge = full_neuron.edges["operation_added"].map(full_neuron.edits["is_merge"])
+
+operation_type = pd.Series(index=full_neuron.edges.index, dtype="object")
+operation_type[is_merge == True] = "merge"
+operation_type[is_merge == False] = "split"
+operation_type[is_merge.isna()] = "original"
+
+full_neuron.edges["operation_added_type"] = operation_type
+full_neuron.edges
+
+# %%
+component_labels = no_cross_neuron.component_labels()
+
+full_neuron.nodes["component_label"] = component_labels
+
+og_neuron = full_neuron.set_edits([], inplace=False)
+og_neuron.select_nucleus_component().select_by_ball(50_000).generate_neuroglancer_link(
+    client
+)
+
 # TODO figure out the correct logic here for generating the connected components
+
+
 # %%
 cross_neuron = full_neuron.query_edges(f"cross_{prefix}operation").remove_unused_nodes()
 cross_neuron
+# %%
