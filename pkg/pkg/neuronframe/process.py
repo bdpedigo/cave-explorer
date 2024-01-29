@@ -22,7 +22,7 @@ os.environ["SKEDITS_USE_CLOUD"] = "True"
 os.environ["SKEDITS_RECOMPUTE"] = "False"
 
 
-@lazycloud("allen-minnie-phase3", "edit_neuronframes", "test.pkl")
+@lazycloud("allen-minnie-phase3", "edit_neuronframes", "neuronframe.pkl", arg_key=0)
 def load_neuronframe(root_id: int, client: cc.CAVEclient):
     (
         networkdeltas_by_operation,

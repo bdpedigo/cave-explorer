@@ -7,7 +7,7 @@ os.environ["LAZYCLOUD_USE_CLOUD"] = "True"
 os.environ["LAZYCLOUD_RECOMPUTE"] = "False"
 
 
-@lazycloud("allen-minnie-phase3", "test", ".pkl")
+@lazycloud("allen-minnie-phase3", "test", "my_function.pkl")
 def my_function(x):
     """Here's my function"""
     return x + 1
