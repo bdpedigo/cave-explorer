@@ -136,14 +136,14 @@ class NeuronFrame(NetworkFrame):
 
         self._post_synapse_mapping_col = post_synapse_mapping_col
 
-    def set_edits(self, edit_ids: Union[list[int], int], inplace=False):
+    def set_edits(self, edit_ids: Union[list[int], int], inplace=False, prefix=""):
         if isinstance(edit_ids, int):
             edit_ids = [edit_ids]
 
         # by convention -1 represents original things
         query = (
-            "(operation_added.isin(@edit_ids) | operation_added == -1)"
-            " & ~operation_removed.isin(@edit_ids)"
+            f"({prefix}operation_added.isin(@edit_ids) | {prefix}operation_added == -1)"
+            f" & ~{prefix}operation_removed.isin(@edit_ids)"
         )
         if inplace:
             self.query_nodes(query, local_dict=locals(), inplace=inplace)

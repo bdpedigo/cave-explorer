@@ -295,11 +295,20 @@ for i in range(len(merge_op_ids) + 1):
     # print(len(possible_operations), "possible operations")
 
     ordered_ops = merge_op_ids[merge_op_ids.isin(possible_operations)]
+
+    # HACK
+    ordered_ops = ordered_ops[~ordered_ops.isin(applied_merges)]
+
+    if len(ordered_ops) == 0:
+        break
     applied_op_ids.append(ordered_ops[0])
     applied_merges.append(ordered_ops[0])
     print(ordered_ops[0], "applied operation")
-    if len(possible_operations) == 64:
-        break
+    # if len(possible_operations) == 64:
+    # break
+
+# %%
+current_neuron.generate_neuroglancer_link(client)
 
 # %%
 import numpy as np
