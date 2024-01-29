@@ -1,4 +1,5 @@
 import os
+import pickle
 from functools import wraps
 from typing import Callable
 
@@ -9,9 +10,9 @@ from pkg.paths import OUT_PATH
 CLOUD_BUCKET = "allen-minnie-phase3"
 
 
-def get_cloudfiles(use_cloud: bool, foldername: str) -> CloudFiles:
+def get_cloudfiles(use_cloud: bool, cloud_bucket: str, foldername: str) -> CloudFiles:
     if use_cloud:
-        out_path = CLOUD_BUCKET + "/" + foldername
+        out_path = cloud_bucket + "/" + foldername
         cf = CloudFiles("gs://" + out_path)
     else:
         out_path = OUT_PATH / foldername
@@ -19,20 +20,50 @@ def get_cloudfiles(use_cloud: bool, foldername: str) -> CloudFiles:
     return cf
 
 
+# REF: https://stackoverflow.com/questions/5929107/decorators-with-parameters
+
+
+def parametrized(dec):
+    """This decorator allows you to easily create decorators that take arguments"""
+
+    @wraps(dec)
+    def layer(*args, **kwargs):
+        @wraps(dec)
+        def repl(f):
+            return dec(f, *args, **kwargs)
+
+        return repl
+
+    return layer
+
+
+def loader(data):
+    return pickle.loads(data)
+
+
+def saver(data):
+    return pickle.dumps(data)
+
+
+@parametrized
 def lazycloud(
-    func: Callable, loader: Callable, saver: Callable, foldername: str, filename: str
+    func: Callable, cloud_bucket: str, folder: str, file_suffix: str, arg_key: int = 0
 ) -> Callable:
     use_cloud = os.environ.get("LAZYCLOUD_USE_CLOUD") == "True"
     recompute = os.environ.get("LAZYCLOUD_RECOMPUTE") == "True"
-    cf = get_cloudfiles(use_cloud, foldername)
+
+    cf = get_cloudfiles(use_cloud, cloud_bucket, folder)
 
     @wraps(func)
     def wrapper(*args, **kwargs):
-        if cf.exists(filename) and not recompute:
-            return loader(filename)
+        file_name = str(args[arg_key]) + "-" + file_suffix
+        if cf.exists(file_name) and not recompute:
+            return loader(cf.get(file_name))
         else:
             result = func(*args, **kwargs)
-            saver(result, filename)
+            result = saver(result)
+            cf.put(file_name, result)
+            result = loader(cf.get(file_name))
             return result
 
     return wrapper
