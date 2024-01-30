@@ -136,6 +136,31 @@ class NeuronFrame(NetworkFrame):
 
         self._post_synapse_mapping_col = post_synapse_mapping_col
 
+    @property
+    def metaedits(self, by="metaoperation_id", agg_rules=None) -> pd.DataFrame:
+        if agg_rules is None:
+            agg_rules = {
+                "centroid_x": "mean",
+                "centroid_y": "mean",
+                "centroid_z": "mean",
+                "centroid_distance_to_nuc_um": "min",
+                "datetime": "max",  # using the latest edit in a bunch as the time
+            }
+        groupby = self.edits.groupby("metaoperation_id")
+        groups = groupby.groups
+        metaoperation_stats = groupby.agg(agg_rules)
+        metaoperation_stats["time"] = metaoperation_stats["datetime"].dt.strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+        metaoperation_stats["operation_ids"] = metaoperation_stats.index.map(
+            lambda x: groups[x].tolist()
+        )
+        metaoperation_stats["is_merges"] = metaoperation_stats.index.map(
+            lambda x: self.edits.loc[groups[x], "is_merge"].tolist()
+        )
+        metaoperation_stats["has_merge"] = metaoperation_stats["is_merges"].apply(any)
+        return metaoperation_stats
+
     def set_edits(self, edit_ids: Union[list[int], int], inplace=False, prefix=""):
         if isinstance(edit_ids, int):
             edit_ids = [edit_ids]

@@ -1,5 +1,4 @@
 # %%
-import os
 
 import caveclient as cc
 
@@ -18,38 +17,38 @@ from pkg.morphology import (
 )
 from pkg.neuronframe import NeuronFrame
 
-os.environ["SKEDITS_USE_CLOUD"] = "True"
-os.environ["SKEDITS_RECOMPUTE"] = "False"
-
 
 @lazycloud("allen-minnie-phase3", "edit_neuronframes", "neuronframe.pkl", arg_key=0)
 def load_neuronframe(root_id: int, client: cc.CAVEclient):
+    print("Loading level 2 network edits...")
     (
         networkdeltas_by_operation,
         networkdeltas_by_metaoperation,
     ) = lazy_load_network_edits(root_id, client=client)
 
+    print("Collating edit info...")
     operation_to_metaoperation = get_operation_metaoperation_map(
         networkdeltas_by_metaoperation
     )
-
     edit_stats, metaoperation_stats, modified_level2_nodes = collate_edit_info(
         networkdeltas_by_operation, operation_to_metaoperation, root_id, client
     )
 
-    initial_nf = get_initial_network(root_id, client, positions=False)
+    print("Loading initial network state...")
+    nf = get_initial_network(root_id, client, positions=False)
 
     # go through all of the edits/metaedits
     # add nodes that were added, but don't remove any nodes
     # mark nodes/edges with when they were added/removed
     # things that were never removed/added get -1
 
-    nf = initial_nf.copy()
-
+    print("Applying edit history to frame...")
     apply_edit_history(nf, networkdeltas_by_operation, operation_to_metaoperation)
 
+    print("Applying positions...")
     apply_positions(nf, client)
 
+    print("Applying synapses...")
     pre_synapses, post_synapses = apply_synapses(
         nf,
         networkdeltas_by_operation,
@@ -57,8 +56,10 @@ def load_neuronframe(root_id: int, client: cc.CAVEclient):
         client,
     )
 
+    print("Applying nucleus...")
     nuc_level2_id = apply_nucleus(nf, root_id, client)
 
+    print("Creating full neuronframe...")
     full_neuron = NeuronFrame(
         nodes=nf.nodes,
         edges=nf.edges,
