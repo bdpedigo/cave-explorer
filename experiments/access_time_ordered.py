@@ -39,6 +39,11 @@ root_id = query_neurons["pt_root_id"].values[11]
 # root_id = 864691135992790209
 prefix = "meta"
 
+#%%
+nuc_row = client.materialize.query_table("nucleus_detection_v0", filter_equal_dict={"pt_root_id": root_id})
+nuc_row['id']
+#%%
+root_id
 
 # %%
 import numpy as np
