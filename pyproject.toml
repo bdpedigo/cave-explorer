@@ -29,6 +29,7 @@ task-queue = "^2.13.0"
 urllib3 = "^1.26.17"
 networkframe = {path = "../networkframe", develop = true}
 pkg = {path = "pkg"}
+gcsfs = "^2023.12.2.post1"
 
 [tool.poetry.group.dev]
 optional = true

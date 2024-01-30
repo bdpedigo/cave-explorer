@@ -196,9 +196,14 @@ class NeuronFrame(NetworkFrame):
         )
 
     def select_nucleus_component(self, inplace=False):
-        return self.select_component_from_node(
-            self.nucleus_id, directed=False, inplace=inplace
-        )
+        if self.nucleus_id in self.nodes.index:
+            return self.select_component_from_node(
+                self.nucleus_id, directed=False, inplace=inplace
+            )
+        else:
+            print("Warning: nucleus_id not in nodes index, returning unmodified")
+            
+            return self._return(inplace=inplace)
 
     def select_by_ball(self, radius: Union[float, int], inplace: bool = False) -> Self:
         """Select nodes within a ball of radius `radius` around the nucleus.
