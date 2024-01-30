@@ -10,7 +10,7 @@ from cloudfiles import CloudFiles
 from meshparty import meshwork
 from requests import HTTPError
 
-client = cc.CAVEclient("minnie65_phase3_v1")
+client = cc.CAVEclient("minnie65_public_v661")
 
 root_id = 864691135013445270
 nuc_id = 262779
