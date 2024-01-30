@@ -48,8 +48,6 @@ def load_mw(directory, filename):
 
 
 neuron = load_mw(skel_path, filename)
-
-# %%
 neuron.reset_mask()
 
 # %%
@@ -74,10 +72,27 @@ nodes["n_labels"] = nodes[
     ["is_basal_dendrite", "is_apical_dendrite", "is_axon", "is_soma"]
 ].sum(axis=1)
 
-nodes['is_dendrite'] = nodes['']
+nodes["is_dendrite"] = nodes["is_basal_dendrite"] | nodes["is_apical_dendrite"]
 
-print(len(nodes.query("n_labels == 0")))
-print(len(nodes.query("n_labels > 1")))
+
+def label_compartment(row):
+    if row["is_soma"]:
+        return "soma"
+    elif row["is_axon"]:
+        return "axon"
+    elif row["is_dendrite"]:
+        return "dendrite"
+    else:
+        return "unknown"
+
+
+nodes["compartment"] = nodes.apply(label_compartment, axis=1)
+
+nodes.drop(
+    ["is_basal_dendrite", "is_apical_dendrite", "is_axon", "is_soma"],
+    axis=1,
+    inplace=True,
+)
 
 nodes = nodes.reset_index(drop=False).set_index("lvl2_id")
 
@@ -92,6 +107,7 @@ locs[["x", "y", "z"]] = locs["rep_coord_nm"].apply(pd.Series)
 
 nodes = nodes.join(locs)
 
+nodes
 
 # %%
 
@@ -146,7 +162,6 @@ changelog[["x", "y", "z"]] = changelog["rough_location"].apply(pd.Series)
 
 # %%
 
-
 sns.set_context("talk")
 fig, ax = plt.subplots(figsize=(10, 10))
 sns.scatterplot(data=changelog, x="x", y="y", linewidth=0, s=20, hue="is_merge")
@@ -155,14 +170,6 @@ ax.legend(title="Is merge?")
 
 # %%
 fig, ax = plt.subplots(figsize=(10, 10))
-sns.scatterplot(data=nodes, x="x", y="y", hue="is_axon", linewidth=0, s=2)
+sns.scatterplot(data=nodes, x="x", y="y", hue="compartment", linewidth=0, s=5)
 
 # %%
-import skeleton_plot as skelplot
-
-skelplot.plot_tools.plot_mw_skel(
-    neuron,
-    pull_radius=True,
-    invert_y=True,
-    ax=ax,
-)
