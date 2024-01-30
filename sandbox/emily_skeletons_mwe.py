@@ -107,3 +107,5 @@ nodes["n_labels"] = nodes[
 
 print(len(nodes.query("n_labels == 0")))
 print(len(nodes.query("n_labels > 1")))
+
+#%%
