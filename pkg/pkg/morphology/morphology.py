@@ -9,7 +9,7 @@ from networkframe import NetworkFrame
 from pcg_skel.chunk_tools import build_spatial_graph
 from sklearn.metrics import pairwise_distances_argmin
 
-from ..utils import get_nucleus_point_nm, get_positions
+from ..utils import get_nucleus_level2_id, get_nucleus_point_nm, get_positions
 
 
 def skeletonize_networkframe(
@@ -76,16 +76,23 @@ def get_soma_point(
     return soma_point
 
 
-def apply_nucleus(nf: NetworkFrame, root_id: int, client: cc.CAVEclient):
+def apply_nucleus(
+    nf: NetworkFrame, root_id: int, client: cc.CAVEclient, positional=False
+):
     """annotate a point on the level2 graph as the nucleus; whatever is closest"""
 
-    nuc_pt_nm = get_nucleus_point_nm(root_id, client, method="table")
+    if positional:
+        nuc_pt_nm = get_nucleus_point_nm(root_id, client, method="table")
 
-    pos_nodes = nf.nodes[["x", "y", "z"]]
-    pos_nodes = pos_nodes[pos_nodes.notna().all(axis=1)]
+        pos_nodes = nf.nodes[["x", "y", "z"]]
+        pos_nodes = pos_nodes[pos_nodes.notna().all(axis=1)]
 
-    ind = pairwise_distances_argmin(nuc_pt_nm.reshape(1, -1), pos_nodes)[0]
-    nuc_level2_id = pos_nodes.index[ind]
+        ind = pairwise_distances_argmin(nuc_pt_nm.reshape(1, -1), pos_nodes)[0]
+        nuc_level2_id = pos_nodes.index[ind]
+
+    else:
+        nuc_level2_id = get_nucleus_level2_id(root_id, client)
+
     nf.nodes["nucleus"] = False
     nf.nodes.loc[nuc_level2_id, "nucleus"] = True
     return nuc_level2_id

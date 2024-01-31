@@ -30,6 +30,13 @@ urllib3 = "^1.26.17"
 networkframe = {path = "../networkframe", develop = true}
 pkg = {path = "pkg"}
 gcsfs = "^2023.12.2.post1"
+polyscope = "^2.1.0"
+vedo = "^2023.5.0"
+k3d = "^2.16.1"
+ipyvtklink = "^0.2.3"
+pyvista = {extras = ["jupyter"], version = "^0.43.2"}
+trame = "^3.5.1"
+vtk = "^9.3.0"
 
 [tool.poetry.group.dev]
 optional = true

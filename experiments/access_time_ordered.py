@@ -1,5 +1,11 @@
 # %%
 import os
+
+os.environ["LAZYCLOUD_USE_CLOUD"] = "True"
+os.environ["LAZYCLOUD_RECOMPUTE"] = "False"
+os.environ["SKEDITS_USE_CLOUD"] = "True"
+os.environ["SKEDITS_RECOMPUTE"] = "False"
+
 import pickle
 
 import caveclient as cc
@@ -11,11 +17,6 @@ from tqdm.auto import tqdm
 from pkg.edits import count_synapses_by_sample
 from pkg.neuronframe import load_neuronframe
 from pkg.plot import savefig
-
-# %%
-
-os.environ["SKEDITS_USE_CLOUD"] = "True"
-os.environ["SKEDITS_RECOMPUTE"] = "False"
 
 # %%
 palette_file = "/Users/ben.pedigo/code/skedits/skedits-app/skedits/data/ctype_hues.pkl"
@@ -39,11 +40,25 @@ root_id = query_neurons["pt_root_id"].values[11]
 # root_id = 864691135992790209
 prefix = "meta"
 
-#%%
-nuc_row = client.materialize.query_table("nucleus_detection_v0", filter_equal_dict={"pt_root_id": root_id})
-nuc_row['id']
-#%%
-root_id
+# %%
+nuc_row = client.materialize.query_table(
+    "nucleus_detection_v0", filter_equal_dict={"pt_root_id": root_id}
+)
+nuc_row["id"]
+
+# %%
+
+from pkg.utils import get_nucleus_level2_id, get_nucleus_point_nm
+
+nuc_pt_nm = get_nucleus_point_nm(root_id, client, method="l2cache")
+nuc_l2_id = get_nucleus_level2_id(root_id, client)
+
+# %%
+mtypes = client.materialize.query_table("aibs_metamodel_mtypes_v661_v2")
+root_id_counts = mtypes["pt_root_id"].value_counts()
+root_id_singles = root_id_counts[root_id_counts == 1].index
+mtypes = mtypes.query("pt_root_id in @root_id_singles")
+mtypes.set_index("pt_root_id", inplace=True)
 
 # %%
 import numpy as np
@@ -64,8 +79,9 @@ def find_closest_point(df, point):
 # maybe need to look up in the table again to make sure everything is still there
 # and the nucleus hasn't changed?
 
-for root_id in query_neurons["pt_root_id"].values[0:12]:
+for root_id in query_neurons["pt_root_id"].values[10:20]:
     full_neuron = load_neuronframe(root_id, client)
+    
 
     metaedits = full_neuron.metaedits.sort_values("time")
 
@@ -87,7 +103,9 @@ for root_id in query_neurons["pt_root_id"].values[0:12]:
     applied_merges = []
     resolved_synapses = {}
 
-    for i in tqdm(range(len(merge_op_ids) + 1)):
+    for i in tqdm(
+        range(len(merge_op_ids) + 1), desc="Applying edits and resolving synapses..."
+    ):
         # apply the next operation
         current_neuron = full_neuron.set_edits(
             applied_op_ids, inplace=False, prefix=prefix
@@ -129,11 +147,12 @@ for root_id in query_neurons["pt_root_id"].values[0:12]:
         ordered_ops = ordered_ops[~ordered_ops.isin(applied_merges)]
 
         if len(ordered_ops) == 0:
-            print(f"no remaining merges, stopping ({i / len(merge_op_ids):.2f})")
             break
 
         applied_op_ids.append(ordered_ops[0])
         applied_merges.append(ordered_ops[0])
+
+    print(f"no remaining merges, stopping ({i / len(merge_op_ids):.2f})")
 
     # current_neuron.generate_neuroglancer_link(client)
 
@@ -148,12 +167,6 @@ for root_id in query_neurons["pt_root_id"].values[0:12]:
     final_neuron.edges.index.sort_values().equals(
         current_neuron.edges.index.sort_values()
     )
-
-    mtypes = client.materialize.query_table("aibs_metamodel_mtypes_v661_v2")
-    root_id_counts = mtypes["pt_root_id"].value_counts()
-    root_id_singles = root_id_counts[root_id_counts == 1].index
-    mtypes = mtypes.query("pt_root_id in @root_id_singles")
-    mtypes.set_index("pt_root_id", inplace=True)
 
     pre_synapses = full_neuron.pre_synapses
     post_synapses = full_neuron.post_synapses
@@ -201,7 +214,11 @@ for root_id in query_neurons["pt_root_id"].values[0:12]:
     ax.set_xlabel("Metaoperation added")
     ax.set_ylabel("# output synapses")
     ax.spines[["top", "right"]].set_visible(False)
-    savefig(f"output_synapses_access_time_ordered-root_id={root_id}", fig)
+    savefig(
+        f"output_synapses_access_time_ordered-root_id={root_id}",
+        fig,
+        folder="access_time_ordered",
+    )
 
     fig, ax = plt.subplots(1, 1, figsize=(6, 5))
 
@@ -217,7 +234,11 @@ for root_id in query_neurons["pt_root_id"].values[0:12]:
     ax.set_xlabel("Metaoperation added")
     ax.set_ylabel("Proportion of output synapses")
     ax.spines[["top", "right"]].set_visible(False)
-    savefig(f"output_proportion_access_time_ordered-root_id={root_id}", fig)
+    savefig(
+        f"output_proportion_access_time_ordered-root_id={root_id}",
+        fig,
+        folder="access_time_ordered",
+    )
 
 
 # %%

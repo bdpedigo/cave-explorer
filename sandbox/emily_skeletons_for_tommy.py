@@ -171,5 +171,3 @@ ax.legend(title="Is merge?")
 # %%
 fig, ax = plt.subplots(figsize=(10, 10))
 sns.scatterplot(data=nodes, x="x", y="y", hue="compartment", linewidth=0, s=5)
-
-# %%

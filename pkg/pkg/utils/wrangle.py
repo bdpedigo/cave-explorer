@@ -9,6 +9,23 @@ from requests import HTTPError
 
 def get_positions(nodelist, client: CAVEclient, n_retries=2, retry_delay=10):
     nodelist = list(nodelist)
+    chunk_size = 100_000
+    if len(nodelist) > chunk_size:
+        print(
+            f"Warning: nodelist is too large ({len(nodelist)}), splitting into chunks of {chunk_size}"
+        )
+        chunks = [
+            nodelist[i : i + chunk_size] for i in range(0, len(nodelist), chunk_size)
+        ]
+        nodes = []
+        for chunk in chunks:
+            nodes.append(
+                get_positions(
+                    chunk, client, n_retries=n_retries, retry_delay=retry_delay
+                )
+            )
+        nodes = pd.concat(nodes, axis=0)
+        return nodes
     l2stats = client.l2cache.get_l2data(nodelist, attributes=["rep_coord_nm"])
     nodes = pd.DataFrame(l2stats).T
     if "rep_coord_nm" not in nodes.columns:
@@ -133,6 +150,19 @@ def integerize_dict_keys(dictionary):
 
 def stringize_dict_keys(dictionary):
     return {str(k): v for k, v in dictionary.items()}
+
+
+def get_nucleus_level2_id(root_id: int, client: CAVEclient):
+    nuc = client.materialize.query_table(
+        "nucleus_detection_v0",
+        filter_equal_dict={"pt_root_id": root_id},
+        select_columns=["pt_supervoxel_id", "pt_root_id", "pt_position"],
+    ).set_index("pt_root_id")
+    nuc_supervoxel = nuc.loc[root_id, "pt_supervoxel_id"]
+    current_nuc_level2 = client.chunkedgraph.get_roots([nuc_supervoxel], stop_layer=2)[
+        0
+    ]
+    return current_nuc_level2
 
 
 def get_nucleus_point_nm(root_id: int, client: CAVEclient, method="table"):

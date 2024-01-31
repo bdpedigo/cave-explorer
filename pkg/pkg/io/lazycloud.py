@@ -60,6 +60,7 @@ def lazycloud(
 ) -> Callable:
     use_cloud = os.environ.get("LAZYCLOUD_USE_CLOUD") == "True"
     recompute = os.environ.get("LAZYCLOUD_RECOMPUTE") == "True"
+    print("Recompute?", recompute)
 
     cf = get_cloudfiles(use_cloud, cloud_bucket, folder, local_path=local_path)
 
