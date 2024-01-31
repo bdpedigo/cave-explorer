@@ -86,9 +86,8 @@ if full_neuron.nodes.loc[full_neuron.nucleus_id, f"{prefix}operation_added"] != 
 
 neuron_list = []
 applied_merges = []
-resolved_synapses = {}
+resolved_synapses_dict = {}
 
-from IPython.display import display
 
 for i in tqdm(
     range(len(merge_op_ids) + 1), desc="Applying edits and resolving synapses..."
@@ -107,32 +106,24 @@ for i in tqdm(
 
     current_neuron.remove_unused_synapses(inplace=True)
     neuron_list.append(current_neuron)
-    resolved_synapses[i] = {
+    resolved_synapses_dict[i] = {
         "resolved_pre_synapses": current_neuron.pre_synapses.index.to_list(),
         "resolved_post_synapses": current_neuron.post_synapses.index.to_list(),
-        "metaoperation_added": applied_op_ids[-1] if i > 0 else None,
+        f"{prefix}operation_added": applied_op_ids[-1] if i > 0 else None,
     }
-
-    if i in [83, 84, 85, 86]:
-        print(i)
-        # display(current_neuron.generate_neuroglancer_link(client))
 
     # select the next operation to apply
     out_edges = full_neuron.edges.query(
         "source.isin(@current_neuron.nodes.index) | target.isin(@current_neuron.nodes.index)"
     )
-    # print(len(out_edges), "out edges")
 
     out_edges = out_edges.drop(current_neuron.edges.index)
 
-    # print(len(out_edges), "out edges after removing current edges")
-
     possible_operations = out_edges[f"{prefix}operation_added"].unique()
-    # print(len(possible_operations), "possible operations")
 
     ordered_ops = merge_op_ids[merge_op_ids.isin(possible_operations)]
 
-    # HACK
+    # HACK?
     ordered_ops = ordered_ops[~ordered_ops.isin(applied_merges)]
 
     if len(ordered_ops) == 0:
@@ -142,34 +133,41 @@ for i in tqdm(
     applied_merges.append(ordered_ops[0])
 
 
-print(f"no remaining merges, stopping ({i / len(merge_op_ids):.2f})")
+print(f"No remaining merges, stopping ({(i+1) / len(merge_op_ids):.2f})")
 
-# current_neuron.generate_neuroglancer_link(client)
-
+# %%
 final_neuron = full_neuron.set_edits(full_neuron.edits.index, inplace=False)
 final_neuron.select_nucleus_component(inplace=True)
 final_neuron.remove_unused_synapses(inplace=True)
 
-final_neuron.nodes.index.sort_values().equals(current_neuron.nodes.index.sort_values())
+assert final_neuron.nodes.index.sort_values().equals(
+    current_neuron.nodes.index.sort_values()
+)
+assert final_neuron.edges.index.sort_values().equals(
+    current_neuron.edges.index.sort_values()
+)
 
-final_neuron.edges.index.sort_values().equals(current_neuron.edges.index.sort_values())
-
+# %%
 pre_synapses = full_neuron.pre_synapses
 post_synapses = full_neuron.post_synapses
 
 pre_synapses["post_mtype"] = pre_synapses["post_pt_root_id"].map(mtypes["cell_type"])
 post_synapses["pre_mtype"] = post_synapses["pre_pt_root_id"].map(mtypes["cell_type"])
 
-resolved_synapses = pd.DataFrame(resolved_synapses).T
+resolved_synapses = pd.DataFrame(resolved_synapses_dict).T
 
+# %%
 resolved_pre_synapses = resolved_synapses["resolved_pre_synapses"]
 post_mtype_counts = count_synapses_by_sample(
     pre_synapses, resolved_pre_synapses, "post_mtype"
 )
 
+# %%
 counts_table = post_mtype_counts
 post_mtype_stats_tidy = counts_table.reset_index().melt(
-    var_name="post_mtype", value_name="count", id_vars="sample"
+    var_name="post_mtype",
+    value_name="count",
+    id_vars=["sample"],
 )
 
 post_mtype_probs = counts_table / counts_table.sum(axis=1).values[:, None]
@@ -179,6 +177,15 @@ post_mtype_probs_tidy = post_mtype_probs.reset_index().melt(
 )
 
 post_mtype_stats_tidy["prob"] = post_mtype_probs_tidy["prob"]
+
+post_mtype_stats_tidy[f"{prefix}operation_added"] = post_mtype_stats_tidy["sample"].map(
+    resolved_synapses[f"{prefix}operation_added"]
+)
+
+post_mtype_stats_tidy = post_mtype_stats_tidy.join(
+    metaedits, on=f"{prefix}operation_added"
+)
+
 
 # %%
 sns.set_context("talk")
@@ -223,17 +230,26 @@ savefig(
     folder="access_time_ordered",
 )
 
+#%%
 
-# %%
-total_count = post_mtype_counts.sum(axis=1).to_frame("total_count").reset_index()
-total_count
-# %%
-sns.lineplot(data=total_count, x="sample", y="total_count")
+fig, ax = plt.subplots(1, 1, figsize=(6, 5))
 
-# %%
-total_count.diff()["total_count"].idxmax()
+sns.lineplot(
+    data=post_mtype_stats_tidy,
+    x="sample",
+    y="centroid_distance_to_nuc_um",
+    hue="post_mtype",
+    legend=False,
+    palette=ctype_hues,
+    ax=ax,
+)
+ax.set_xlabel("Metaoperation added")
+ax.set_ylabel("Distance to nucleus (nm)")
+ax.spines[["top", "right"]].set_visible(False)
+savefig(
+    f"distance_access_time_ordered-root_id={root_id}",
+    fig,
+    folder="access_time_ordered",
+)
 
-# %%
-total_count.loc[83:86]
-
-# %%
+#%%

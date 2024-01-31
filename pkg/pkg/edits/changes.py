@@ -1,4 +1,5 @@
 import json
+from typing import Union
 
 import caveclient as cc
 import networkx as nx
@@ -778,19 +779,19 @@ def resolve_synapses_from_edit_selections(
 
 
 def count_synapses_by_sample(
-    synapses: pd.DataFrame, resolved_pre_synapses: dict, by: str
+    synapses: pd.DataFrame, resolved_pre_synapses: Union[dict, pd.Series], by: str
 ) -> pd.DataFrame:
     """
     Count number of synapses belonging to some group (`by`) for each sample.
 
     Parameters
     ----------
-    synapses : pd.DataFrame
+    synapses :
         Synapses table.
-    resolved_pre_synapses : dict
+    resolved_pre_synapses :
         Dictionary of resolved synapses by edit selection. Keys are edit selection
         identifiers, values are lists of synapse ids.
-    by : str
+    by :
         Column name to group by. Synapses will be grouped by this column, within each
         sample.
     """
@@ -799,7 +800,7 @@ def count_synapses_by_sample(
         sample_resolved_synapses = resolved_pre_synapses[key]
 
         sample_counts = synapses.loc[sample_resolved_synapses].groupby(by).size()
-        sample_counts.name = i
+        sample_counts.name = key
         counts_by_sample.append(sample_counts)
 
     count = pd.concat(counts_by_sample, axis=1).fillna(0).astype(int).T
