@@ -79,18 +79,27 @@ def find_closest_point(df, point):
 # maybe need to look up in the table again to make sure everything is still there
 # and the nucleus hasn't changed?
 
-for root_id in query_neurons["pt_root_id"].values[10:20]:
+for i, root_id in enumerate(query_neurons["pt_root_id"].values[:20]):
+    if i == 8:
+        continue
+    print("---")
+    print("ROOT ID", root_id)
+    print("i", i)
+    print("---")
+    print()
     full_neuron = load_neuronframe(root_id, client)
-    
+    if full_neuron == "Not for now!":
+        continue
 
     metaedits = full_neuron.metaedits.sort_values("time")
 
-    pure_split_metaedits = metaedits.query("~has_merge")
+    # split_metaedits = metaedits.query("~has_merge")
+    split_metaedits = metaedits.query("has_split")
 
     merge_metaedits = metaedits.query("has_merge")
 
     merge_op_ids = merge_metaedits.index
-    split_op_ids = pure_split_metaedits.index
+    split_op_ids = split_metaedits.index
     applied_op_ids = list(split_op_ids)
 
     # edge case where the neuron's ultimate soma location is itself a merge node
@@ -239,7 +248,10 @@ for root_id in query_neurons["pt_root_id"].values[10:20]:
         fig,
         folder="access_time_ordered",
     )
+    print()
 
+#%%
+    
 
 # %%
 

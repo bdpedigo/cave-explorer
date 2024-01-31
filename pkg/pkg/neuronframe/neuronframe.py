@@ -159,6 +159,9 @@ class NeuronFrame(NetworkFrame):
             lambda x: self.edits.loc[groups[x], "is_merge"].tolist()
         )
         metaoperation_stats["has_merge"] = metaoperation_stats["is_merges"].apply(any)
+        metaoperation_stats["has_split"] = metaoperation_stats["is_merges"].apply(
+            lambda x: not all(x)
+        )
         return metaoperation_stats
 
     def set_edits(self, edit_ids: Union[list[int], int], inplace=False, prefix=""):
@@ -202,7 +205,7 @@ class NeuronFrame(NetworkFrame):
             )
         else:
             print("Warning: nucleus_id not in nodes index, returning unmodified")
-            
+
             return self._return(inplace=inplace)
 
     def select_by_ball(self, radius: Union[float, int], inplace: bool = False) -> Self:
