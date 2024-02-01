@@ -10,12 +10,15 @@ import pickle
 
 import caveclient as cc
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import seaborn as sns
+from sklearn.metrics import pairwise_distances_argmin
 from tqdm.auto import tqdm
 
 from pkg.edits import count_synapses_by_sample
 from pkg.neuronframe import load_neuronframe
+from pkg.paths import OUT_PATH
 from pkg.plot import savefig
 
 # %%
@@ -33,25 +36,8 @@ client = cc.CAVEclient("minnie65_phase3_v1")
 query_neurons = client.materialize.query_table("connectivity_groups_v507")
 query_neurons.sort_values("id", inplace=True)
 
-# 10 looked "unstable"
-# 11 looked "stable"
-root_id = query_neurons["pt_root_id"].values[11]
-# root_id = 864691135865971164
-# root_id = 864691135992790209
 prefix = "meta"
-
-# %%
-nuc_row = client.materialize.query_table(
-    "nucleus_detection_v0", filter_equal_dict={"pt_root_id": root_id}
-)
-nuc_row["id"]
-
-# %%
-
-from pkg.utils import get_nucleus_level2_id, get_nucleus_point_nm
-
-nuc_pt_nm = get_nucleus_point_nm(root_id, client, method="l2cache")
-nuc_l2_id = get_nucleus_level2_id(root_id, client)
+path = OUT_PATH / "access_time_ordered"
 
 # %%
 mtypes = client.materialize.query_table("aibs_metamodel_mtypes_v661_v2")
@@ -61,8 +47,6 @@ mtypes = mtypes.query("pt_root_id in @root_id_singles")
 mtypes.set_index("pt_root_id", inplace=True)
 
 # %%
-import numpy as np
-from sklearn.metrics import pairwise_distances_argmin
 
 
 def find_closest_point(df, point):
@@ -134,25 +118,21 @@ for i, root_id in enumerate(query_neurons["pt_root_id"].values[:20]):
         resolved_synapses[i] = {
             "resolved_pre_synapses": current_neuron.pre_synapses.index.to_list(),
             "resolved_post_synapses": current_neuron.post_synapses.index.to_list(),
-            "metaoperation_added": applied_op_ids[-1] if i > 0 else None,
+            f"{prefix}operation_added": applied_op_ids[-1] if i > 0 else None,
         }
 
         # select the next operation to apply
         out_edges = full_neuron.edges.query(
             "source.isin(@current_neuron.nodes.index) | target.isin(@current_neuron.nodes.index)"
         )
-        # print(len(out_edges), "out edges")
 
         out_edges = out_edges.drop(current_neuron.edges.index)
 
-        # print(len(out_edges), "out edges after removing current edges")
-
         possible_operations = out_edges[f"{prefix}operation_added"].unique()
-        # print(len(possible_operations), "possible operations")
 
         ordered_ops = merge_op_ids[merge_op_ids.isin(possible_operations)]
 
-        # HACK
+        # HACK?
         ordered_ops = ordered_ops[~ordered_ops.isin(applied_merges)]
 
         if len(ordered_ops) == 0:
@@ -161,19 +141,17 @@ for i, root_id in enumerate(query_neurons["pt_root_id"].values[:20]):
         applied_op_ids.append(ordered_ops[0])
         applied_merges.append(ordered_ops[0])
 
-    print(f"no remaining merges, stopping ({i / len(merge_op_ids):.2f})")
-
-    # current_neuron.generate_neuroglancer_link(client)
+    print(f"No remaining merges, stopping ({(i+1) / len(merge_op_ids):.2f})")
 
     final_neuron = full_neuron.set_edits(full_neuron.edits.index, inplace=False)
     final_neuron.select_nucleus_component(inplace=True)
     final_neuron.remove_unused_synapses(inplace=True)
 
-    final_neuron.nodes.index.sort_values().equals(
+    assert final_neuron.nodes.index.sort_values().equals(
         current_neuron.nodes.index.sort_values()
     )
 
-    final_neuron.edges.index.sort_values().equals(
+    assert final_neuron.edges.index.sort_values().equals(
         current_neuron.edges.index.sort_values()
     )
 
@@ -206,6 +184,22 @@ for i, root_id in enumerate(query_neurons["pt_root_id"].values[:20]):
     )
 
     post_mtype_stats_tidy["prob"] = post_mtype_probs_tidy["prob"]
+
+    post_mtype_stats_tidy[f"{prefix}operation_added"] = post_mtype_stats_tidy[
+        "sample"
+    ].map(resolved_synapses[f"{prefix}operation_added"])
+
+    post_mtype_stats_tidy = post_mtype_stats_tidy.join(
+        metaedits, on=f"{prefix}operation_added"
+    )
+
+    final_probs = post_mtype_probs.iloc[-1]
+
+    diffs = (
+        ((((post_mtype_probs - final_probs) ** 2).sum(axis=1)) ** 0.5)
+        .to_frame("diff")
+        .reset_index()
+    )
 
     sns.set_context("talk")
 
@@ -250,10 +244,46 @@ for i, root_id in enumerate(query_neurons["pt_root_id"].values[:20]):
     )
     print()
 
-#%%
-    
+    fig, ax = plt.subplots(1, 1, figsize=(6, 5))
 
-# %%
+    sns.lineplot(
+        data=post_mtype_stats_tidy,
+        x="sample",
+        y="centroid_distance_to_nuc_um",
+        hue="post_mtype",
+        legend=False,
+        palette=ctype_hues,
+        ax=ax,
+    )
+    ax.set_xlabel("Metaoperation added")
+    ax.set_ylabel("Distance to nucleus (nm)")
+    ax.spines[["top", "right"]].set_visible(False)
+    savefig(
+        f"distance_access_time_ordered-root_id={root_id}",
+        fig,
+        folder="access_time_ordered",
+    )
 
-# TODO i bet these are all things such that filtered = False
-# metaedits.loc[merge_op_ids[~np.isin(merge_op_ids, applied_merges)]]
+    fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+
+    sns.lineplot(
+        data=diffs,
+        x="sample",
+        y="diff",
+    )
+    ax.set_xlabel("Metaoperation added")
+    ax.set_ylabel("Distance from final")
+    ax.spines[["top", "right"]].set_visible(False)
+
+    savefig(
+        f"distance_from_final_access_time_ordered-root_id={root_id}",
+        fig,
+        folder="access_time_ordered",
+    )
+
+    resolved_synapses.to_csv(path / f"resolved_synapses-root_id={root_id}.csv")
+
+    post_mtype_stats_tidy.to_csv(path / f"post_mtype_stats_tidy-root_id={root_id}.csv")
+
+    diffs.to_csv(path / f"diffs-root_id={root_id}.csv")
+

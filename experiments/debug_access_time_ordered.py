@@ -98,6 +98,7 @@ for i in tqdm(
     if full_neuron.nucleus_id in current_neuron.nodes.index:
         current_neuron.select_nucleus_component(inplace=True)
     else:
+        print("Using proxy L2 nucleus node")
         point_id = find_closest_point(
             current_neuron.nodes,
             full_neuron.nodes.loc[full_neuron.nucleus_id, ["x", "y", "z"]],
@@ -186,6 +187,16 @@ post_mtype_stats_tidy = post_mtype_stats_tidy.join(
     metaedits, on=f"{prefix}operation_added"
 )
 
+# %%
+post_mtype_probs.values
+final_probs = post_mtype_probs.iloc[-1]
+
+diffs = (
+    ((((post_mtype_probs - final_probs) ** 2).sum(axis=1)) ** 0.5)
+    .to_frame("diff")
+    .reset_index()
+)
+
 
 # %%
 sns.set_context("talk")
@@ -230,7 +241,7 @@ savefig(
     folder="access_time_ordered",
 )
 
-#%%
+# %%
 
 fig, ax = plt.subplots(1, 1, figsize=(6, 5))
 
@@ -252,4 +263,38 @@ savefig(
     folder="access_time_ordered",
 )
 
-#%%
+# %%
+fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+
+sns.lineplot(
+    data=diffs,
+    x="sample",
+    y="diff",
+)
+ax.set_xlabel("Metaoperation added")
+ax.set_ylabel("Distance from final")
+ax.spines[["top", "right"]].set_visible(False)
+
+savefig(
+    f"distance_from_final_access_time_ordered-root_id={root_id}",
+    fig,
+    folder="access_time_ordered",
+)
+
+# %%
+
+# %%
+path = OUT_PATH / "access_time_ordered"
+resolved_synapses.to_csv(
+    path / f"resolved_synapses-root_id={root_id}.csv"
+)
+
+post_mtype_stats_tidy.to_csv(
+    path / f"post_mtype_stats_tidy-root_id={root_id}.csv"
+)
+
+diffs = (
+    ((((post_mtype_probs - final_probs) ** 2).sum(axis=1)) ** 0.5)
+    .to_frame("diff")
+    .reset_index()
+)
