@@ -35,12 +35,10 @@ def load_neuronframe(root_id: int, client: cc.CAVEclient):
     )
 
     print("Loading initial network state...")
-    # TODO this is super lazy and not optimized, just gets ALL of the initial states 
-    # for any neuron related to this one, but doesn't check whether parts of that 
+    # TODO this is super lazy and not optimized, just gets ALL of the initial states
+    # for any neuron related to this one, but doesn't check whether parts of that
     # neuron can actually connect to this one.
     nf = get_initial_network(root_id, client, positions=False)
-    if len(nf) > 250_000:
-        return "Not for now!"
 
     # go through all of the edits/metaedits
     # add nodes that were added, but don't remove any nodes

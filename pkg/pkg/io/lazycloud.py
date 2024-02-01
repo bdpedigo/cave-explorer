@@ -1,7 +1,9 @@
+import json
 import os
 import pickle
 from functools import wraps
-from typing import Callable
+from pathlib import Path
+from typing import Callable, Literal, Union
 
 from cloudfiles import CloudFiles
 
@@ -37,18 +39,6 @@ def parametrized(dec):
     return layer
 
 
-# TODO these could be expanded or configurable from the lazycloud decorator
-# right now they just pickle and unpickle
-
-
-def loader(data):
-    return pickle.loads(data)
-
-
-def saver(data):
-    return pickle.dumps(data)
-
-
 @parametrized
 def lazycloud(
     func: Callable,
@@ -56,24 +46,68 @@ def lazycloud(
     folder: str,
     file_suffix: str,
     arg_key: int = 0,
-    local_path=OUT_PATH,
+    local_path: Union[str, Path] = OUT_PATH,
+    save_format: Literal["pickle", "json"] = "pickle",
+    verify: bool = False,
 ) -> Callable:
+    """
+    This decorator is used to cache the results of a function in the cloud (or fallback
+    to a local path).
+
+    Parameters
+    ----------
+    func :
+        The function to be decorated.
+    cloud_bucket :
+        The path to the cloud bucket to use for caching.
+    folder :
+        The folder within the cloud bucket to use for caching.
+    file_suffix :
+        The suffix to use when saving the file. This is appended to the argument used to
+        index the cache, `arg_key`.
+    arg_key :
+        The index of the argument to use as the key for the cache. The default is 0. For
+        instance, if `arg_key` is 0, then the first argument to the function will be
+        used as the key for writing to and retrieving from the cache.
+    local_path :
+        The local path to use for caching.
+    save_format :
+        The format to use for saving the cache, can be "pickle" or "json".
+    verify :
+        Whether to check if the loaded result from the cache matches the one computed
+        when running the function. Requires the result to implement the `__eq__` method.
+    """
     use_cloud = os.environ.get("LAZYCLOUD_USE_CLOUD") == "True"
     recompute = os.environ.get("LAZYCLOUD_RECOMPUTE") == "True"
-    print("Recompute?", recompute)
+    print("LAZYCLOUD_RECOMPUTE?", recompute)
+
+    if save_format == "pickle":
+        loader = pickle.loads
+        saver = pickle.dumps
+    elif save_format == "json":
+        loader = json.loads
+        saver = json.dumps
+    else:
+        raise ValueError(f"Unknown save_format: {save_format}")
 
     cf = get_cloudfiles(use_cloud, cloud_bucket, folder, local_path=local_path)
 
     @wraps(func)
     def wrapper(*args, **kwargs):
         file_name = str(args[arg_key]) + "-" + file_suffix
-        if cf.exists(file_name) and not recompute:
-            return loader(cf.get(file_name))
-        else:
+
+        if not cf.exists(file_name) or recompute:
             result = func(*args, **kwargs)
             result = saver(result)
             cf.put(file_name, result)
-            result = loader(cf.get(file_name))
-            return result
+
+        loaded_result = loader(cf.get(file_name))
+
+        if verify:
+            is_same = result == loaded_result
+            if not is_same:
+                raise ValueError("Loaded result does not match original result.")
+
+        return loaded_result
 
     return wrapper

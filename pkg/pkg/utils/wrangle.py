@@ -1,3 +1,4 @@
+import pickle
 from time import sleep
 
 import numpy as np
@@ -5,6 +6,9 @@ import pandas as pd
 import pcg_skel
 from caveclient import CAVEclient
 from requests import HTTPError
+from sklearn.metrics import pairwise_distances_argmin
+
+from pkg.paths import DATA_PATH
 
 
 def get_positions(nodelist, client: CAVEclient, n_retries=2, retry_delay=10):
@@ -184,3 +188,21 @@ def get_nucleus_point_nm(root_id: int, client: CAVEclient, method="table"):
         nuc_pt_nm = np.array(nuc.loc[root_id, "pt_position"])
         nuc_pt_nm *= np.array([4, 4, 40])
     return nuc_pt_nm
+
+
+def find_closest_point(df, point):
+    if not isinstance(point, np.ndarray):
+        point = np.array(point)
+    X = df.loc[:, ["x", "y", "z"]].values
+    min_iloc = pairwise_distances_argmin(point.reshape(1, -1), X)[0]
+    return df.index[min_iloc]
+
+
+def load_casey_palette():
+    palette_file = DATA_PATH / "ctype_hues.pkl"
+
+    with open(palette_file, "rb") as f:
+        ctype_hues = pickle.load(f)
+
+    ctype_hues = {ctype: tuple(ctype_hues[ctype]) for ctype in ctype_hues.keys()}
+    return ctype_hues

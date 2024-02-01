@@ -6,28 +6,17 @@ os.environ["LAZYCLOUD_RECOMPUTE"] = "False"
 os.environ["SKEDITS_USE_CLOUD"] = "True"
 os.environ["SKEDITS_RECOMPUTE"] = "False"
 
-import pickle
 
 import caveclient as cc
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import seaborn as sns
-from sklearn.metrics import pairwise_distances_argmin
 from tqdm.auto import tqdm
 
 from pkg.edits import count_synapses_by_sample
 from pkg.neuronframe import load_neuronframe
 from pkg.paths import OUT_PATH
 from pkg.plot import savefig
-
-# %%
-palette_file = "/Users/ben.pedigo/code/skedits/skedits-app/skedits/data/ctype_hues.pkl"
-
-with open(palette_file, "rb") as f:
-    ctype_hues = pickle.load(f)
-
-ctype_hues = {ctype: tuple(ctype_hues[ctype]) for ctype in ctype_hues.keys()}
 
 # %%
 
@@ -48,21 +37,6 @@ mtypes.set_index("pt_root_id", inplace=True)
 
 # %%
 
-
-def find_closest_point(df, point):
-    if not isinstance(point, np.ndarray):
-        point = np.array(point)
-    X = df.loc[:, ["x", "y", "z"]].values
-    min_iloc = pairwise_distances_argmin(point.reshape(1, -1), X)[0]
-    return df.index[min_iloc]
-
-
-# TODO
-# something weird going on w/ 0 -
-# it seems like the nucleus node is later removed by a subsequent edit
-# maybe need to look up in the table again to make sure everything is still there
-# and the nucleus hasn't changed?
-
 for i, root_id in enumerate(query_neurons["pt_root_id"].values[:20]):
     if i == 8:
         continue
@@ -71,13 +45,11 @@ for i, root_id in enumerate(query_neurons["pt_root_id"].values[:20]):
     print("i", i)
     print("---")
     print()
+
     full_neuron = load_neuronframe(root_id, client)
-    if full_neuron == "Not for now!":
-        continue
 
     metaedits = full_neuron.metaedits.sort_values("time")
 
-    # split_metaedits = metaedits.query("~has_merge")
     split_metaedits = metaedits.query("has_split")
 
     merge_metaedits = metaedits.query("has_merge")
@@ -114,6 +86,7 @@ for i, root_id in enumerate(query_neurons["pt_root_id"].values[:20]):
             current_neuron.select_component_from_node(point_id, inplace=True)
 
         current_neuron.remove_unused_synapses(inplace=True)
+
         neuron_list.append(current_neuron)
         resolved_synapses[i] = {
             "resolved_pre_synapses": current_neuron.pre_synapses.index.to_list(),
@@ -122,12 +95,14 @@ for i, root_id in enumerate(query_neurons["pt_root_id"].values[:20]):
         }
 
         # select the next operation to apply
+        # this looks at all of the edges that are connected to the current neuron
+        # and then finds the set of operations that are "touched" by this one
+        # then it selects the first one of those that hasn't been applied yet, in time
+        # order
         out_edges = full_neuron.edges.query(
             "source.isin(@current_neuron.nodes.index) | target.isin(@current_neuron.nodes.index)"
         )
-
         out_edges = out_edges.drop(current_neuron.edges.index)
-
         possible_operations = out_edges[f"{prefix}operation_added"].unique()
 
         ordered_ops = merge_op_ids[merge_op_ids.isin(possible_operations)]
@@ -286,4 +261,3 @@ for i, root_id in enumerate(query_neurons["pt_root_id"].values[:20]):
     post_mtype_stats_tidy.to_csv(path / f"post_mtype_stats_tidy-root_id={root_id}.csv")
 
     diffs.to_csv(path / f"diffs-root_id={root_id}.csv")
-

@@ -1,4 +1,5 @@
 from .wrangle import (
+    find_closest_point,
     get_all_nodes_edges,
     get_level2_nodes_edges,
     get_nucleus_level2_id,
@@ -6,6 +7,7 @@ from .wrangle import (
     get_positions,
     get_skeleton_nodes_edges,
     integerize_dict_keys,
+    load_casey_palette,
     pt_to_xyz,
     stringize_dict_keys,
 )
@@ -20,4 +22,6 @@ __all__ = [
     "pt_to_xyz",
     "stringize_dict_keys",
     "get_nucleus_level2_id",
+    "find_closest_point",
+    "load_casey_palette",
 ]

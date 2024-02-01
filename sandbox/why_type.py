@@ -1,3 +1,5 @@
+# %%
+
 from beartype import beartype
 
 
@@ -25,7 +27,7 @@ def my_function_untyped(a, b):
 
 
 @beartype
-def my_function(a: int, b: int) -> int:
+def my_function_typed(a: int, b: int) -> int:
     """This function is type annotated.
 
     Parameters
@@ -41,3 +43,7 @@ def my_function(a: int, b: int) -> int:
         The sum of the two numbers.
     """
     return a + b
+
+
+# %%
+my_function_typed(1, '2')

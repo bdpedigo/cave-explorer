@@ -6,3 +6,5 @@ RESULTS_PATH = RESULTS_PATH / "results"
 FIG_PATH = RESULTS_PATH / "figs"
 
 OUT_PATH = RESULTS_PATH / "outs"
+
+DATA_PATH = Path(__file__).parent.parent.parent / "data"
