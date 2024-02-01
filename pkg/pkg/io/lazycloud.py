@@ -22,11 +22,9 @@ def get_cloudfiles(
     return cf
 
 
-# REF: https://stackoverflow.com/questions/5929107/decorators-with-parameters
-
-
 def parametrized(dec):
     """This decorator allows you to easily create decorators that take arguments"""
+    # REF: https://stackoverflow.com/questions/5929107/decorators-with-parameters
 
     @wraps(dec)
     def layer(*args, **kwargs):

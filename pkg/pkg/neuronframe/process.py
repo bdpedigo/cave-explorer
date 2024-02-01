@@ -18,7 +18,12 @@ from pkg.morphology import (
 from pkg.neuronframe import NeuronFrame
 
 
-@lazycloud("allen-minnie-phase3", "edit_neuronframes", "neuronframe.pkl", arg_key=0)
+@lazycloud(
+    cloud_bucket="allen-minnie-phase3",
+    folder="edit_neuronframes",
+    file_suffix="neuronframe.pkl",
+    arg_key=0,
+)
 def load_neuronframe(root_id: int, client: cc.CAVEclient):
     print("Loading level 2 network edits...")
     (
