@@ -290,3 +290,21 @@ pl.add_mesh(split_poly, color=colors[6], point_size=10)
 
 pl.show()
 
+# %%
+
+pl = pv.Plotter()
+
+pl.add_mesh(
+    l2graph_poly, cmap=cmap, line_width=1, scalars="compartment", lighting=False
+)
+pl.add_mesh(merge_poly, color=colors[8], point_size=3, lighting=False)
+pl.add_mesh(split_poly, color=colors[6], point_size=3, lighting=False)
+
+# p.camera.zoom(1.5)
+path = pl.generate_orbital_path(
+    n_points=240, viewup=[0, -1, 0]
+)
+pl.remove_scalar_bar()
+pl.open_gif("orbit2.gif",fps=30)
+pl.orbit_on_path(path, write_frames=True, viewup=[0, -1, 0], step=0.1)
+pl.close()
