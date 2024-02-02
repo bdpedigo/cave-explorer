@@ -26,8 +26,11 @@ def my_function_untyped(a, b):
     return a + b
 
 
+from typing import Union
+
+
 @beartype
-def my_function_typed(a: int, b: int) -> int:
+def my_function_typed(a: Union[int, float], b: int) -> int:
     """This function is type annotated.
 
     Parameters
@@ -46,4 +49,6 @@ def my_function_typed(a: int, b: int) -> int:
 
 
 # %%
-my_function_typed(1, '2')
+my_function_typed(1, "2")
+
+# %%

@@ -206,3 +206,12 @@ def load_casey_palette():
 
     ctype_hues = {ctype: tuple(ctype_hues[ctype]) for ctype in ctype_hues.keys()}
     return ctype_hues
+
+
+def load_mtypes(client: CAVEclient):
+    mtypes = client.materialize.query_table("aibs_metamodel_mtypes_v661_v2")
+    root_id_counts = mtypes["pt_root_id"].value_counts()
+    root_id_singles = root_id_counts[root_id_counts == 1].index
+    mtypes = mtypes.query("pt_root_id in @root_id_singles")
+    mtypes.set_index("pt_root_id", inplace=True)
+    return mtypes

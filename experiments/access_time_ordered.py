@@ -17,6 +17,7 @@ from pkg.edits import count_synapses_by_sample
 from pkg.neuronframe import load_neuronframe
 from pkg.paths import OUT_PATH
 from pkg.plot import savefig
+from pkg.utils import find_closest_point, load_casey_palette, load_mtypes
 
 # %%
 
@@ -28,12 +29,8 @@ query_neurons.sort_values("id", inplace=True)
 prefix = "meta"
 path = OUT_PATH / "access_time_ordered"
 
-# %%
-mtypes = client.materialize.query_table("aibs_metamodel_mtypes_v661_v2")
-root_id_counts = mtypes["pt_root_id"].value_counts()
-root_id_singles = root_id_counts[root_id_counts == 1].index
-mtypes = mtypes.query("pt_root_id in @root_id_singles")
-mtypes.set_index("pt_root_id", inplace=True)
+ctype_hues = load_casey_palette()
+mtypes = load_mtypes(client)
 
 # %%
 
@@ -51,9 +48,7 @@ for i, root_id in enumerate(query_neurons["pt_root_id"].values[:20]):
     metaedits = full_neuron.metaedits.sort_values("time")
 
     split_metaedits = metaedits.query("has_split")
-
     merge_metaedits = metaedits.query("has_merge")
-
     merge_op_ids = merge_metaedits.index
     split_op_ids = split_metaedits.index
     applied_op_ids = list(split_op_ids)

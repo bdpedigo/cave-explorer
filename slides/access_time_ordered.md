@@ -10,7 +10,7 @@ math: true
 
 ---
 
-# "Access-time" ordering
+# "Clean-then-add" ordering
 
 - Apply all splits
   - Assumption that a proofreader would add something after cleaning
@@ -22,6 +22,8 @@ math: true
 
 - Looking at inhibitory neurons from the column paper
 - My naive way of making metaedits
+  - Edits which touch the same L2 nodes are lumped together 
+  - Anything with a split is considered a meta-split
 - Not doing anything on the post synaptic side here
 - Using all cells with labels, not just cells in the column
 

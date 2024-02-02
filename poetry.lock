@@ -6563,13 +6563,13 @@ test = ["numpy", "pandas", "pytest", "xarray"]
 
 [[package]]
 name = "trame"
-version = "3.5.1"
+version = "3.5.2"
 description = "Trame, a framework to build applications in plain Python"
 optional = false
 python-versions = "*"
 files = [
-    {file = "trame-3.5.1-py3-none-any.whl", hash = "sha256:ccf7945c98939d58c6c75fc5651980b8778f252b63ceb09d07601dfe59fb0f78"},
-    {file = "trame-3.5.1.tar.gz", hash = "sha256:10585fb44815da99d038e450208063e3cc7eb38dfbbc2399af7eaa9ead9d17a8"},
+    {file = "trame-3.5.2-py3-none-any.whl", hash = "sha256:40a7c7568566e2dc1100d954a4e54a44dfb26005a5975771da9a18c9df213897"},
+    {file = "trame-3.5.2.tar.gz", hash = "sha256:93d97951a4d08fef2ee447e63e8593b6192a30e408637c5b1075fb292e74c8d3"},
 ]
 
 [package.dependencies]
@@ -7246,4 +7246,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">3.11.0,<3.12.0"
-content-hash = "b2993ba1e7ebc64d5306d4fa0f97711c7f3b9415be69cdbda2895d005a39ff3a"
+content-hash = "0e8dcc01058faa6716aa5bb406a8bf431ecfafcfb428efb45efbd74bcdadd397"
