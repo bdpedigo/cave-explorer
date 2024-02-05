@@ -72,13 +72,15 @@ for i, root_id in enumerate(query_neurons["pt_root_id"].values[:20]):
         )
 
         if full_neuron.nucleus_id in current_neuron.nodes.index:
-            current_neuron.select_nucleus_component(inplace=True)
+            current_neuron.select_nucleus_component(inplace=True, directed=False)
         else:
             point_id = find_closest_point(
                 current_neuron.nodes,
                 full_neuron.nodes.loc[full_neuron.nucleus_id, ["x", "y", "z"]],
             )
-            current_neuron.select_component_from_node(point_id, inplace=True)
+            current_neuron.select_component_from_node(
+                point_id, inplace=True, directed=False
+            )
 
         current_neuron.remove_unused_synapses(inplace=True)
 

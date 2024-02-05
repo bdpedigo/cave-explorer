@@ -10,15 +10,20 @@ os.environ["SKEDITS_RECOMPUTE"] = "False"
 import caveclient as cc
 import matplotlib.pyplot as plt
 import pandas as pd
+import pyvista as pv
 import seaborn as sns
 from scipy.spatial.distance import cdist
 from tqdm.auto import tqdm
 
 from pkg.edits import count_synapses_by_sample
 from pkg.neuronframe import load_neuronframe, verify_neuron_matches_final
-from pkg.paths import OUT_PATH
+from pkg.paths import FIG_PATH, OUT_PATH
 from pkg.plot import savefig
 from pkg.utils import find_closest_point, load_casey_palette, load_mtypes
+
+pv.set_jupyter_backend("client")
+
+# %%
 
 
 def apply_operations(
@@ -32,13 +37,15 @@ def apply_operations(
     current_neuron = full_neuron.set_edits(applied_op_ids, inplace=False, prefix=prefix)
 
     if full_neuron.nucleus_id in current_neuron.nodes.index:
-        current_neuron.select_nucleus_component(inplace=True)
+        current_neuron.select_nucleus_component(inplace=True, directed=False)
     else:
         point_id = find_closest_point(
             current_neuron.nodes,
             full_neuron.nodes.loc[full_neuron.nucleus_id, ["x", "y", "z"]],
         )
-        current_neuron.select_component_from_node(point_id, inplace=True)
+        current_neuron.select_component_from_node(
+            point_id, inplace=True, directed=False
+        )
 
     current_neuron.remove_unused_synapses(inplace=True)
 
@@ -91,21 +98,150 @@ completes_neuron = False
 
 ctype_hues = load_casey_palette()
 
-root_id = query_neurons["pt_root_id"].values[5]
+root_id = query_neurons["pt_root_id"].values[2]
 
 full_neuron = load_neuronframe(root_id, client)
 
+
 # %%
+
+import numpy as np
+
+# static plot of the initial state of the neuron
 
 skeleton_poly = full_neuron.to_skeleton_polydata()
 
-import pyvista as pv
-
-pv.set_jupyter_backend("client")
 pl = pv.Plotter()
+nuc_loc = full_neuron.nodes.loc[full_neuron.nucleus_id, ["x", "y", "z"]].values
+
+pl.camera_position = "zx"
+
+setback = -2_000_000
+
+pl.camera.focal_point = nuc_loc
+pl.camera.position = nuc_loc + np.array([0, 0, setback])
+pl.camera.up = (0, -1, 0)
+pl.camera.azimuth += 2
+
 pl.add_mesh(skeleton_poly, color="black", line_width=1)
+
+
+# pl.camera.roll = 0
+
+# pl.camera.elevation = 45
+# pl.camera.view_angle = 0
+
+radius = 100_000
+
 pl.show()
 
+pl.camera_position
+
+# %%
+edits = full_neuron.edits
+edits.sort_values("time", inplace=True)
+
+fps = 20
+window_size = (1920, 1080)
+n_rotation_steps = 5
+azimuth_step_size = 1
+
+plotter = pv.Plotter(window_size=window_size)
+
+
+# plotter.camera_position = "zx"
+# plotter.camera.focal_point = nuc_loc
+# plotter.camera.position = nuc_loc + np.array([0, 0, setback])
+# plotter.camera.up = (0, -1, 0)
+
+
+print(plotter.camera_position)
+
+plotter.open_gif(
+    str(FIG_PATH / "animations" / f"all_edits-root_id={root_id}.gif"), fps=fps
+)
+
+setback = 2_000_000
+nuc_loc = full_neuron.nodes.loc[full_neuron.nucleus_id, ["x", "y", "z"]].values
+# plotter.camera_position = "zx"
+plotter.camera.focal_point = nuc_loc
+plotter.camera.position = nuc_loc + np.array([0, 0, setback])
+plotter.camera.up = (0, -1, 0)
+# print(plotter.camera_position)
+
+last_nodes = pd.DataFrame()
+
+actors_remove_queue = []
+
+for i in tqdm(range(len(edits[:10])), desc="Applying edits..."):
+    current_neuron = full_neuron.set_edits(edits.index[:i], inplace=False, prefix="")
+
+    # point_id = find_closest_point(
+    #     current_neuron.nodes,
+    #     full_neuron.nodes.loc[full_neuron.nucleus_id, ["x", "y", "z"]],
+    # )
+    current_neuron.select_component_from_node(
+        full_neuron.nucleus_id, inplace=True, directed=False
+    )
+
+    skeleton_poly = current_neuron.to_skeleton_polydata()
+    skeleton_actor = plotter.add_mesh(skeleton_poly, color="black", line_width=1)
+    print(plotter.camera_position)
+
+    highlight = current_neuron.nodes.index.difference(last_nodes.index)
+    if len(highlight) > 0:
+        highlight_poly = current_neuron.query_nodes(
+            "index.isin(@highlight)", local_dict=locals()
+        ).to_skeleton_polydata()
+        highlight_actor = plotter.add_mesh(
+            highlight_poly, color="purple", point_size=8, line_width=3
+        )
+        username = edits.iloc[i]["user_name"]
+        text = pv.Text3D(
+            username,
+            center=highlight_poly.center,
+        )
+
+        text_actor = plotter.add_mesh(text)
+
+        actors_remove_queue.append((highlight_actor, text_actor))
+
+    merge_poly, split_poly = current_neuron.to_edit_polydata()
+    if len(merge_poly.points) > 0:
+        merge_actor = plotter.add_mesh(merge_poly, color="purple", point_size=4)
+
+    if len(split_poly.points) > 0:
+        split_actor = plotter.add_mesh(split_poly, color="red", point_size=4)
+
+    time_actor = plotter.add_text(
+        "t = " + str(edits.iloc[i]["time"]), position="upper_left"
+    )
+
+    for _ in range(n_rotation_steps):
+        plotter.camera.azimuth += azimuth_step_size
+        plotter.write_frame()
+        print(plotter.camera_position)
+
+    plotter.remove_actor(time_actor)
+
+    plotter.remove_actor(skeleton_actor)
+
+    if len(actors_remove_queue) > 5:
+        for actor in actors_remove_queue.pop(0):
+            plotter.remove_actor(actor)
+
+    if len(merge_poly.points) > 0:
+        plotter.remove_actor(merge_actor)
+    if len(split_poly.points) > 0:
+        plotter.remove_actor(split_actor)
+
+    last_nodes = current_neuron.nodes
+    
+plotter.show()
+
+print("Closing gif...")
+plotter.close()
+# current_neuron.remove_unused_synapses(inplace=True)
 
 # %%
 
@@ -135,22 +271,6 @@ neurons = {}
 resolved_synapses = {}
 applied_merges = []
 
-plotter = pv.Plotter(window_size=([1920, 1080]))
-
-# Open a gif
-plotter.open_gif("edits.gif", fps=20)
-
-# plotter.camera_position = "xy"
-# plotter.camera.elevation = 20
-
-# camera = pv.Camera()
-# loc = full_neuron.nodes.loc[full_neuron.nucleus_id, ["x", "y", "z"]].values
-# camera.focal_point = loc
-# camera.position = loc + [10_000, 10_000, 0]
-# plotter.camera = camera
-
-#
-# pl.camera_position = "xy"
 
 for i in tqdm(
     range(len(merge_op_ids) + 1), desc="Applying edits and resolving synapses..."
@@ -168,24 +288,6 @@ for i in tqdm(
         i,
     )
 
-    # TODO there might be a smarter way to do this with masking, but this seems fast
-    actor = plotter.add_mesh(
-        current_neuron.to_skeleton_polydata(), color="black", line_width=1
-    )
-    merge_poly, split_poly = current_neuron.to_edit_polydata()
-    merge_actor = plotter.add_mesh(merge_poly, color="purple", point_size=4)
-    split_actor = plotter.add_mesh(split_poly, color="red", point_size=4)
-
-    for i in range(20):
-        plotter.camera.azimuth += 1
-        plotter.write_frame()
-
-    plotter.remove_actor(actor)
-    plotter.remove_actor(merge_actor)
-    plotter.remove_actor(split_actor)
-
-    
-
     # TODO write this in a way where this part can be swapped in and out
     more_operations = select_next_operation(
         full_neuron, current_neuron, applied_op_ids, merge_op_ids
@@ -195,7 +297,6 @@ for i in tqdm(
 
 # print(pl.camera_position)
 
-plotter.close()
 
 print(f"No remaining merges, stopping ({i / len(merge_op_ids):.2f})")
 
@@ -203,6 +304,44 @@ resolved_synapses = pd.DataFrame(resolved_synapses).T
 
 if completes_neuron:
     verify_neuron_matches_final(full_neuron, current_neuron)
+
+# %%
+
+# generate an animation
+
+
+# Open a gif
+
+fps = 20
+window_size = (1920, 1080)
+n_rotation_steps = 20
+azimuth_step_size = 1
+
+plotter = pv.Plotter(window_size=window_size)
+
+plotter.open_gif(str(FIG_PATH / "animations" / f"edits-root_id={root_id}.gif"), fps=fps)
+
+for sample_id, neuron in tqdm(neurons.items(), desc="Writing frames..."):
+    # TODO there might be a smarter way to do this with masking, but this seems fast
+    actor = plotter.add_mesh(
+        current_neuron.to_skeleton_polydata(), color="black", line_width=1
+    )
+    merge_poly, split_poly = current_neuron.to_edit_polydata()
+    merge_actor = plotter.add_mesh(merge_poly, color="purple", point_size=4)
+    split_actor = plotter.add_mesh(split_poly, color="red", point_size=4)
+
+    for _ in range(n_rotation_steps):
+        plotter.camera.azimuth += azimuth_step_size
+        plotter.write_frame()
+
+    plotter.remove_actor(actor)
+    plotter.remove_actor(merge_actor)
+    plotter.remove_actor(split_actor)
+
+print("Closing gif...")
+plotter.close()
+
+# %%
 
 
 # %%
