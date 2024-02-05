@@ -4,6 +4,7 @@ from typing import Literal, Optional, Self, Union
 import caveclient as cc
 import numpy as np
 import pandas as pd
+import pyvista as pv
 from networkframe import NetworkFrame
 
 
@@ -457,6 +458,40 @@ class NeuronFrame(NetworkFrame):
 
     def remove_unused_edits(self):
         pass
+
+    def to_skeleton_polydata(self, label: Optional[str] = None) -> pv.PolyData:
+        nodes = self.nodes
+        edges = self.edges
+
+        points = nodes[["x", "y", "z"]].values.astype(float)
+
+        iloc_map = dict(zip(nodes.index.values, range(len(nodes))))
+        iloc_edges = edges[["source", "target"]].applymap(lambda x: iloc_map[x])
+
+        lines = np.empty((len(edges), 3), dtype=int)
+        lines[:, 0] = 2
+        lines[:, 1:3] = iloc_edges[["source", "target"]].values
+
+        skeleton = pv.PolyData(points, lines=lines)
+
+        if label is not None:
+            skeleton[label] = nodes[label].values
+
+        return skeleton
+
+    def to_edit_polydata(self) -> pv.PolyData:
+        changed_nodes = self.nodes.query("operation_added != -1")
+        merges = changed_nodes[
+            changed_nodes["operation_added"].isin(self.edits.query("is_merge").index)
+        ]
+        splits = changed_nodes[
+            changed_nodes["operation_added"].isin(self.edits.query("~is_merge").index)
+        ]
+        merge_poly = pv.PolyData(merges[["x", "y", "z"]].values.astype(float))
+
+        split_poly = pv.PolyData(splits[["x", "y", "z"]].values.astype(float))
+
+        return merge_poly, split_poly
 
 
 def random_rgb():

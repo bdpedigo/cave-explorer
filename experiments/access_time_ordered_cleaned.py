@@ -95,6 +95,20 @@ root_id = query_neurons["pt_root_id"].values[5]
 
 full_neuron = load_neuronframe(root_id, client)
 
+# %%
+
+skeleton_poly = full_neuron.to_skeleton_polydata()
+
+import pyvista as pv
+
+pv.set_jupyter_backend("client")
+pl = pv.Plotter()
+pl.add_mesh(skeleton_poly, color="black", line_width=1)
+pl.show()
+
+
+# %%
+
 if prefix == "meta":
     edits = full_neuron.metaedits
 else:
@@ -121,6 +135,22 @@ neurons = {}
 resolved_synapses = {}
 applied_merges = []
 
+plotter = pv.Plotter(window_size=([1920, 1080]))
+
+# Open a gif
+plotter.open_gif("edits.gif", fps=20)
+
+# plotter.camera_position = "xy"
+# plotter.camera.elevation = 20
+
+# camera = pv.Camera()
+# loc = full_neuron.nodes.loc[full_neuron.nucleus_id, ["x", "y", "z"]].values
+# camera.focal_point = loc
+# camera.position = loc + [10_000, 10_000, 0]
+# plotter.camera = camera
+
+#
+# pl.camera_position = "xy"
 
 for i in tqdm(
     range(len(merge_op_ids) + 1), desc="Applying edits and resolving synapses..."
@@ -138,6 +168,24 @@ for i in tqdm(
         i,
     )
 
+    # TODO there might be a smarter way to do this with masking, but this seems fast
+    actor = plotter.add_mesh(
+        current_neuron.to_skeleton_polydata(), color="black", line_width=1
+    )
+    merge_poly, split_poly = current_neuron.to_edit_polydata()
+    merge_actor = plotter.add_mesh(merge_poly, color="purple", point_size=4)
+    split_actor = plotter.add_mesh(split_poly, color="red", point_size=4)
+
+    for i in range(20):
+        plotter.camera.azimuth += 1
+        plotter.write_frame()
+
+    plotter.remove_actor(actor)
+    plotter.remove_actor(merge_actor)
+    plotter.remove_actor(split_actor)
+
+    
+
     # TODO write this in a way where this part can be swapped in and out
     more_operations = select_next_operation(
         full_neuron, current_neuron, applied_op_ids, merge_op_ids
@@ -145,6 +193,9 @@ for i in tqdm(
     if not more_operations:
         break
 
+# print(pl.camera_position)
+
+plotter.close()
 
 print(f"No remaining merges, stopping ({i / len(merge_op_ids):.2f})")
 

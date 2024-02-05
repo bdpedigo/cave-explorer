@@ -300,11 +300,30 @@ pl.add_mesh(
 pl.add_mesh(merge_poly, color=colors[8], point_size=3, lighting=False)
 pl.add_mesh(split_poly, color=colors[6], point_size=3, lighting=False)
 
-# p.camera.zoom(1.5)
-path = pl.generate_orbital_path(
-    n_points=240, viewup=[0, -1, 0]
-)
+path = pl.generate_orbital_path(n_points=240, viewup=[0, -1, 0])
 pl.remove_scalar_bar()
-pl.open_gif("orbit2.gif",fps=30)
+pl.open_gif("orbit2.gif", fps=30)
 pl.orbit_on_path(path, write_frames=True, viewup=[0, -1, 0], step=0.1)
 pl.close()
+
+# %%
+pl = pv.Plotter()
+
+l2graph_poly = pv.PolyData(points, lines=lines)
+l2graph_poly["compartment"] = labels.codes
+
+l2graph_poly.cast_to_unstructured_grid()
+
+axon_nodes = nodes.query("compartment == 'axon'").index
+
+axon_edge = edges.query("source in @axon_nodes or target in @axon_nodes")
+
+mask = edges.index.isin(axon_edge.index)
+
+l2graph_poly.remove_cells(mask, inplace=True)
+
+pl.add_mesh(l2graph_poly, cmap=cmap, line_width=2, scalars="compartment")
+
+pl.show()
+
+#%%
