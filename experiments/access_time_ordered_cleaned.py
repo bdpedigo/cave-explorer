@@ -37,8 +37,9 @@ def apply_operations(
     current_neuron = full_neuron.set_edits(applied_op_ids, inplace=False, prefix=prefix)
 
     if full_neuron.nucleus_id in current_neuron.nodes.index:
-        current_neuron.select_nucleus_component(inplace=True, directed=False)
+        current_neuron.select_nucleus_component(inplace=True)
     else:
+        print("WARNING: Using closest point to nucleus...")
         point_id = find_closest_point(
             current_neuron.nodes,
             full_neuron.nodes.loc[full_neuron.nucleus_id, ["x", "y", "z"]],
@@ -98,7 +99,7 @@ completes_neuron = False
 
 ctype_hues = load_casey_palette()
 
-root_id = query_neurons["pt_root_id"].values[2]
+root_id = query_neurons["pt_root_id"].values[1]
 
 full_neuron = load_neuronframe(root_id, client)
 
@@ -117,11 +118,10 @@ nuc_loc = full_neuron.nodes.loc[full_neuron.nucleus_id, ["x", "y", "z"]].values
 pl.camera_position = "zx"
 
 setback = -2_000_000
-
 pl.camera.focal_point = nuc_loc
 pl.camera.position = nuc_loc + np.array([0, 0, setback])
 pl.camera.up = (0, -1, 0)
-pl.camera.azimuth += 2
+pl.camera.azimuth += 200
 
 pl.add_mesh(skeleton_poly, color="black", line_width=1)
 
@@ -131,7 +131,6 @@ pl.add_mesh(skeleton_poly, color="black", line_width=1)
 # pl.camera.elevation = 45
 # pl.camera.view_angle = 0
 
-radius = 100_000
 
 pl.show()
 
@@ -142,7 +141,8 @@ edits = full_neuron.edits
 edits.sort_values("time", inplace=True)
 
 fps = 20
-window_size = (1920, 1080)
+# window_size = (1920, 1080)
+window_size = None
 n_rotation_steps = 5
 azimuth_step_size = 1
 
@@ -161,19 +161,24 @@ plotter.open_gif(
     str(FIG_PATH / "animations" / f"all_edits-root_id={root_id}.gif"), fps=fps
 )
 
-setback = 2_000_000
+setback = -2_000_000
 nuc_loc = full_neuron.nodes.loc[full_neuron.nucleus_id, ["x", "y", "z"]].values
-# plotter.camera_position = "zx"
+# print(plotter.camera_position)
+
+skeleton_poly = full_neuron.to_skeleton_polydata()
+skeleton_actor = plotter.add_mesh(skeleton_poly, color="black", line_width=0.1)
+plotter.camera_position = "zx"
 plotter.camera.focal_point = nuc_loc
 plotter.camera.position = nuc_loc + np.array([0, 0, setback])
 plotter.camera.up = (0, -1, 0)
-# print(plotter.camera_position)
+
+plotter.remove_actor(skeleton_actor)
 
 last_nodes = pd.DataFrame()
 
 actors_remove_queue = []
 
-for i in tqdm(range(len(edits[:10])), desc="Applying edits..."):
+for i in tqdm(range(len(edits[:])), desc="Applying edits..."):
     current_neuron = full_neuron.set_edits(edits.index[:i], inplace=False, prefix="")
 
     # point_id = find_closest_point(
@@ -186,7 +191,6 @@ for i in tqdm(range(len(edits[:10])), desc="Applying edits..."):
 
     skeleton_poly = current_neuron.to_skeleton_polydata()
     skeleton_actor = plotter.add_mesh(skeleton_poly, color="black", line_width=1)
-    print(plotter.camera_position)
 
     highlight = current_neuron.nodes.index.difference(last_nodes.index)
     if len(highlight) > 0:
@@ -220,7 +224,6 @@ for i in tqdm(range(len(edits[:10])), desc="Applying edits..."):
     for _ in range(n_rotation_steps):
         plotter.camera.azimuth += azimuth_step_size
         plotter.write_frame()
-        print(plotter.camera_position)
 
     plotter.remove_actor(time_actor)
 
@@ -236,8 +239,6 @@ for i in tqdm(range(len(edits[:10])), desc="Applying edits..."):
         plotter.remove_actor(split_actor)
 
     last_nodes = current_neuron.nodes
-    
-plotter.show()
 
 print("Closing gif...")
 plotter.close()

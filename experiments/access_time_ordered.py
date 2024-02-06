@@ -72,7 +72,7 @@ for i, root_id in enumerate(query_neurons["pt_root_id"].values[:20]):
         )
 
         if full_neuron.nucleus_id in current_neuron.nodes.index:
-            current_neuron.select_nucleus_component(inplace=True, directed=False)
+            current_neuron.select_nucleus_component(inplace=True)
         else:
             point_id = find_closest_point(
                 current_neuron.nodes,
