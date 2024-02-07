@@ -142,31 +142,6 @@ animate_neuron_edit_sequence(
 )
 
 # %%
-import numpy as np
-
-isinstance(operation_id, np.integer)
-
-# %%
-neuron_sequence.edit_ids_added
-
-neuron_sequence.applied_edit_history
-
-neuron_sequence.resolved_synapses
-
-# %%
-neuron_sequence.sequence_info
-
-# %%
-from pkg.plot import animate_neuron_edit_sequence
-
-path = str(FIG_PATH / "animations" / f"all_edits_by_time-root_id={root_id}.gif")
-
-animate_neuron_edit_sequence(
-    path, neuron_sequence.unresolved_sequence, n_rotation_steps=2
-)
-
-
-# %%
 
 if prefix == "meta":
     edits = full_neuron.metaedits
