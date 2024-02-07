@@ -1,4 +1,6 @@
 # %%
+
+# %%
 import os
 
 os.environ["LAZYCLOUD_USE_CLOUD"] = "True"
@@ -15,7 +17,11 @@ from scipy.spatial.distance import cdist
 from tqdm.auto import tqdm
 
 from pkg.edits import count_synapses_by_sample
-from pkg.neuronframe import load_neuronframe, verify_neuron_matches_final
+from pkg.neuronframe import (
+    NeuronFrameSequence,
+    load_neuronframe,
+    verify_neuron_matches_final,
+)
 from pkg.paths import FIG_PATH, OUT_PATH
 from pkg.plot import savefig
 from pkg.utils import find_closest_point, load_casey_palette, load_mtypes
@@ -98,9 +104,66 @@ completes_neuron = False
 
 ctype_hues = load_casey_palette()
 
-root_id = query_neurons["pt_root_id"].values[1]
+root_id = query_neurons["pt_root_id"].values[8]
 
 full_neuron = load_neuronframe(root_id, client)
+
+# %%
+
+neuron_sequence = NeuronFrameSequence(
+    full_neuron, prefix="", edit_label_name="operation_id"
+)
+neuron_sequence.edits = neuron_sequence.edits.sort_values("time")
+
+for i in tqdm(range(len(neuron_sequence.edits))):
+    operation_id = neuron_sequence.edits.index[i]
+    neuron_sequence.apply_edits(operation_id)
+
+# %%
+used_nodes = pd.Index([])
+
+for edit_id, neuron in neuron_sequence.resolved_sequence.items():
+    used_nodes = used_nodes.union(neuron.nodes.index)
+
+# %%
+new_sequence = {}
+for key, neuron in neuron_sequence.unresolved_sequence.items():
+    new_neuron = neuron.query_nodes("index.isin(@used_nodes)", local_dict=locals())
+    new_sequence[key] = new_neuron
+
+# %%
+
+from pkg.plot import animate_neuron_edit_sequence
+
+path = str(FIG_PATH / "animations" / f"all_edits_by_time-root_id={root_id}.gif")
+
+animate_neuron_edit_sequence(
+    path, neuron_sequence.resolved_sequence, n_rotation_steps=5
+)
+
+# %%
+import numpy as np
+
+isinstance(operation_id, np.integer)
+
+# %%
+neuron_sequence.edit_ids_added
+
+neuron_sequence.applied_edit_history
+
+neuron_sequence.resolved_synapses
+
+# %%
+neuron_sequence.sequence_info
+
+# %%
+from pkg.plot import animate_neuron_edit_sequence
+
+path = str(FIG_PATH / "animations" / f"all_edits_by_time-root_id={root_id}.gif")
+
+animate_neuron_edit_sequence(
+    path, neuron_sequence.unresolved_sequence, n_rotation_steps=2
+)
 
 
 # %%

@@ -52,9 +52,10 @@ def animate_neuron_edit_sequence(
     # remove dummy skeleton
     plotter.remove_actor(skeleton_actor)
 
-    last_nodes = next(iter(neurons.values())).nodes
-    actors_remove_queue = []
-    for sample_id, neuron in tqdm(neurons.items(), desc="Writing frames..."):
+    last_neuron = next(iter(neurons.values()))
+    merge_remove_queue = []
+    split_remove_queue = []
+    for i, (sample_id, neuron) in enumerate(tqdm(neurons.items(), desc="Writing frames...")):
         # NOTE: there might be a smarter way to do this with masking, but this seems fast
         skeleton_actor = plotter.add_mesh(
             neuron.to_skeleton_polydata(), color="black", line_width=1
@@ -70,10 +71,10 @@ def animate_neuron_edit_sequence(
                 split_poly, color=split_color, point_size=edit_point_size
             )
 
-        highlight = neuron.nodes.index.difference(last_nodes.index)
-        if len(highlight) > 0:
+        merge_highlight = neuron.nodes.index.difference(last_neuron.nodes.index)
+        if len(merge_highlight) > 0:
             highlight_poly = neuron.query_nodes(
-                "index.isin(@highlight)", local_dict=locals()
+                "index.isin(@merge_highlight)", local_dict=locals()
             ).to_skeleton_polydata()
             highlight_actor = plotter.add_mesh(
                 highlight_poly,
@@ -81,20 +82,45 @@ def animate_neuron_edit_sequence(
                 point_size=edit_point_size,
                 line_width=3,
             )
-            actors_remove_queue.append((highlight_actor,))
+            merge_remove_queue.append((highlight_actor,))
+        else: 
+            merge_remove_queue.append(())
+
+        split_highlight = last_neuron.nodes.index.difference(neuron.nodes.index)
+        if len(split_highlight) > 0:
+            highlight_poly = last_neuron.query_nodes(
+                "index.isin(@split_highlight)", local_dict=locals()
+            ).to_skeleton_polydata()
+            highlight_actor = plotter.add_mesh(
+                highlight_poly,
+                color=split_color,
+                point_size=edit_point_size,
+                line_width=3,
+            )
+            split_remove_queue.append((highlight_actor,))
+        else: 
+            split_remove_queue.append(())
 
         for _ in range(n_rotation_steps):
             plotter.camera.azimuth += azimuth_step_size
             plotter.write_frame()
 
-        if len(actors_remove_queue) > highlight_last:
-            for actor in actors_remove_queue.pop(0):
+
+        if len(merge_remove_queue) > highlight_last:
+            for actor in merge_remove_queue.pop(0):
                 plotter.remove_actor(actor)
-        last_nodes = neuron.nodes
+        if len(split_remove_queue) > highlight_last:
+            for actor in split_remove_queue.pop(0):
+                plotter.remove_actor(actor)
+
+        last_neuron = neuron
 
         plotter.remove_actor(skeleton_actor)
-        plotter.remove_actor(merge_actor)
-        plotter.remove_actor(split_actor)
+
+        if len(merge_poly.points) > 0:
+            plotter.remove_actor(merge_actor)
+        if len(split_poly.points) > 0:
+            plotter.remove_actor(split_actor)
 
     print("Closing gif...")
     plotter.close()
