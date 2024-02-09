@@ -7,6 +7,8 @@ import pandas as pd
 import pyvista as pv
 from networkframe import NetworkFrame
 
+from ..plot import set_up_camera
+
 
 class NeuronFrame(NetworkFrame):
     def __init__(
@@ -380,7 +382,7 @@ class NeuronFrame(NetworkFrame):
 
         groups = within_edges.groupby(f"source_{key}")
         # colors = sns.color_palette("husl", n_colors=len(groups.groups)).as_hex()
-        colors = [random_hex() for _ in range(len(groups.groups))]
+        colors = [_random_hex() for _ in range(len(groups.groups))]
         print(len(groups.groups))
         for i, (group_label, within_group) in enumerate(groups):
             line_mapper = statebuilder.LineMapper(
@@ -465,12 +467,7 @@ class NeuronFrame(NetworkFrame):
 
         points = nodes[["x", "y", "z"]].values.astype(float)
 
-        iloc_map = dict(zip(nodes.index.values, range(len(nodes))))
-        iloc_edges = edges[["source", "target"]].applymap(lambda x: iloc_map[x])
-
-        lines = np.empty((len(edges), 3), dtype=int)
-        lines[:, 0] = 2
-        lines[:, 1:3] = iloc_edges[["source", "target"]].values
+        lines = _edges_to_lines(nodes, edges)
 
         skeleton = pv.PolyData(points, lines=lines)
 
@@ -479,24 +476,78 @@ class NeuronFrame(NetworkFrame):
 
         return skeleton
 
-    def to_edit_polydata(self) -> pv.PolyData:
-        changed_nodes = self.nodes.query("operation_added != -1")
-        merges = changed_nodes[
-            changed_nodes["operation_added"].isin(self.edits.query("is_merge").index)
-        ]
-        splits = changed_nodes[
-            changed_nodes["operation_added"].isin(self.edits.query("~is_merge").index)
-        ]
-        merge_poly = pv.PolyData(merges[["x", "y", "z"]].values.astype(float))
+    def to_merge_polydata(self, draw_edges=False) -> pv.PolyData:
+        merge_ids = self.edits.query("is_merge").index
+        merge_nodes = self.nodes.query(
+            "(operation_added in @merge_ids) and (operation_added != -1)"
+        )
+        points = merge_nodes[["x", "y", "z"]].values.astype(float)
 
-        split_poly = pv.PolyData(splits[["x", "y", "z"]].values.astype(float))
+        if draw_edges:
+            merge_edges = self.edges.query("operation_added.isin(@merge_ids)")
+            merge_edges = merge_edges.query(
+                "source in @merge_nodes.index and target in @merge_nodes.index"
+            )
+            lines = _edges_to_lines(merge_nodes, merge_edges)
+        else:
+            lines = None
 
-        return merge_poly, split_poly
+        merge_poly = pv.PolyData(points, lines=lines)
+
+        return merge_poly
+
+    def to_split_polydata(self, draw_edges=False) -> pv.PolyData:
+        split_ids = self.edits.query("~is_merge").index
+        split_nodes = self.nodes.query(
+            "(operation_added in @split_ids) and (operation_added != -1)"
+        )
+        points = split_nodes[["x", "y", "z"]].values.astype(float)
+
+        if draw_edges:
+            split_edges = self.edges.query("operation_added.isin(@split_ids)")
+            split_edges = split_edges.query(
+                "source in @split_nodes.index and target in @split_nodes.index"
+            )
+            lines = _edges_to_lines(split_nodes, split_edges)
+        else:
+            lines = None
+
+        split_poly = pv.PolyData(points, lines=lines)
+
+        return split_poly
+
+    def plot_pyvista(self):
+        plotter = pv.Plotter()
+        set_up_camera(plotter, self)
+        plotter.add_mesh(self.to_skeleton_polydata(), color="black", line_width=0.1)
+        merge_poly_points = self.to_merge_polydata(draw_edges=False)
+        merge_poly_lines = self.to_merge_polydata(draw_edges=True)
+        if len(merge_poly_points.points) > 0:
+            plotter.add_mesh(merge_poly_points, color="purple", point_size=5)
+            plotter.add_mesh(merge_poly_lines, color="purple", line_width=5)
+        split_poly_points = self.to_split_polydata(draw_edges=False)
+        split_poly_lines = self.to_split_polydata(draw_edges=True)
+        if len(split_poly_points.points) > 0:
+            plotter.add_mesh(split_poly_points, color="red", point_size=5, line_width=5)
+            plotter.add_mesh(split_poly_lines, color="red", point_size=5, line_width=5)
+        plotter.enable_fly_to_right_click(callback=None)
+        plotter.show()
 
 
-def random_rgb():
+def _random_rgb():
     return tuple(random.randint(0, 255) for _ in range(3))
 
 
-def random_hex():
-    return "#%02X%02X%02X" % random_rgb()
+def _random_hex():
+    return "#%02X%02X%02X" % _random_rgb()
+
+
+def _edges_to_lines(nodes, edges):
+    iloc_map = dict(zip(nodes.index.values, range(len(nodes))))
+    iloc_edges = edges[["source", "target"]].applymap(lambda x: iloc_map[x])
+
+    lines = np.empty((len(edges), 3), dtype=int)
+    lines[:, 0] = 2
+    lines[:, 1:3] = iloc_edges[["source", "target"]].values
+
+    return lines

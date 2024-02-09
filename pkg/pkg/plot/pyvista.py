@@ -16,6 +16,21 @@ UP_MAP = {
 }
 
 
+def set_up_camera(
+    plotter: pv.Plotter,
+    neuron,
+    setback: Union[float, int] = -2_000_000,
+    elevation: Union[float, int] = 25,
+    up: Literal["x", "y", "z", "-x", "-y", "-z"] = "-y",
+):
+    nuc_loc = neuron.nodes.loc[neuron.nucleus_id, ["x", "y", "z"]].values
+    plotter.camera_position = "zx"
+    plotter.camera.focal_point = nuc_loc
+    plotter.camera.position = nuc_loc + np.array([0, 0, setback])
+    plotter.camera.up = UP_MAP[up]
+    plotter.camera.elevation = elevation
+
+
 @beartype
 def animate_neuron_edit_sequence(
     path: Union[str, Path],
@@ -23,10 +38,10 @@ def animate_neuron_edit_sequence(
     fps: int = 20,
     window_size: Optional[tuple] = None,
     n_rotation_steps: int = 20,
-    azimuth_step_size: float = 1,
-    setback: float = -2_000_000,
+    azimuth_step_size: Union[float, int] = 1,
+    setback: Union[float, int] = -2_000_000,
     highlight_last: int = 2,
-    elevation: float = 25,
+    elevation: Union[float, int] = 25,
     up: Literal["x", "y", "z", "-x", "-y", "-z"] = "-y",
     merge_color: str = "purple",
     split_color: str = "red",
@@ -55,17 +70,20 @@ def animate_neuron_edit_sequence(
     last_neuron = next(iter(neurons.values()))
     merge_remove_queue = []
     split_remove_queue = []
-    for i, (sample_id, neuron) in enumerate(tqdm(neurons.items(), desc="Writing frames...")):
+    for i, (sample_id, neuron) in enumerate(
+        tqdm(neurons.items(), desc="Writing frames...")
+    ):
         # NOTE: there might be a smarter way to do this with masking, but this seems fast
         skeleton_actor = plotter.add_mesh(
             neuron.to_skeleton_polydata(), color="black", line_width=1
         )
 
-        merge_poly, split_poly = neuron.to_edit_polydata()
+        merge_poly = neuron.to_merge_polydata()
         if len(merge_poly.points) > 0:
             merge_actor = plotter.add_mesh(
                 merge_poly, color=merge_color, point_size=edit_point_size
             )
+        split_poly = neuron.to_split_polydata()
         if len(split_poly.points) > 0:
             split_actor = plotter.add_mesh(
                 split_poly, color=split_color, point_size=edit_point_size
@@ -83,7 +101,7 @@ def animate_neuron_edit_sequence(
                 line_width=3,
             )
             merge_remove_queue.append((highlight_actor,))
-        else: 
+        else:
             merge_remove_queue.append(())
 
         split_highlight = last_neuron.nodes.index.difference(neuron.nodes.index)
@@ -98,13 +116,12 @@ def animate_neuron_edit_sequence(
                 line_width=3,
             )
             split_remove_queue.append((highlight_actor,))
-        else: 
+        else:
             split_remove_queue.append(())
 
         for _ in range(n_rotation_steps):
             plotter.camera.azimuth += azimuth_step_size
             plotter.write_frame()
-
 
         if len(merge_remove_queue) > highlight_last:
             for actor in merge_remove_queue.pop(0):
