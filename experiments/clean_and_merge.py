@@ -74,7 +74,7 @@ completes_neuron = False
 
 ctype_hues = load_casey_palette()
 
-root_id = query_neurons["pt_root_id"].values[13]
+root_id = query_neurons["pt_root_id"].values[14]
 
 full_neuron = load_neuronframe(root_id, client)
 
@@ -90,7 +90,7 @@ for i in tqdm(range(len(edits))):
     operation_id = neuron_sequence.edits.index[i]
     neuron_sequence.apply_edits(operation_id)
 
-#%%
+# %%
 neuron_sequence.is_completed
 
 # %%
@@ -104,43 +104,16 @@ animate_neuron_edit_sequence(
 # %%
 
 
-def select_next_operation(full_neuron, current_neuron, applied_op_ids, possible_op_ids):
-    # select the next operation to apply
-    # this looks at all of the edges that are connected to the current neuron
-    # and then finds the set of operations that are "touched" by this one
-    # then it selects the first one of those that hasn't been applied yet, in time
-    # order
-    out_edges = full_neuron.edges.query(
-        "source.isin(@current_neuron.nodes.index) | target.isin(@current_neuron.nodes.index)"
-    )
-    out_edges = out_edges.drop(current_neuron.edges.index)
-
-    candidate_operations = out_edges[operation_key].unique()
-
-    # TODO this is hard coded
-    ordered_ops = possible_op_ids[possible_op_ids.isin(candidate_operations)]
-
-    # HACK?
-    # TODO should this be applied merges, or applied ops?
-    ordered_ops = ordered_ops[~ordered_ops.isin(applied_merges)]
-
-    if len(ordered_ops) == 0:
-        return False
-    else:
-        applied_op_ids.append(ordered_ops[0])
-        applied_merges.append(ordered_ops[0])
-        return True
-
-
 # from the current available operations, apply all splits,
 # then apply the soonest merge
 # then see if we can apply any more splits (recurse here)
+prefix = "meta"
 neuron_sequence = NeuronFrameSequence(
-    full_neuron, prefix="", edit_label_name="operation_id"
+    full_neuron, prefix=prefix, edit_label_name="metaoperation_id"
 )
-neuron_sequence.edits = neuron_sequence.edits.sort_values(["is_merge", "time"])
+# neuron_sequence.edits = neuron_sequence.edits.sort_values(["has_merge", "time"])
 
-edits = neuron_sequence.edits
+edits = neuron_sequence.edits.sort_values(["has_merge", "time"])
 
 added_key = f"{prefix}operation_added"
 removed_key = f"{prefix}operation_removed"
@@ -150,6 +123,9 @@ include_removed = False
 
 i = 0
 next_operation = True
+from tqdm.auto import tqdm
+
+pbar = tqdm(total=len(edits), desc="Applying edits...")
 while next_operation is not None:
     current_neuron = neuron_sequence.current_resolved_neuron
     full_neuron = neuron_sequence.base_neuron
@@ -197,12 +173,13 @@ while next_operation is not None:
         neuron_sequence.apply_edits(next_operation, label=i)
 
     i += 1
+    pbar.update(1)
+
+pbar.close()
+
 
 # %%
-neuron_sequence.final_neuron
-
-# %%
-neuron_sequence.current_resolved_neuron
+neuron_sequence.is_completed
 
 # %%
 

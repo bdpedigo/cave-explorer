@@ -66,10 +66,10 @@ class NeuronFrameSequence:
 
         return edits
 
-    @beartype
-    @edits.setter
-    def edits(self, edits: pd.DataFrame):
-        self.base_neuron.edits = edits
+    # @beartype
+    # @edits.setter
+    # def edits(self, edits: pd.DataFrame):
+    #     self.base_neuron.edits = edits
 
     @property
     def split_edits(self) -> pd.DataFrame:
