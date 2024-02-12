@@ -18,7 +18,6 @@ from pkg.edits import count_synapses_by_sample
 from pkg.neuronframe import (
     NeuronFrameSequence,
     load_neuronframe,
-    verify_neuron_matches_final,
 )
 from pkg.paths import FIG_PATH, OUT_PATH
 from pkg.plot import animate_neuron_edit_sequence, savefig
@@ -111,7 +110,6 @@ prefix = "meta"
 neuron_sequence = NeuronFrameSequence(
     full_neuron, prefix=prefix, edit_label_name="metaoperation_id"
 )
-# neuron_sequence.edits = neuron_sequence.edits.sort_values(["has_merge", "time"])
 
 edits = neuron_sequence.edits.sort_values(["has_merge", "time"])
 
@@ -123,7 +121,6 @@ include_removed = False
 
 i = 0
 next_operation = True
-from tqdm.auto import tqdm
 
 pbar = tqdm(total=len(edits), desc="Applying edits...")
 while next_operation is not None:
@@ -145,10 +142,7 @@ while next_operation is not None:
     possible_edit_ids = neuron_sequence.unapplied_edits.index.intersection(
         internal_edit_ids, sort=False
     )
-    # )
     n_possible_internal = len(possible_edit_ids)
-    # if n_internal != n_possible_internal:
-    #     print(f"WARNING: {n_internal - n_possible_internal} internal edits are missing")
 
     # if no internal operations, find an external one
     if n_possible_internal == 0:
@@ -166,9 +160,6 @@ while next_operation is not None:
         print("No possible operations to apply")
         next_operation = None
     else:
-        # print(f"Possible operations to apply: {possible_edit_ids}")
-        # print(f"Applying operation: {possible_edit_ids[0]}")
-        # print(f"Operation is merge: {edits.loc[possible_edit_ids[0], 'is_merge']}")
         next_operation = possible_edit_ids[0]
         neuron_sequence.apply_edits(next_operation, label=i)
 
@@ -179,111 +170,36 @@ pbar.close()
 
 
 # %%
-neuron_sequence.is_completed
+if neuron_sequence.is_completed:
+    print("Neuron is completed")
+else:
+    print("Neuron is not completed")
+    current = neuron_sequence.current_resolved_neuron
+    final = neuron_sequence.final_neuron
+    print(current.node_agreement(final), "current nodes in final.")
+    print(final.node_agreement(current), "final nodes in current.")
+
 
 # %%
 
-path = str(FIG_PATH / "animations" / f"all_edits_by_access-root_id={root_id}.gif")
+path = str(
+    FIG_PATH
+    / "animations"
+    / f"all_edits_by_access-prefix={prefix}-root_id={root_id}.gif"
+)
 
 animate_neuron_edit_sequence(
     path, neuron_sequence.resolved_sequence, n_rotation_steps=5, setback=-3_000_000
 )
 
-# neuron_sequence.current_resolved_neuron.plot_pyvista()
-# %%
-# if n_possible_internal == 0:
-# now find the next merge to apply, basically
+#%%
+neuron_sequence.sequence_info
 
-# # TODO this is hard coded
-# ordered_ops = possible_op_ids[possible_op_ids.isin(candidate_operations)]
+#%%
+neuron_sequence.new_sequence_info
 
-# # HACK?
-# # TODO should this be applied merges, or applied ops?
-# ordered_ops = ordered_ops[~ordered_ops.isin(applied_merges)]
-
-# %%
-plotter = pv.Plotter()
-
-skeleton = full_neuron.to_skeleton_polydata()
-plotter.add_mesh(skeleton, color="black", line_width=1)
-merge_poly = full_neuron.to_merge_polydata()
-if len(merge_poly.points) > 0:
-    plotter.add_mesh(merge_poly, color="purple", line_width=5)
-
-plotter.show()
-
-# %%
-current_neuron.to_edit_polydata()
-
-# %%
-
-if prefix == "meta":
-    edits = full_neuron.metaedits
-else:
-    edits = full_neuron.edits
-    edits["has_split"] = ~edits["is_merge"]
-    edits["has_merge"] = edits["is_merge"]
-
-edits = edits.sort_values("time")
-# edits["any_merge"] = edits["is_merges"].apply(any)
-
-split_metaedits = edits.query("has_split")
-merge_metaedits = edits.query("has_merge")
-merge_op_ids = merge_metaedits.index
-split_op_ids = split_metaedits.index
-applied_op_ids = list(split_op_ids)
-
-# edge case where the neuron's ultimate soma location is itself a merge node
-operation_key = f"{prefix}operation_added"
-if full_neuron.nodes.loc[full_neuron.nucleus_id, operation_key] != -1:
-    applied_op_ids.append(full_neuron.nodes.loc[full_neuron.nucleus_id, operation_key])
-
-
-neurons = {}
-resolved_synapses = {}
-applied_merges = []
-
-
-for i in tqdm(
-    range(len(merge_op_ids) + 1), desc="Applying edits and resolving synapses..."
-):
-    # TODO consider doing this in a way such that I can keep track of how many different
-    # split edits are applied with each merge
-    # i think this would just mean recursively adding the split edits if available, and
-    # then keeping track of merges when they pop up.
-    current_neuron = apply_operations(
-        full_neuron,
-        applied_op_ids,
-        resolved_synapses,
-        neurons,
-        operation_key,
-        i,
-    )
-
-    # TODO write this in a way where this part can be swapped in and out
-    more_operations = select_next_operation(
-        full_neuron, current_neuron, applied_op_ids, merge_op_ids
-    )
-    if not more_operations:
-        break
-
-# print(pl.camera_position)
-
-
-print(f"No remaining merges, stopping ({i / len(merge_op_ids):.2f})")
-
-resolved_synapses = pd.DataFrame(resolved_synapses).T
-
-if completes_neuron:
-    verify_neuron_matches_final(full_neuron, current_neuron)
-
-# %%
-path = str(FIG_PATH / "animations" / f"edits-root_id={root_id}.gif")
-
-from pkg.plot import animate_neuron_edit_sequence
-
-animate_neuron_edit_sequence(path, neurons)
-
+#%%
+neuron_sequence.sequence_info.equals(neuron_sequence.new_sequence_info)
 
 # %%
 def compute_synapse_metrics(

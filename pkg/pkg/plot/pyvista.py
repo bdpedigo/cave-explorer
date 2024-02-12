@@ -3,7 +3,6 @@ from typing import Literal, Optional, Union
 
 import numpy as np
 import pyvista as pv
-from beartype import beartype
 from tqdm.auto import tqdm
 
 UP_MAP = {
@@ -31,7 +30,6 @@ def set_up_camera(
     plotter.camera.elevation = elevation
 
 
-@beartype
 def animate_neuron_edit_sequence(
     path: Union[str, Path],
     neurons: dict,
@@ -43,7 +41,7 @@ def animate_neuron_edit_sequence(
     highlight_last: int = 2,
     elevation: Union[float, int] = 25,
     up: Literal["x", "y", "z", "-x", "-y", "-z"] = "-y",
-    merge_color: str = "purple",
+    merge_color: str = "blue",
     split_color: str = "red",
     edit_point_size: float = 4,
 ):

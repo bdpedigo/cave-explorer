@@ -520,16 +520,19 @@ class NeuronFrame(NetworkFrame):
         plotter = pv.Plotter()
         set_up_camera(plotter, self)
         plotter.add_mesh(self.to_skeleton_polydata(), color="black", line_width=0.1)
+
         merge_poly_points = self.to_merge_polydata(draw_edges=False)
         merge_poly_lines = self.to_merge_polydata(draw_edges=True)
         if len(merge_poly_points.points) > 0:
-            plotter.add_mesh(merge_poly_points, color="purple", point_size=5)
-            plotter.add_mesh(merge_poly_lines, color="purple", line_width=5)
+            plotter.add_mesh(merge_poly_points, color="blue", point_size=5)
+            plotter.add_mesh(merge_poly_lines, color="blue", line_width=5)
+
         split_poly_points = self.to_split_polydata(draw_edges=False)
         split_poly_lines = self.to_split_polydata(draw_edges=True)
         if len(split_poly_points.points) > 0:
             plotter.add_mesh(split_poly_points, color="red", point_size=5, line_width=5)
             plotter.add_mesh(split_poly_lines, color="red", point_size=5, line_width=5)
+
         plotter.enable_fly_to_right_click(callback=None)
         plotter.show()
 
