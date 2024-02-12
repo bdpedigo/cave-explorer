@@ -165,6 +165,9 @@ class NeuronFrame(NetworkFrame):
         metaoperation_stats["has_split"] = metaoperation_stats["is_merges"].apply(
             lambda x: not all(x)
         )
+        metaoperation_stats["n_operations"] = metaoperation_stats[
+            "operation_ids"
+        ].apply(len)
         return metaoperation_stats
 
     def set_edits(self, edit_ids: Union[list[int], int], inplace=False, prefix=""):
@@ -535,6 +538,41 @@ class NeuronFrame(NetworkFrame):
 
         plotter.enable_fly_to_right_click(callback=None)
         plotter.show()
+
+    def apply_edge_lengths(self, inplace=False):
+        sources = self.edges["source"]
+        targets = self.edges["target"]
+        source_pos = self.nodes.loc[sources, ["x", "y", "z"]].values
+        target_pos = self.nodes.loc[targets, ["x", "y", "z"]].values
+        edge_lengths = np.linalg.norm(source_pos - target_pos, axis=1)
+        if inplace:
+            self.edges["length"] = edge_lengths
+        else:
+            new_edges = self.edges.copy()
+            new_edges["length"] = edge_lengths
+            return self._return(edges=new_edges)
+
+    # @property
+    # def path_length(self):
+    #     cols = ["source_x", "source_y", "source_z", "target_x", "target_y", "target_z"]
+    #     if not np.isin(cols, self.edges.columns).all():
+    #         edges = self.apply_node_features(["x", "y", "z"], inplace=False).edges
+    #     else:
+    #         edges = self.edges
+    #     source_cols = cols[:3]
+    #     target_cols = cols[3:]
+    #     edge_lengths = np.linalg.norm(
+    #         edges[source_cols].values - edges[target_cols].values, axis=1
+    #     )
+    #     return edge_lengths.sum()
+
+    @property
+    def path_length(self):
+        if not np.isin(["length"], self.edges.columns).all():
+            edges = self.apply_edge_lengths(inplace=False).edges
+        else:
+            edges = self.edges
+        return edges["length"].sum()
 
 
 def _random_rgb():

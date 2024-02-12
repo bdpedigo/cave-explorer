@@ -77,4 +77,6 @@ def load_neuronframe(root_id: int, client: cc.CAVEclient):
         post_synapses=post_synapses,
         edits=edit_stats,
     )
+    
+
     return full_neuron

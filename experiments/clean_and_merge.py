@@ -14,7 +14,6 @@ import seaborn as sns
 from scipy.spatial.distance import cdist
 from tqdm.auto import tqdm
 
-from pkg.edits import count_synapses_by_sample
 from pkg.neuronframe import (
     NeuronFrameSequence,
     load_neuronframe,
@@ -77,6 +76,16 @@ root_id = query_neurons["pt_root_id"].values[14]
 
 full_neuron = load_neuronframe(root_id, client)
 
+# TODO put this in the lazy loader when running the full thing
+full_neuron.apply_edge_lengths(inplace=True)
+
+mtypes = load_mtypes(client)
+
+pre_synapses = full_neuron.pre_synapses
+# map post synapses to their mtypes
+pre_synapses["post_mtype"] = pre_synapses["post_pt_root_id"].map(mtypes["cell_type"])
+
+
 # %%
 
 # simple time-ordered case
@@ -88,6 +97,9 @@ edits = neuron_sequence.edits.sort_values("time")
 for i in tqdm(range(len(edits))):
     operation_id = neuron_sequence.edits.index[i]
     neuron_sequence.apply_edits(operation_id)
+
+# %%
+neuron_sequence.edits
 
 # %%
 neuron_sequence.is_completed
@@ -111,6 +123,10 @@ neuron_sequence = NeuronFrameSequence(
     full_neuron, prefix=prefix, edit_label_name="metaoperation_id"
 )
 
+neuron_sequence.edits
+
+# %%
+
 edits = neuron_sequence.edits.sort_values(["has_merge", "time"])
 
 added_key = f"{prefix}operation_added"
@@ -124,6 +140,8 @@ next_operation = True
 
 pbar = tqdm(total=len(edits), desc="Applying edits...")
 while next_operation is not None:
+    # TODO make much of the below a few steps coming from methods in the
+    # NeuronFrameSequence
     current_neuron = neuron_sequence.current_resolved_neuron
     full_neuron = neuron_sequence.base_neuron
     applied_edit_ids = neuron_sequence.applied_edit_ids
@@ -161,7 +179,7 @@ while next_operation is not None:
         next_operation = None
     else:
         next_operation = possible_edit_ids[0]
-        neuron_sequence.apply_edits(next_operation, label=i)
+        neuron_sequence.apply_edits(next_operation)
 
     i += 1
     pbar.update(1)
@@ -192,81 +210,192 @@ animate_neuron_edit_sequence(
     path, neuron_sequence.resolved_sequence, n_rotation_steps=5, setback=-3_000_000
 )
 
-#%%
-neuron_sequence.sequence_info
-
-#%%
-neuron_sequence.new_sequence_info
-
-#%%
-neuron_sequence.sequence_info.equals(neuron_sequence.new_sequence_info)
+# %%
+neuron_sequence
 
 # %%
-def compute_synapse_metrics(
-    full_neuron,
-    edits,
-    resolved_synapses,
-    operation_key,
-):
-    mtypes = load_mtypes(client)
+# sns.scatterplot(
+#     data=neuron_sequence.sequence_info,
+#     hue='has_merge',
+#     x="order",
+#     y="n_nodes",
+#     palette="tab10",
+# )
 
-    pre_synapses = full_neuron.pre_synapses
-    # map post synapses to their mtypes
-    pre_synapses["post_mtype"] = pre_synapses["post_pt_root_id"].map(
-        mtypes["cell_type"]
-    )
+sns.scatterplot(
+    data=neuron_sequence.sequence_info,
+    hue="has_merge",
+    x="order",
+    y="path_length",
+    palette="tab10",
+)
 
-    # post_synapses = full_neuron.post_synapses
-    # post_synapses["pre_mtype"] = post_synapses["pre_pt_root_id"].map(
-    #     mtypes["cell_type"]
-    # )
+# %%
+counts_table = neuron_sequence.synapse_groupby_count(by="post_mtype", which="pre")
+counts_table
 
-    # find the synapses per sample
-    resolved_pre_synapses = resolved_synapses["resolved_pre_synapses"]
-    post_mtype_counts = count_synapses_by_sample(
-        pre_synapses, resolved_pre_synapses, "post_mtype"
-    )
+# %%
+edit_label_name = neuron_sequence.edit_label_name
+# %%
+# wrangle counts and probs
 
-    # wrangle counts and probs
-    counts_table = post_mtype_counts
-    var_name = "post_mtype"
-    post_mtype_stats_tidy = counts_table.reset_index().melt(
-        var_name=var_name, value_name="count", id_vars="sample"
-    )
-    post_mtype_probs = counts_table / counts_table.sum(axis=1).values[:, None]
-    post_mtype_probs.fillna(0, inplace=True)
-    post_mtype_probs_tidy = post_mtype_probs.reset_index().melt(
-        var_name=var_name, value_name="prob", id_vars="sample"
-    )
-    post_mtype_stats_tidy["prob"] = post_mtype_probs_tidy["prob"]
-    post_mtype_stats_tidy[operation_key] = post_mtype_stats_tidy["sample"].map(
-        resolved_synapses[operation_key]
-    )
-    post_mtype_stats_tidy = post_mtype_stats_tidy.join(edits, on=operation_key)
+var_name = "post_mtype"
+post_mtype_stats_tidy = counts_table.reset_index().melt(
+    var_name=var_name, value_name="count", id_vars=edit_label_name
+)
+post_mtype_stats_tidy
 
-    final_probs = post_mtype_probs.iloc[-1]
+post_mtype_probs = counts_table / counts_table.sum(axis=1).values[:, None]
+post_mtype_probs.fillna(0, inplace=True)
+post_mtype_probs_tidy = post_mtype_probs.reset_index().melt(
+    var_name=var_name, value_name="prob", id_vars=edit_label_name
+)
+post_mtype_stats_tidy["prob"] = post_mtype_probs_tidy["prob"]
 
-    # euclidean distance
-    # euc_diffs = (((post_mtype_probs - final_probs) ** 2).sum(axis=1)) ** 0.5
+post_mtype_stats_tidy
 
-    sample_wise_metrics = []
-    for metric in ["euclidean", "cityblock", "jensenshannon", "cosine"]:
-        distances = cdist(
-            post_mtype_probs.values, final_probs.values.reshape(1, -1), metric=metric
+# post_mtype_stats_tidy[operation_key] = post_mtype_stats_tidy["sample"].map(
+#     resolved_synapses[operation_key]
+# )
+
+
+post_mtype_stats_tidy = post_mtype_stats_tidy.join(
+    neuron_sequence.sequence_info, on=edit_label_name
+)
+post_mtype_stats_tidy
+
+
+# %%
+bouts = neuron_sequence.sequence_info["has_merge"].fillna(False).cumsum()
+bouts.name = "bout"
+
+bout_exemplars = (
+    neuron_sequence.sequence_info.index.to_series()
+    .groupby(bouts)
+    .apply(lambda x: x.iloc[-1])
+)
+
+bout_exemplars
+bout_info = neuron_sequence.sequence_info.loc[bout_exemplars.values]
+
+sub_post_mtype_stats = post_mtype_stats_tidy.query(
+    "metaoperation_id.isin(@bout_exemplars)"
+)
+
+
+# %%
+fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+
+sns.scatterplot(
+    data=post_mtype_stats_tidy,
+    x="order",
+    y="count",
+    hue="post_mtype",
+    palette=ctype_hues,
+    ax=ax,
+    legend=False,
+    s=10,
+)
+
+for metaoperation_id, row in post_mtype_stats_tidy.iterrows():
+    if row["has_merge"]:
+        ax.axvline(
+            row["order"],
+            color="lightgrey",
+            linestyle="-",
+            alpha=0.5,
+            linewidth=1,
+            zorder=-1,
         )
-        distances = pd.Series(
-            distances.flatten(), name=metric, index=post_mtype_probs.index
+
+# %%
+fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+
+sns.scatterplot(
+    data=post_mtype_stats_tidy,
+    x="cumulative_n_operations",
+    y="prob",
+    hue="post_mtype",
+    palette=ctype_hues,
+    ax=ax,
+    legend=False,
+    s=10,
+)
+sns.scatterplot(
+    data=sub_post_mtype_stats,
+    x="cumulative_n_operations",
+    y="prob",
+    hue="post_mtype",
+    palette=ctype_hues,
+    ax=ax,
+    legend=False,
+    s=50,
+)
+sns.lineplot(
+    data=sub_post_mtype_stats,
+    x="cumulative_n_operations",
+    y="prob",
+    hue="post_mtype",
+    palette=ctype_hues,
+    ax=ax,
+    legend=False,
+)
+
+for metaoperation_id, row in post_mtype_stats_tidy.iterrows():
+    if row["has_merge"]:
+        ax.axvline(
+            row["cumulative_n_operations"],
+            color="lightgrey",
+            linestyle="-",
+            alpha=0.5,
+            linewidth=1,
+            zorder=-1,
         )
-        sample_wise_metrics.append(distances)
-    sample_wise_metrics = pd.concat(sample_wise_metrics, axis=1)
-    sample_wise_metrics[operation_key] = sample_wise_metrics.index.map(
-        resolved_synapses[operation_key]
+
+plt.show()
+
+
+# %%
+# get the last row from each bout as a representation
+bout_info = neuron_sequence.sequence_info.groupby(bouts).apply(lambda x: x.iloc[-1])
+fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+sns.scatterplot(
+    data=bout_info,
+    x="order",
+    y="path_length",
+    hue="has_merge",
+    palette="tab10",
+    ax=ax,
+    legend=False,
+    s=10,
+)
+
+
+# %%
+final_probs = post_mtype_probs.iloc[-1]
+
+# euclidean distance
+# euc_diffs = (((post_mtype_probs - final_probs) ** 2).sum(axis=1)) ** 0.5
+
+sample_wise_metrics = []
+for metric in ["euclidean", "cityblock", "jensenshannon", "cosine"]:
+    distances = cdist(
+        post_mtype_probs.values, final_probs.values.reshape(1, -1), metric=metric
     )
-    sample_wise_metrics = sample_wise_metrics.join(edits, on=operation_key)
+    distances = pd.Series(
+        distances.flatten(), name=metric, index=post_mtype_probs.index
+    )
+    sample_wise_metrics.append(distances)
+sample_wise_metrics = pd.concat(sample_wise_metrics, axis=1)
+sample_wise_metrics[operation_key] = sample_wise_metrics.index.map(
+    resolved_synapses[operation_key]
+)
+sample_wise_metrics = sample_wise_metrics.join(edits, on=operation_key)
 
-    # TODO might as well also do the same join as the above to the added metaedits
+# TODO might as well also do the same join as the above to the added metaedits
 
-    return post_mtype_stats_tidy, sample_wise_metrics
+
+# %%
 
 
 # %%
