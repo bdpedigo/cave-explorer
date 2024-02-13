@@ -35,6 +35,16 @@ class NeuronFrameSequence:
         self.resolved_sequence = {}
         self._sequence_info = {}
         self.edit_label_name = edit_label_name
+
+        if self.prefix == "meta":
+            edits = self.base_neuron.metaedits
+        else:
+            edits = self.base_neuron.edits
+            edits["has_split"] = ~edits["is_merge"]
+            edits["has_merge"] = edits["is_merge"]
+            edits["n_operations"] = np.ones(len(edits), dtype=int)
+
+        self.edits = edits.copy()
         self.apply_edits(self.applied_edit_ids, label=None)
 
     def __len__(self) -> int:
@@ -52,22 +62,6 @@ class NeuronFrameSequence:
         out += f"\tsequence=({len(self)},)\n"
         out += ")"
         return out
-
-    @property
-    def edits(self) -> pd.DataFrame:
-        if self.prefix == "meta":
-            edits = self.base_neuron.metaedits
-        else:
-            edits = self.base_neuron.edits
-            edits["has_split"] = ~edits["is_merge"]
-            edits["has_merge"] = edits["is_merge"]
-            edits["n_operations"] = np.ones(len(edits), dtype=int)
-        return edits
-
-    # @beartype
-    # @edits.setter
-    # def edits(self, edits: pd.DataFrame):
-    #     self.base_neuron.edits = edits
 
     @property
     def split_edits(self) -> pd.DataFrame:
@@ -191,6 +185,25 @@ class NeuronFrameSequence:
         counts = count_synapses_by_sample(synapses, resolved, by=by)
         counts.index.name = self.edit_label_name
         return counts
+
+    def find_incident_edits(self) -> pd.Index:
+        # look at edges that are connected to the current neuron
+        current_neuron = self.current_resolved_neuron
+        out_edges = self.base_neuron.edges.query(
+            "source.isin(@current_neuron.nodes.index) | target.isin(@current_neuron.nodes.index)"
+        )
+        # ignore those that we already have
+        out_edges = out_edges.drop(current_neuron.edges.index)
+
+        possible_edit_ids = out_edges[f"{self.prefix}operation_added"].unique()
+
+        edits = self.edits
+        possible_edit_ids = edits.index[edits.index.isin(possible_edit_ids)]
+
+        applied_edit_ids = self.applied_edit_ids
+        possible_edit_ids = possible_edit_ids[~possible_edit_ids.isin(applied_edit_ids)]
+
+        return possible_edit_ids
 
 
 def resolve_neuron(unresolved_neuron, base_neuron):

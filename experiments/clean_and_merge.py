@@ -88,6 +88,10 @@ pre_synapses["post_mtype"] = pre_synapses["post_pt_root_id"].map(mtypes["cell_ty
 
 # %%
 
+# TODO I think this can be re-written using the same logic as the below; a priority-
+# sorted list of operations, and then (optionally) some logic about whether to apply
+# them in order or anything like that.
+
 # simple time-ordered case
 neuron_sequence = NeuronFrameSequence(
     full_neuron, prefix="", edit_label_name="operation_id"
@@ -97,9 +101,6 @@ edits = neuron_sequence.edits.sort_values("time")
 for i in tqdm(range(len(edits))):
     operation_id = neuron_sequence.edits.index[i]
     neuron_sequence.apply_edits(operation_id)
-
-# %%
-neuron_sequence.edits
 
 # %%
 neuron_sequence.is_completed
@@ -125,7 +126,6 @@ neuron_sequence = NeuronFrameSequence(
 
 neuron_sequence.edits
 
-# %%
 
 edits = neuron_sequence.edits.sort_values(["has_merge", "time"])
 
@@ -147,32 +147,36 @@ while next_operation is not None:
     applied_edit_ids = neuron_sequence.applied_edit_ids
 
     # find operations that are internal to the current neuron
-    internal_edges = current_neuron.edges
-    internal_edit_ids = set()
-    if include_added:
-        added_edit_ids = set(internal_edges[added_key].unique()) - {-1}
-        internal_edit_ids = internal_edit_ids | added_edit_ids
-    if include_removed:
-        removed_edit_ids = set(internal_edges[removed_key].unique()) - {-1}
-        internal_edit_ids = internal_edit_ids | removed_edit_ids
-    n_internal = len(internal_edit_ids)
+    # internal_edges = current_neuron.edges
+    # internal_edit_ids = set()
+    # if include_added:
+    #     added_edit_ids = set(internal_edges[added_key].unique()) - {-1}
+    #     internal_edit_ids = internal_edit_ids | added_edit_ids
+    # if include_removed:
+    #     removed_edit_ids = set(internal_edges[removed_key].unique()) - {-1}
+    #     internal_edit_ids = internal_edit_ids | removed_edit_ids
+    # n_internal = len(internal_edit_ids)
 
-    possible_edit_ids = neuron_sequence.unapplied_edits.index.intersection(
-        internal_edit_ids, sort=False
-    )
-    n_possible_internal = len(possible_edit_ids)
+    # possible_edit_ids = neuron_sequence.unapplied_edits.index.intersection(
+    #     internal_edit_ids, sort=False
+    # )
+    # n_possible_internal = len(possible_edit_ids)
+    # if n_possible_internal > 0:
+    #     print("internal")
 
     # if no internal operations, find an external one
-    if n_possible_internal == 0:
-        out_edges = full_neuron.edges.query(
-            "source.isin(@current_neuron.nodes.index) | target.isin(@current_neuron.nodes.index)"
-        )
-        out_edges = out_edges.drop(current_neuron.edges.index)
 
-        possible_edit_ids = out_edges[f"{prefix}operation_added"].unique()
+    # out_edges = full_neuron.edges.query(
+    #     "source.isin(@current_neuron.nodes.index) | target.isin(@current_neuron.nodes.index)"
+    # )
+    # out_edges = out_edges.drop(current_neuron.edges.index)
 
-        possible_edit_ids = edits.index[edits.index.isin(possible_edit_ids)]
-        possible_edit_ids = possible_edit_ids[~possible_edit_ids.isin(applied_edit_ids)]
+    # possible_edit_ids = out_edges[f"{prefix}operation_added"].unique()
+
+    # possible_edit_ids = edits.index[edits.index.isin(possible_edit_ids)]
+    # possible_edit_ids = possible_edit_ids[~possible_edit_ids.isin(applied_edit_ids)]
+
+    possible_edit_ids = neuron_sequence.find_incident_edits()
 
     if len(possible_edit_ids) == 0:
         print("No possible operations to apply")
@@ -187,7 +191,6 @@ while next_operation is not None:
 pbar.close()
 
 
-# %%
 if neuron_sequence.is_completed:
     print("Neuron is completed")
 else:
