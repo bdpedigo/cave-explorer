@@ -20,45 +20,11 @@ from pkg.neuronframe import (
 )
 from pkg.paths import FIG_PATH, OUT_PATH
 from pkg.plot import animate_neuron_edit_sequence, savefig
-from pkg.utils import find_closest_point, load_casey_palette, load_mtypes
+from pkg.utils import load_casey_palette, load_mtypes
 
 pv.set_jupyter_backend("client")
 
 # %%
-
-
-def apply_operations(
-    full_neuron,
-    applied_op_ids,
-    resolved_synapses,
-    neuron_list,
-    operation_key,
-    iteration_key,
-):
-    current_neuron = full_neuron.set_edits(applied_op_ids, inplace=False, prefix=prefix)
-
-    if full_neuron.nucleus_id in current_neuron.nodes.index:
-        current_neuron.select_nucleus_component(inplace=True)
-    else:
-        print("WARNING: Using closest point to nucleus...")
-        point_id = find_closest_point(
-            current_neuron.nodes,
-            full_neuron.nodes.loc[full_neuron.nucleus_id, ["x", "y", "z"]],
-        )
-        current_neuron.select_component_from_node(
-            point_id, inplace=True, directed=False
-        )
-
-    current_neuron.remove_unused_synapses(inplace=True)
-
-    neuron_list[iteration_key] = current_neuron
-    resolved_synapses[iteration_key] = {
-        "resolved_pre_synapses": current_neuron.pre_synapses.index.to_list(),
-        "resolved_post_synapses": current_neuron.post_synapses.index.to_list(),
-        operation_key: applied_op_ids[-1] if i > 0 else None,
-    }
-
-    return current_neuron
 
 
 client = cc.CAVEclient("minnie65_phase3_v1")
@@ -72,7 +38,7 @@ completes_neuron = False
 
 ctype_hues = load_casey_palette()
 
-root_id = query_neurons["pt_root_id"].values[14]
+root_id = query_neurons["pt_root_id"].values[15]
 
 full_neuron = load_neuronframe(root_id, client)
 
@@ -96,14 +62,16 @@ pre_synapses["post_mtype"] = pre_synapses["post_pt_root_id"].map(mtypes["cell_ty
 neuron_sequence = NeuronFrameSequence(
     full_neuron, prefix="", edit_label_name="operation_id"
 )
-edits = neuron_sequence.edits.sort_values("time")
+neuron_sequence.edits.sort_values("time", inplace=True)
 
-for i in tqdm(range(len(edits))):
+for i in tqdm(range(len(neuron_sequence.edits))):
     operation_id = neuron_sequence.edits.index[i]
     neuron_sequence.apply_edits(operation_id)
 
-# %%
-neuron_sequence.is_completed
+if neuron_sequence.is_completed:
+    print("Neuron is completed")
+else:
+    print("Neuron is not completed")
 
 # %%
 
@@ -115,7 +83,7 @@ animate_neuron_edit_sequence(
 
 # %%
 
-
+# this is actually "merge and clean"
 # from the current available operations, apply all splits,
 # then apply the soonest merge
 # then see if we can apply any more splits (recurse here)
@@ -124,82 +92,28 @@ neuron_sequence = NeuronFrameSequence(
     full_neuron, prefix=prefix, edit_label_name="metaoperation_id"
 )
 
-neuron_sequence.edits
+neuron_sequence.edits.sort_values(["has_merge", "time"], inplace=True)
 
-
-edits = neuron_sequence.edits.sort_values(["has_merge", "time"])
-
-added_key = f"{prefix}operation_added"
-removed_key = f"{prefix}operation_removed"
-
-include_added = True
-include_removed = False
 
 i = 0
 next_operation = True
-
-pbar = tqdm(total=len(edits), desc="Applying edits...")
+pbar = tqdm(total=len(neuron_sequence.edits), desc="Applying edits...")
 while next_operation is not None:
-    # TODO make much of the below a few steps coming from methods in the
-    # NeuronFrameSequence
-    current_neuron = neuron_sequence.current_resolved_neuron
-    full_neuron = neuron_sequence.base_neuron
-    applied_edit_ids = neuron_sequence.applied_edit_ids
-
-    # find operations that are internal to the current neuron
-    # internal_edges = current_neuron.edges
-    # internal_edit_ids = set()
-    # if include_added:
-    #     added_edit_ids = set(internal_edges[added_key].unique()) - {-1}
-    #     internal_edit_ids = internal_edit_ids | added_edit_ids
-    # if include_removed:
-    #     removed_edit_ids = set(internal_edges[removed_key].unique()) - {-1}
-    #     internal_edit_ids = internal_edit_ids | removed_edit_ids
-    # n_internal = len(internal_edit_ids)
-
-    # possible_edit_ids = neuron_sequence.unapplied_edits.index.intersection(
-    #     internal_edit_ids, sort=False
-    # )
-    # n_possible_internal = len(possible_edit_ids)
-    # if n_possible_internal > 0:
-    #     print("internal")
-
-    # if no internal operations, find an external one
-
-    # out_edges = full_neuron.edges.query(
-    #     "source.isin(@current_neuron.nodes.index) | target.isin(@current_neuron.nodes.index)"
-    # )
-    # out_edges = out_edges.drop(current_neuron.edges.index)
-
-    # possible_edit_ids = out_edges[f"{prefix}operation_added"].unique()
-
-    # possible_edit_ids = edits.index[edits.index.isin(possible_edit_ids)]
-    # possible_edit_ids = possible_edit_ids[~possible_edit_ids.isin(applied_edit_ids)]
-
     possible_edit_ids = neuron_sequence.find_incident_edits()
-
     if len(possible_edit_ids) == 0:
-        print("No possible operations to apply")
+        print("No more possible operations to apply")
         next_operation = None
     else:
         next_operation = possible_edit_ids[0]
         neuron_sequence.apply_edits(next_operation)
-
     i += 1
     pbar.update(1)
-
 pbar.close()
-
 
 if neuron_sequence.is_completed:
     print("Neuron is completed")
 else:
     print("Neuron is not completed")
-    current = neuron_sequence.current_resolved_neuron
-    final = neuron_sequence.final_neuron
-    print(current.node_agreement(final), "current nodes in final.")
-    print(final.node_agreement(current), "final nodes in current.")
-
 
 # %%
 
@@ -214,58 +128,6 @@ animate_neuron_edit_sequence(
 )
 
 # %%
-neuron_sequence
-
-# %%
-# sns.scatterplot(
-#     data=neuron_sequence.sequence_info,
-#     hue='has_merge',
-#     x="order",
-#     y="n_nodes",
-#     palette="tab10",
-# )
-
-sns.scatterplot(
-    data=neuron_sequence.sequence_info,
-    hue="has_merge",
-    x="order",
-    y="path_length",
-    palette="tab10",
-)
-
-# %%
-counts_table = neuron_sequence.synapse_groupby_count(by="post_mtype", which="pre")
-counts_table
-
-# %%
-edit_label_name = neuron_sequence.edit_label_name
-# %%
-# wrangle counts and probs
-
-var_name = "post_mtype"
-post_mtype_stats_tidy = counts_table.reset_index().melt(
-    var_name=var_name, value_name="count", id_vars=edit_label_name
-)
-post_mtype_stats_tidy
-
-post_mtype_probs = counts_table / counts_table.sum(axis=1).values[:, None]
-post_mtype_probs.fillna(0, inplace=True)
-post_mtype_probs_tidy = post_mtype_probs.reset_index().melt(
-    var_name=var_name, value_name="prob", id_vars=edit_label_name
-)
-post_mtype_stats_tidy["prob"] = post_mtype_probs_tidy["prob"]
-
-post_mtype_stats_tidy
-
-# post_mtype_stats_tidy[operation_key] = post_mtype_stats_tidy["sample"].map(
-#     resolved_synapses[operation_key]
-# )
-
-
-post_mtype_stats_tidy = post_mtype_stats_tidy.join(
-    neuron_sequence.sequence_info, on=edit_label_name
-)
-post_mtype_stats_tidy
 
 
 # %%
@@ -291,33 +153,8 @@ fig, ax = plt.subplots(1, 1, figsize=(6, 5))
 
 sns.scatterplot(
     data=post_mtype_stats_tidy,
-    x="order",
-    y="count",
-    hue="post_mtype",
-    palette=ctype_hues,
-    ax=ax,
-    legend=False,
-    s=10,
-)
-
-for metaoperation_id, row in post_mtype_stats_tidy.iterrows():
-    if row["has_merge"]:
-        ax.axvline(
-            row["order"],
-            color="lightgrey",
-            linestyle="-",
-            alpha=0.5,
-            linewidth=1,
-            zorder=-1,
-        )
-
-# %%
-fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-
-sns.scatterplot(
-    data=post_mtype_stats_tidy,
     x="cumulative_n_operations",
-    y="prob",
+    y="prop",
     hue="post_mtype",
     palette=ctype_hues,
     ax=ax,
@@ -327,7 +164,7 @@ sns.scatterplot(
 sns.scatterplot(
     data=sub_post_mtype_stats,
     x="cumulative_n_operations",
-    y="prob",
+    y="prop",
     hue="post_mtype",
     palette=ctype_hues,
     ax=ax,
@@ -337,7 +174,7 @@ sns.scatterplot(
 sns.lineplot(
     data=sub_post_mtype_stats,
     x="cumulative_n_operations",
-    y="prob",
+    y="prop",
     hue="post_mtype",
     palette=ctype_hues,
     ax=ax,
@@ -455,7 +292,7 @@ fig, ax = plt.subplots(1, 1, figsize=(6, 5))
 sns.lineplot(
     data=post_mtype_stats_tidy,
     x="sample",
-    y="prob",
+    y="prop",
     hue="post_mtype",
     legend=False,
     palette=ctype_hues,

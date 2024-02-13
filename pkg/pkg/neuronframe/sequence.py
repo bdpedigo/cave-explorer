@@ -35,6 +35,7 @@ class NeuronFrameSequence:
         self.resolved_sequence = {}
         self._sequence_info = {}
         self.edit_label_name = edit_label_name
+        self.tables = {}
 
         if self.prefix == "meta":
             edits = self.base_neuron.metaedits
@@ -172,20 +173,6 @@ class NeuronFrameSequence:
     def is_completed(self):
         return self.final_neuron == self.current_resolved_neuron
 
-    def synapse_groupby_count(
-        self, by: str, which: Literal["pre", "post"]
-    ) -> pd.DataFrame:
-        if which == "pre":
-            synapses = self.base_neuron.pre_synapses
-            resolved = self.sequence_info["pre_synapses"]
-        else:
-            synapses = self.base_neuron.post_synapses
-            resolved = self.sequence_info["post_synapses"]
-
-        counts = count_synapses_by_sample(synapses, resolved, by=by)
-        counts.index.name = self.edit_label_name
-        return counts
-
     def find_incident_edits(self) -> pd.Index:
         # look at edges that are connected to the current neuron
         current_neuron = self.current_resolved_neuron
@@ -204,6 +191,45 @@ class NeuronFrameSequence:
         possible_edit_ids = possible_edit_ids[~possible_edit_ids.isin(applied_edit_ids)]
 
         return possible_edit_ids
+
+    def synapse_groupby_count(
+        self, by: str, which: Literal["pre", "post"]
+    ) -> pd.DataFrame:
+        if which == "pre":
+            synapses = self.base_neuron.pre_synapses
+            resolved = self.sequence_info["pre_synapses"]
+        else:
+            synapses = self.base_neuron.post_synapses
+            resolved = self.sequence_info["post_synapses"]
+
+        counts = count_synapses_by_sample(synapses, resolved, by=by)
+        counts.index.name = self.edit_label_name
+        return counts
+
+    def synapse_groupby_metrics(self, by: str, which: Literal["pre", "post"] = "pre"):
+        counts_table = self.synapse_groupby_count(by=by, which=which)
+
+        edit_label_name = self.edit_label_name
+
+        # melt the counts into long-form
+        var_name = "post_mtype"
+        post_mtype_stats_tidy = counts_table.reset_index().melt(
+            var_name=var_name, value_name="count", id_vars=edit_label_name
+        )
+
+        # also compute proportions and do the same melt
+        post_mtype_probs = counts_table / counts_table.sum(axis=1).values[:, None]
+        post_mtype_probs.fillna(0, inplace=True)
+        post_mtype_probs_tidy = post_mtype_probs.reset_index().melt(
+            var_name=var_name, value_name="prop", id_vars=edit_label_name
+        )
+
+        # combining tables
+        post_mtype_stats_tidy["prop"] = post_mtype_probs_tidy["prop"]
+        post_mtype_stats_tidy = post_mtype_stats_tidy.join(
+            self.sequence_info, on=edit_label_name
+        )
+        return post_mtype_stats_tidy
 
 
 def resolve_neuron(unresolved_neuron, base_neuron):
