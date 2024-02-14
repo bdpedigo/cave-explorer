@@ -22,7 +22,7 @@ from pkg.neuronframe import NeuronFrame
     cloud_bucket="allen-minnie-phase3",
     folder="edit_neuronframes",
     file_suffix="neuronframe.pkl",
-    arg_key=0,
+    arg_keys=[0],
 )
 def load_neuronframe(root_id: int, client: cc.CAVEclient):
     print("Loading level 2 network edits...")
@@ -35,7 +35,7 @@ def load_neuronframe(root_id: int, client: cc.CAVEclient):
     operation_to_metaoperation = get_operation_metaoperation_map(
         networkdeltas_by_metaoperation
     )
-    edit_stats, metaoperation_stats, modified_level2_nodes = collate_edit_info(
+    edit_stats, _, _ = collate_edit_info(
         networkdeltas_by_operation, operation_to_metaoperation, root_id, client
     )
 
@@ -77,6 +77,5 @@ def load_neuronframe(root_id: int, client: cc.CAVEclient):
         post_synapses=post_synapses,
         edits=edit_stats,
     )
-    
 
     return full_neuron

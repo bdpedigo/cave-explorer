@@ -8,11 +8,11 @@ os.environ["SKEDITS_RECOMPUTE"] = "False"
 
 import caveclient as cc
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import pyvista as pv
 import seaborn as sns
 from scipy.spatial.distance import cdist
-from tqdm.auto import tqdm
 
 from pkg.neuronframe import (
     NeuronFrameSequence,
@@ -20,6 +20,7 @@ from pkg.neuronframe import (
 )
 from pkg.paths import FIG_PATH, OUT_PATH
 from pkg.plot import animate_neuron_edit_sequence, savefig
+from pkg.sequence import create_merge_and_clean_sequence, create_time_ordered_sequence
 from pkg.utils import load_casey_palette, load_mtypes
 
 pv.set_jupyter_backend("client")
@@ -38,7 +39,7 @@ completes_neuron = False
 
 ctype_hues = load_casey_palette()
 
-root_id = query_neurons["pt_root_id"].values[17]
+root_id = query_neurons["pt_root_id"].values[19]
 
 # root_id = 864691135737446276
 full_neuron = load_neuronframe(root_id, client)
@@ -49,149 +50,109 @@ full_neuron.apply_edge_lengths(inplace=True)
 mtypes = load_mtypes(client)
 
 pre_synapses = full_neuron.pre_synapses
-# map post synapses to their mtypes
 pre_synapses["post_mtype"] = pre_synapses["post_pt_root_id"].map(mtypes["cell_type"])
 
 setback = 2_000_000
 # %%
 
-# simple time-ordered case
-neuron_sequence = NeuronFrameSequence(
-    full_neuron, prefix="", edit_label_name="operation_id"
+
+time_ordered_sequence = create_time_ordered_sequence(full_neuron, root_id=root_id)
+
+
+# %%
+merge_and_clean_sequence = create_merge_and_clean_sequence(
+    full_neuron, root_id=root_id, order_by="time"
 )
-neuron_sequence.edits.sort_values("time", inplace=True)
-
-for i in tqdm(range(len(neuron_sequence.edits))):
-    operation_id = neuron_sequence.edits.index[i]
-    neuron_sequence.apply_edits(operation_id)
-
-if neuron_sequence.is_completed:
-    print("Neuron is completed")
-else:
-    print("Neuron is not completed")
-
 # %%
-
-high_res = False
-if high_res:
-    path = str(
-        FIG_PATH
-        / "animations"
-        / f"high_res_all_edits_by_time-prefix={prefix}-root_id={root_id}.gif"
-    )
-
-    animate_neuron_edit_sequence(
-        path,
-        neuron_sequence.resolved_sequence,
-        n_rotation_steps=5,
-        setback=-2_500_000,
-        azimuth_step_size=0.5,
-        fps=30,
-    )
-else:
-    path = str(
-        FIG_PATH
-        / "animations"
-        / f"all_edits_by_time-prefix={prefix}-root_id={root_id}.gif"
-    )
-
-    animate_neuron_edit_sequence(
-        path,
-        neuron_sequence.resolved_sequence,
-        n_rotation_steps=2,
-        setback=setback,
-        azimuth_step_size=1,
-        fps=20,
-    )
-
-# %%
-
-# this is actually "merge and clean"
-# from the current available operations, apply all splits,
-# then apply the soonest merge
-# then see if we can apply any more splits (recurse here)
-prefix = "meta"
-neuron_sequence = NeuronFrameSequence(
-    full_neuron, prefix=prefix, edit_label_name="metaoperation_id"
+merge_and_clean_sequence1 = create_merge_and_clean_sequence(
+    full_neuron, root_id=root_id, order_by="random", random_seed=8888
+)
+merge_and_clean_sequence2 = create_merge_and_clean_sequence(
+    full_neuron, root_id=root_id, order_by="random", random_seed=8888
 )
 
-neuron_sequence.edits.sort_values(["has_merge", "time"], inplace=True)
+# %%
+df1 = merge_and_clean_sequence1.sequence_info
+df2 = merge_and_clean_sequence2.sequence_info
 
+df1.equals(df2)
 
-i = 0
-next_operation = True
-pbar = tqdm(total=len(neuron_sequence.edits), desc="Applying edits...")
-while next_operation is not None:
-    possible_edit_ids = neuron_sequence.find_incident_edits()
-    if len(possible_edit_ids) == 0:
-        print("No more possible operations to apply")
-        next_operation = None
-    else:
-        next_operation = possible_edit_ids[0]
-        neuron_sequence.apply_edits(next_operation)
-    i += 1
-    pbar.update(1)
-pbar.close()
+# %%
+path = str(FIG_PATH / "animations" / f"merge_and_clean_by_time-root_id={root_id}.gif")
 
-if neuron_sequence.is_completed:
-    print("Neuron is completed")
-else:
-    print("Neuron is not completed")
+animate_neuron_edit_sequence(
+    path,
+    merge_and_clean_sequence.resolved_sequence,
+    n_rotation_steps=2,
+    setback=setback,
+    azimuth_step_size=1,
+    fps=20,
+)
 
 # %%
 
-high_res = False
-if high_res:
-    path = str(
-        FIG_PATH
-        / "animations"
-        / f"high_res_all_edits_by_time-prefix={prefix}-root_id={root_id}.gif"
+rng = np.random.default_rng(8888)
+n_trials = 10
+for i in range(n_trials):
+    seed = rng.integers(np.iinfo(np.uint64).max, dtype=np.uint64)
+    rand_merge_and_clean_sequence = create_merge_and_clean_sequence(
+        full_neuron, order_by="random", random_seed=seed
     )
 
-    animate_neuron_edit_sequence(
-        path,
-        neuron_sequence.resolved_sequence,
-        n_rotation_steps=5,
-        setback=-2_500_000,
-        azimuth_step_size=0.5,
-        fps=30,
-    )
-else:
-    path = str(
-        FIG_PATH
-        / "animations"
-        / f"all_edits_by_time-prefix={prefix}-root_id={root_id}.gif"
-    )
+# %%
+import pickle
 
-    animate_neuron_edit_sequence(
-        path,
-        neuron_sequence.resolved_sequence,
-        n_rotation_steps=2,
-        setback=setback,
-        azimuth_step_size=1,
-        fps=20,
-    )
+with open("test.pickle", "wb") as f:
+    pickle.dump(rand_merge_and_clean_sequence.sequence_info, f)
 
 
 # %%
-neuron_sequence.synapse_groupby_count(by="post_mtype", which="pre")
+np.random.default_rng(np.iinfo(np.uint64).max)
+# %%
+path = str(FIG_PATH / "animations" / f"merge_and_clean_by_random-root_id={root_id}.gif")
+
+animate_neuron_edit_sequence(
+    path,
+    rand_merge_and_clean_sequence.resolved_sequence,
+    n_rotation_steps=2,
+    setback=setback,
+    azimuth_step_size=1,
+    fps=20,
+)
+# %%
+merge_and_clean_sequence.sequence_info
 
 # %%
-post_mtype_stats = neuron_sequence.synapse_groupby_metrics(by="post_mtype", which="pre")
+rand_merge_and_clean_sequence.sequence_info
+
+info = merge_and_clean_sequence.sequence_info
+seq = merge_and_clean_sequence
+# %%
+out_dict = merge_and_clean_sequence.to_dict()
+# %%
+seq = NeuronFrameSequence.from_dict_and_neuron(out_dict, full_neuron)
+
 
 # %%
-bouts = neuron_sequence.sequence_info["has_merge"].fillna(False).cumsum()
+seq.sequence_info
+
+# %%
+seq.synapse_groupby_count(by="post_mtype", which="pre")
+
+# %%
+post_mtype_stats = seq.synapse_groupby_metrics(by="post_mtype", which="pre")
+
+# %%
+bouts = seq.sequence_info["has_merge"].fillna(False).cumsum()
 bouts.name = "bout"
 
 # %%
 bout_exemplars = (
-    neuron_sequence.sequence_info.index.to_series()
-    .groupby(bouts)
-    .apply(lambda x: x.iloc[-1])
+    seq.sequence_info.index.to_series().groupby(bouts).apply(lambda x: x.iloc[-1])
 )
 
 bout_exemplars
-bout_info = neuron_sequence.sequence_info.loc[bout_exemplars.values]
+bout_info = seq.sequence_info.loc[bout_exemplars.values]
 
 sub_post_mtype_stats = post_mtype_stats.query("metaoperation_id.isin(@bout_exemplars)")
 
@@ -240,7 +201,6 @@ for metaoperation_id, row in post_mtype_stats.iterrows():
             zorder=-1,
         )
 
-plt.show()
 
 # %%
 sns.set_context("talk")

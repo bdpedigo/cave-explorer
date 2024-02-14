@@ -43,7 +43,8 @@ def lazycloud(
     cloud_bucket: str,
     folder: str,
     file_suffix: str,
-    arg_key: int = 0,
+    arg_keys: Union[int, list[int]] = [],
+    kwarg_keys: Union[str, list[str]] = [],
     local_path: Union[str, Path] = OUT_PATH,
     save_format: Literal["pickle", "json"] = "pickle",
     verify: bool = False,
@@ -76,8 +77,6 @@ def lazycloud(
         when running the function. Requires the result to implement the `__eq__` method.
     """
     use_cloud = os.environ.get("LAZYCLOUD_USE_CLOUD") == "True"
-    recompute = os.environ.get("LAZYCLOUD_RECOMPUTE") == "True"
-    print("LAZYCLOUD_RECOMPUTE?", recompute)
 
     if save_format == "pickle":
         loader = pickle.loads
@@ -92,14 +91,29 @@ def lazycloud(
 
     @wraps(func)
     def wrapper(*args, **kwargs):
-        file_name = str(args[arg_key]) + "-" + file_suffix
+        file_name = ""
+        for arg_key in arg_keys:
+            file_name += str(args[arg_key]) + "-"
+        for kwarg_key in kwarg_keys:
+            file_name += f"{str(kwarg_key)}={str(kwargs[kwarg_key])}-"
+        file_name += file_suffix
+
+        if "use_cache" in kwargs:
+            use_cache = kwargs.pop("use_cache")
+            if not use_cache:
+                recompute = True
+            else:
+                recompute = False
+        else:
+            recompute = False
 
         if not cf.exists(file_name) or recompute:
             result = func(*args, **kwargs)
             result = saver(result)
-            print(f"Writing to cloud for key {args[arg_key]}...")
+            print(f"LAZYCLOUD: Writing {file_name} to cloud...")
             cf.put(file_name, result)
 
+        print(f"LAZYCLOUD: Loading result {file_name} from cloud...")
         loaded_result = loader(cf.get(file_name))
 
         if verify:

@@ -20,6 +20,16 @@ Hashable = Union[
     tuple[np.integer, ...],
 ]
 
+SEQUENCE_INFO_COLS = [
+    "edit_ids_added",
+    "applied_edits",
+    "pre_synapses",
+    "post_synapses",
+    "n_nodes",
+    "path_length",
+    "order",
+]
+
 
 class NeuronFrameSequence:
     def __init__(
@@ -27,6 +37,7 @@ class NeuronFrameSequence:
         base_neuron: NeuronFrame,
         prefix="",
         edit_label_name=None,
+        edits=None,
     ):
         self.base_neuron = base_neuron
         self.prefix = prefix
@@ -37,16 +48,18 @@ class NeuronFrameSequence:
         self.edit_label_name = edit_label_name
         self.tables = {}
 
-        if self.prefix == "meta":
-            edits = self.base_neuron.metaedits
+        if edits is None:
+            if self.prefix == "meta":
+                edits = self.base_neuron.metaedits
+            else:
+                edits = self.base_neuron.edits
+                edits["has_split"] = ~edits["is_merge"]
+                edits["has_merge"] = edits["is_merge"]
+                edits["n_operations"] = np.ones(len(edits), dtype=int)
+            self.edits = edits.copy()
+            self.apply_edits(self.applied_edit_ids, label=None)
         else:
-            edits = self.base_neuron.edits
-            edits["has_split"] = ~edits["is_merge"]
-            edits["has_merge"] = edits["is_merge"]
-            edits["n_operations"] = np.ones(len(edits), dtype=int)
-
-        self.edits = edits.copy()
-        self.apply_edits(self.applied_edit_ids, label=None)
+            self.edits = edits
 
     def __len__(self) -> int:
         return len(self._sequence_info)
@@ -154,7 +167,8 @@ class NeuronFrameSequence:
         sequence_info["n_pre_synapses"] = sequence_info["pre_synapses"].apply(len)
         sequence_info["n_post_synapses"] = sequence_info["post_synapses"].apply(len)
 
-        sequence_info = sequence_info.join(self.edits)
+        sequence_info = sequence_info.join(self.edits, how="left")
+
         sequence_info["cumulative_n_operations"] = sequence_info[
             "n_operations"
         ].cumsum()
@@ -213,23 +227,66 @@ class NeuronFrameSequence:
         edit_label_name = self.edit_label_name
 
         # melt the counts into long-form
-        post_mtype_stats_tidy = counts_table.reset_index().melt(
+        stats_tidy = counts_table.reset_index().melt(
             var_name=by, value_name="count", id_vars=edit_label_name
         )
 
         # also compute proportions and do the same melt
-        post_mtype_probs = counts_table / counts_table.sum(axis=1).values[:, None]
-        post_mtype_probs.fillna(0, inplace=True)
-        post_mtype_probs_tidy = post_mtype_probs.reset_index().melt(
+        probs = counts_table / counts_table.sum(axis=1).values[:, None]
+        probs.fillna(0, inplace=True)
+        probs_tidy = probs.reset_index().melt(
             var_name=by, value_name="prop", id_vars=edit_label_name
         )
 
         # combining tables
-        post_mtype_stats_tidy["prop"] = post_mtype_probs_tidy["prop"]
-        post_mtype_stats_tidy = post_mtype_stats_tidy.join(
-            self.sequence_info, on=edit_label_name
-        )
-        return post_mtype_stats_tidy
+        stats_tidy["prop"] = probs_tidy["prop"]
+        stats_tidy = stats_tidy.join(self.sequence_info, on=edit_label_name)
+        return stats_tidy
+
+    # @classmethod
+    # def from_sequence(
+    #     cls,
+    #     base_neuron: NeuronFrame,
+    #     sequence_info: pd.DataFrame,
+    #     prefix="",
+    # ):
+    #     edit_label_name = sequence_info.index.name
+    #     sequence = cls(
+    #         base_neuron,
+    #         prefix=prefix,
+    #         edit_label_name=edit_label_name,
+    #         set_initial_edits=False,
+    #     )
+    #     for label, row in sequence_info.iterrows():
+    #         sequence._sequence_info[label] = row[SEQUENCE_INFO_COLS].to_dict()
+    #     return sequence
+
+    def to_dict(self) -> dict:
+        out = {
+            "prefix": self.prefix,
+            "edit_label_name": self.edit_label_name,
+            "sequence_info": self.sequence_info[SEQUENCE_INFO_COLS].to_dict(
+                orient="index"
+            ),
+            "edits": self.edits.to_dict(orient="index"),
+        }
+        return out
+
+    @classmethod
+    def from_dict_and_neuron(cls, data: dict, neuron: NeuronFrame) -> Self:
+        prefix = data["prefix"]
+        edit_label_name = data["edit_label_name"]
+        sequence_info = pd.DataFrame(data["sequence_info"]).T
+        edits = pd.DataFrame(data["edits"]).T
+
+        out = cls(neuron, prefix=prefix, edit_label_name=edit_label_name, edits=edits)
+
+        for label, row in sequence_info.iterrows():
+            out._sequence_info[label] = row.to_dict()
+        return out
+
+    # def reconstruct_neuron_states(self) -> None:
+    #     for
 
 
 def resolve_neuron(unresolved_neuron, base_neuron):
