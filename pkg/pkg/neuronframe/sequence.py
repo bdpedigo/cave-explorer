@@ -201,27 +201,27 @@ class NeuronFrameSequence:
         else:
             synapses = self.base_neuron.post_synapses
             resolved = self.sequence_info["post_synapses"]
-
         counts = count_synapses_by_sample(synapses, resolved, by=by)
         counts.index.name = self.edit_label_name
         return counts
 
-    def synapse_groupby_metrics(self, by: str, which: Literal["pre", "post"] = "pre"):
+    def synapse_groupby_metrics(
+        self, by: str, which: Literal["pre", "post"]
+    ) -> pd.DataFrame:
         counts_table = self.synapse_groupby_count(by=by, which=which)
 
         edit_label_name = self.edit_label_name
 
         # melt the counts into long-form
-        var_name = "post_mtype"
         post_mtype_stats_tidy = counts_table.reset_index().melt(
-            var_name=var_name, value_name="count", id_vars=edit_label_name
+            var_name=by, value_name="count", id_vars=edit_label_name
         )
 
         # also compute proportions and do the same melt
         post_mtype_probs = counts_table / counts_table.sum(axis=1).values[:, None]
         post_mtype_probs.fillna(0, inplace=True)
         post_mtype_probs_tidy = post_mtype_probs.reset_index().melt(
-            var_name=var_name, value_name="prop", id_vars=edit_label_name
+            var_name=by, value_name="prop", id_vars=edit_label_name
         )
 
         # combining tables

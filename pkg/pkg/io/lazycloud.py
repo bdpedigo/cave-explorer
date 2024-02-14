@@ -97,6 +97,7 @@ def lazycloud(
         if not cf.exists(file_name) or recompute:
             result = func(*args, **kwargs)
             result = saver(result)
+            print(f"Writing to cloud for key {args[arg_key]}...")
             cf.put(file_name, result)
 
         loaded_result = loader(cf.get(file_name))

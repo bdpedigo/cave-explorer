@@ -128,7 +128,7 @@ def pt_to_xyz(pts):
     # positions = positions.pivot(index=idx_name, columns="axis", values=name)
 
     positions = pd.DataFrame(index=pts.index)
-
+    
     positions["x"] = pts.apply(lambda x: x[0])
     positions["y"] = pts.apply(lambda x: x[1])
     positions["z"] = pts.apply(lambda x: x[2])

@@ -38,8 +38,9 @@ completes_neuron = False
 
 ctype_hues = load_casey_palette()
 
-root_id = query_neurons["pt_root_id"].values[15]
+root_id = query_neurons["pt_root_id"].values[16]
 
+root_id = 864691135737446276
 full_neuron = load_neuronframe(root_id, client)
 
 # TODO put this in the lazy loader when running the full thing
@@ -75,10 +76,19 @@ else:
 
 # %%
 
-path = str(FIG_PATH / "animations" / f"all_edits_by_time-root_id={root_id}.gif")
+path = str(
+    FIG_PATH
+    / "animations"
+    / f"high_res_all_edits_by_time-prefix={prefix}-root_id={root_id}.gif"
+)
 
 animate_neuron_edit_sequence(
-    path, neuron_sequence.resolved_sequence, n_rotation_steps=5
+    path,
+    neuron_sequence.resolved_sequence,
+    n_rotation_steps=5,
+    setback=-2_500_000,
+    azimuth_step_size=0.5,
+    fps=30,
 )
 
 # %%
@@ -120,20 +130,29 @@ else:
 path = str(
     FIG_PATH
     / "animations"
-    / f"all_edits_by_access-prefix={prefix}-root_id={root_id}.gif"
+    / f"high_res_all_edits_by_access-prefix={prefix}-root_id={root_id}.gif"
 )
 
 animate_neuron_edit_sequence(
-    path, neuron_sequence.resolved_sequence, n_rotation_steps=5, setback=-3_000_000
+    path,
+    neuron_sequence.resolved_sequence,
+    n_rotation_steps=5,
+    setback=-2_500_000,
+    azimuth_step_size=0.5,
+    fps=30,
 )
 
 # %%
+neuron_sequence.synapse_groupby_count(by="post_mtype", which="pre")
 
+# %%
+post_mtype_stats = neuron_sequence.synapse_groupby_metrics(by="post_mtype", which="pre")
 
 # %%
 bouts = neuron_sequence.sequence_info["has_merge"].fillna(False).cumsum()
 bouts.name = "bout"
 
+# %%
 bout_exemplars = (
     neuron_sequence.sequence_info.index.to_series()
     .groupby(bouts)
@@ -143,16 +162,14 @@ bout_exemplars = (
 bout_exemplars
 bout_info = neuron_sequence.sequence_info.loc[bout_exemplars.values]
 
-sub_post_mtype_stats = post_mtype_stats_tidy.query(
-    "metaoperation_id.isin(@bout_exemplars)"
-)
+sub_post_mtype_stats = post_mtype_stats.query("metaoperation_id.isin(@bout_exemplars)")
 
 
 # %%
 fig, ax = plt.subplots(1, 1, figsize=(6, 5))
 
 sns.scatterplot(
-    data=post_mtype_stats_tidy,
+    data=post_mtype_stats,
     x="cumulative_n_operations",
     y="prop",
     hue="post_mtype",
@@ -181,7 +198,7 @@ sns.lineplot(
     legend=False,
 )
 
-for metaoperation_id, row in post_mtype_stats_tidy.iterrows():
+for metaoperation_id, row in post_mtype_stats.iterrows():
     if row["has_merge"]:
         ax.axvline(
             row["cumulative_n_operations"],
@@ -194,6 +211,30 @@ for metaoperation_id, row in post_mtype_stats_tidy.iterrows():
 
 plt.show()
 
+# %%
+sns.set_context("talk")
+fig, ax = plt.subplots(1, 1, figsize=(8, 5))
+sns.lineplot(
+    data=sub_post_mtype_stats,
+    x="cumulative_n_operations",
+    y="prop",
+    hue="post_mtype",
+    palette=ctype_hues,
+    ax=ax,
+    legend=True,
+)
+handles, labels = ax.get_legend_handles_labels()
+ax.get_legend().remove()
+ax.legend(
+    handles=handles[:],
+    labels=labels[:],
+    loc="center left",
+    bbox_to_anchor=(1, 0.5),
+    title="Post-synaptic M-type",
+    fontsize="small",
+    ncol=2,
+)
+ax.set(xlabel="Cumulative # of operations", ylabel="Proportion of output synapses")
 
 # %%
 # get the last row from each bout as a representation
@@ -239,7 +280,7 @@ sample_wise_metrics = sample_wise_metrics.join(edits, on=operation_key)
 
 
 # %%
-post_mtype_stats_tidy, sample_wise_metrics = compute_synapse_metrics(
+post_mtype_stats, sample_wise_metrics = compute_synapse_metrics(
     full_neuron, edits, resolved_synapses, operation_key
 )
 
@@ -269,7 +310,7 @@ sns.set_context("talk")
 fig, ax = plt.subplots(1, 1, figsize=(6, 5))
 
 sns.lineplot(
-    data=post_mtype_stats_tidy,
+    data=post_mtype_stats,
     x="sample",
     y="count",
     hue="post_mtype",
@@ -290,7 +331,7 @@ if save:
 fig, ax = plt.subplots(1, 1, figsize=(6, 5))
 
 sns.lineplot(
-    data=post_mtype_stats_tidy,
+    data=post_mtype_stats,
     x="sample",
     y="prop",
     hue="post_mtype",
@@ -313,7 +354,7 @@ if save:
 fig, ax = plt.subplots(1, 1, figsize=(6, 5))
 
 sns.lineplot(
-    data=post_mtype_stats_tidy,
+    data=post_mtype_stats,
     x="sample",
     y="centroid_distance_to_nuc_um",
     hue="post_mtype",
@@ -353,7 +394,7 @@ if save:
 if save:
     resolved_synapses.to_csv(path / f"resolved_synapses-root_id={root_id}.csv")
 
-    post_mtype_stats_tidy.to_csv(path / f"post_mtype_stats_tidy-root_id={root_id}.csv")
+    post_mtype_stats.to_csv(path / f"post_mtype_stats_tidy-root_id={root_id}.csv")
 
     diffs.to_csv(path / f"diffs-root_id={root_id}.csv")
 

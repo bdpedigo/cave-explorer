@@ -39,11 +39,14 @@ def animate_neuron_edit_sequence(
     azimuth_step_size: Union[float, int] = 1,
     setback: Union[float, int] = -2_000_000,
     highlight_last: int = 2,
+    highlight_point_size: float = 4,
+    highlight_merge_color: str = "blue",
+    highlight_split_color: str = "red",
     elevation: Union[float, int] = 25,
     up: Literal["x", "y", "z", "-x", "-y", "-z"] = "-y",
-    merge_color: str = "blue",
-    split_color: str = "red",
-    edit_point_size: float = 4,
+    merge_color: str = "lightblue",
+    split_color: str = "lightcoral",
+    edit_point_size: float = 3,
 ):
     plotter = pv.Plotter(window_size=window_size)
     plotter.open_gif(path, fps=fps)
@@ -54,13 +57,7 @@ def animate_neuron_edit_sequence(
     skeleton_poly = last_neuron.to_skeleton_polydata()
     skeleton_actor = plotter.add_mesh(skeleton_poly, color="black", line_width=0.1)
 
-    # set up the camera
-    nuc_loc = last_neuron.nodes.loc[last_neuron.nucleus_id, ["x", "y", "z"]].values
-    plotter.camera_position = "zx"
-    plotter.camera.focal_point = nuc_loc
-    plotter.camera.position = nuc_loc + np.array([0, 0, setback])
-    plotter.camera.up = UP_MAP[up]
-    plotter.camera.elevation = elevation
+    set_up_camera(plotter, last_neuron, setback, elevation, up)
 
     # remove dummy skeleton
     plotter.remove_actor(skeleton_actor)
@@ -94,8 +91,8 @@ def animate_neuron_edit_sequence(
             ).to_skeleton_polydata()
             highlight_actor = plotter.add_mesh(
                 highlight_poly,
-                color=merge_color,
-                point_size=edit_point_size,
+                color=highlight_merge_color,
+                point_size=highlight_point_size,
                 line_width=3,
             )
             merge_remove_queue.append((highlight_actor,))
@@ -109,8 +106,8 @@ def animate_neuron_edit_sequence(
             ).to_skeleton_polydata()
             highlight_actor = plotter.add_mesh(
                 highlight_poly,
-                color=split_color,
-                point_size=edit_point_size,
+                color=highlight_split_color,
+                point_size=highlight_point_size,
                 line_width=3,
             )
             split_remove_queue.append((highlight_actor,))
