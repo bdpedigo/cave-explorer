@@ -1,12 +1,12 @@
 import caveclient as cc
 import numpy as np
 import pandas as pd
-import pcg_skel.skel_utils as sk_utils
+# import pcg_skel.skel_utils as sk_utils
 from meshparty import skeletonize, trimesh_io
 from meshparty.skeleton import Skeleton
 from navis import TreeNeuron
 from networkframe import NetworkFrame
-from pcg_skel.chunk_tools import build_spatial_graph
+# from pcg_skel.chunk_tools import build_spatial_graph
 from sklearn.metrics import pairwise_distances_argmin
 
 from ..utils import get_nucleus_level2_id, get_nucleus_point_nm, get_positions

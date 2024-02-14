@@ -3,7 +3,7 @@ from time import sleep
 
 import numpy as np
 import pandas as pd
-import pcg_skel
+# import pcg_skel
 from caveclient import CAVEclient
 from requests import HTTPError
 from sklearn.metrics import pairwise_distances_argmin

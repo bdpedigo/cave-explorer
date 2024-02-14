@@ -4,8 +4,8 @@ import joblib
 import numpy as np
 import pandas as pd
 
-import apical_classifier.apical_model_utils as amu
-import pcg_skel
+# import apical_classifier.apical_model_utils as amu
+# import pcg_skel
 from meshparty import meshwork
 
 from .morphology import get_soma_row

@@ -7,11 +7,10 @@ version = "0.1.0"
 [tool.poetry.dependencies]
 Jinja2 = ">=3.1.2"
 POT = "^0.9.1"
-apical-classifier = { path = "../apical_classifier", develop = true }
-axon-id = { path = "../axon_id", develop = true }
 brotlicffi = "^1.1.0.0"
 caveclient = "^5.11.0"
 cloud-volume = "^8.27.0"
+gcsfs = "^2023.12.2.post1"
 glasbey = "^0.2.0"
 graspologic = "^3.3.0"
 ipykernel = "^6.25.2"
@@ -19,26 +18,19 @@ ipython = ">8.16.0"
 matplotlib-venn = "^0.11.9"
 meshparty = "^1.16.14"
 navis = "^1.5.0"
+networkframe = { path = "../networkframe", develop = true }
 nglui = "^2.14.3"
-pcg-skel = { path = "../pcg_skel", develop = true }
+pkg = { path = "pkg" }
 python = ">3.11.0,<3.12.0"
 scikit-learn = "1.2.2"
-skeleton-plot = { path = "../skeleton_plot", develop = true }
 tables = { git = "https://github.com/PyTables/PyTables" }
 task-queue = "^2.13.0"
 urllib3 = "^1.26.17"
-networkframe = {path = "../networkframe", develop = true}
-pkg = {path = "pkg"}
-gcsfs = "^2023.12.2.post1"
-polyscope = "^2.1.0"
-vedo = "^2023.5.0"
-k3d = "^2.16.1"
-ipyvtklink = "^0.2.3"
-vtk = "^9.3.0"
-pyvista = {extras = ["jupyter"], version = "^0.43.2"}
 
 [tool.poetry.group.dev]
 optional = true
 
 [tool.poetry.group.dev.dependencies]
 jupyter = "^1.0.0"
+pyvista = { extras = ["jupyter"], version = "^0.43.2" }
+vtk = "^9.3.0"
