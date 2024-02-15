@@ -1,4 +1,3 @@
-print("hello i am __init__")
 
 from .func import my_silly_function
 

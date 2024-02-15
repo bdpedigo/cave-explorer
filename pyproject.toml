@@ -20,7 +20,7 @@ meshparty = "^1.16.14"
 navis = "^1.5.0"
 networkframe = { path = "../networkframe", develop = true }
 nglui = "^2.14.3"
-pkg = { path = "pkg" }
+# pkg = { path = "pkg" }
 python = ">3.11.0,<3.12.0"
 scikit-learn = "1.2.2"
 tables = { git = "https://github.com/PyTables/PyTables" }
