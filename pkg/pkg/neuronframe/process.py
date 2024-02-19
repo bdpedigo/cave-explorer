@@ -24,7 +24,9 @@ from pkg.neuronframe import NeuronFrame
     file_suffix="neuronframe.pkl",
     arg_keys=[0],
 )
-def load_neuronframe(root_id: int, client: cc.CAVEclient):
+def load_neuronframe(root_id: int, client: cc.CAVEclient, cache_verbose: bool = False):
+    cache_verbose
+
     print("Loading level 2 network edits...")
     (
         networkdeltas_by_operation,
@@ -77,5 +79,7 @@ def load_neuronframe(root_id: int, client: cc.CAVEclient):
         post_synapses=post_synapses,
         edits=edit_stats,
     )
+
+    full_neuron.apply_edge_lengths(inplace=True)
 
     return full_neuron

@@ -107,13 +107,29 @@ def lazycloud(
         else:
             recompute = False
 
-        if not cf.exists(file_name) or recompute:
+        if "only_load" in kwargs:
+            only_load = kwargs.pop("only_load")
+        else:
+            only_load = False
+
+        if "cache_verbose" in kwargs:
+            cache_verbose = kwargs.pop("cache_verbose")
+        else:
+            cache_verbose = False
+
+        if (not cf.exists(file_name) or recompute) and not only_load:
             result = func(*args, **kwargs)
             result = saver(result)
-            print(f"LAZYCLOUD: Writing {file_name} to cloud...")
+            if cache_verbose:
+                print(f"LAZYCLOUD: Writing {file_name} to cloud...")
             cf.put(file_name, result)
 
-        print(f"LAZYCLOUD: Loading result {file_name} from cloud...")
+        if only_load:
+            if not cf.exists(file_name):
+                return None
+
+        if cache_verbose:
+            print(f"LAZYCLOUD: Loading result {file_name} from cloud...")
         loaded_result = loader(cf.get(file_name))
 
         if verify:

@@ -220,7 +220,7 @@ class NeuronFrameSequence:
         return counts
 
     def synapse_groupby_metrics(
-        self, by: str, which: Literal["pre", "post"]
+        self, by: str, which: Literal["pre", "post"], join_sequence_info: bool = True
     ) -> pd.DataFrame:
         counts_table = self.synapse_groupby_count(by=by, which=which)
 
@@ -240,7 +240,10 @@ class NeuronFrameSequence:
 
         # combining tables
         stats_tidy["prop"] = probs_tidy["prop"]
-        stats_tidy = stats_tidy.join(self.sequence_info, on=edit_label_name)
+
+        if join_sequence_info:
+            stats_tidy = stats_tidy.join(self.sequence_info, on=edit_label_name)
+
         return stats_tidy
 
     # @classmethod

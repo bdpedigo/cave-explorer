@@ -1,6 +1,7 @@
 from typing import Literal, Optional, Union
 
 import numpy as np
+from cloudfiles import CloudFiles
 from tqdm.auto import tqdm
 
 from ..io import lazycloud
@@ -15,9 +16,15 @@ from ..neuronframe import NeuronFrame, NeuronFrameSequence
     save_format="pickle",
 )
 def _create_time_ordered_sequence_dict(
-    neuron: NeuronFrame, root_id: Optional[int] = None
+    neuron: NeuronFrame,
+    root_id: Optional[int] = None,
+    use_cache: bool = True,
+    cache_verbose: bool = False,
 ) -> dict:
     root_id
+    use_cache
+    cache_verbose
+
     neuron_sequence = NeuronFrameSequence(
         neuron, prefix="", edit_label_name="operation_id"
     )
@@ -34,9 +41,14 @@ def _create_time_ordered_sequence_dict(
 
 
 def create_time_ordered_sequence(
-    neuron: NeuronFrame, root_id: Optional[int] = None, use_cache: bool = True
+    neuron: NeuronFrame,
+    root_id: Optional[int] = None,
+    use_cache: bool = True,
+    cache_verbose: bool = False,
 ) -> NeuronFrameSequence:
-    info = _create_time_ordered_sequence_dict(neuron, root_id=root_id, use_cache=use_cache)
+    info = _create_time_ordered_sequence_dict(
+        neuron, root_id=root_id, use_cache=use_cache, cache_verbose=cache_verbose
+    )
     return NeuronFrameSequence.from_dict_and_neuron(info, neuron)
 
 
@@ -52,8 +64,13 @@ def _create_merge_and_clean_sequence_dict(
     root_id: Optional[int] = None,
     order_by: Literal["time", "random"] = "time",
     random_seed: Optional[Union[int, np.integer]] = None,
+    use_cache: bool = True,
+    cache_verbose: bool = False,
 ) -> dict:
     root_id
+    use_cache
+    cache_verbose
+
     neuron_sequence = NeuronFrameSequence(
         neuron, prefix="meta", edit_label_name="metaoperation_id"
     )
@@ -90,8 +107,23 @@ def create_merge_and_clean_sequence(
     order_by: Literal["time", "random"] = "time",
     random_seed: Optional[Union[int, np.integer]] = None,
     use_cache: bool = True,
+    cache_verbose: bool = False,
 ) -> NeuronFrameSequence:
     info = _create_merge_and_clean_sequence_dict(
-        neuron, root_id=root_id, order_by=order_by, random_seed=random_seed, use_cache=use_cache
+        neuron,
+        root_id=root_id,
+        order_by=order_by,
+        random_seed=random_seed,
+        use_cache=use_cache,
+        cache_verbose=cache_verbose,
     )
     return NeuronFrameSequence.from_dict_and_neuron(info, neuron)
+
+
+def load_sequences(root_id, client=None):
+    cloud_bucket = "allen-minnie-phase3"
+    folder = "edit_sequences"
+
+    cf = CloudFiles(f"gs://{cloud_bucket}/{folder}")
+
+    files = cf.list_files(prefix=f"{root_id}=")
