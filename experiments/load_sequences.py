@@ -254,7 +254,40 @@ for i, row in centers_df.iterrows():
     ax.text(row[f"PC{x}"], row[f"PC{y}"], i, fontsize=12, ha="center", va="bottom")
     ax.scatter(row[f"PC{x}"], row[f"PC{y}"], s=100, color="black", marker="*")
 
+# %%
+X_pca_df["instance"] = (
+    X_pca_df["root_id_str"]
+    + "-"
+    + X_pca_df["order_by"]
+    + "-"
+    + X_pca_df["random_seed"].astype(str)
+)
+# %%
+fig, ax = plt.subplots(1, 1, figsize=(6, 5))
 
+group = 8
+x = 1
+y = 2
+sns.scatterplot(
+    data=X_pca_df,
+    x=f"PC{x}",
+    y=f"PC{y}",
+    s=1,
+    linewidth=0,
+    alpha=0.3,
+    legend=False,
+    color="lightgrey",
+)
+sns.lineplot(
+    data=X_pca_df.query(f"ctype=='{group}'"),
+    x=f"PC{x}",
+    y=f"PC{y}",
+    hue="root_id_str",
+    legend=False,
+    units="instance",
+    estimator=None,
+    linewidth=0.5,
+)
 
 
 # %%
