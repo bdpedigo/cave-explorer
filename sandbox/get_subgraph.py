@@ -70,9 +70,9 @@ def map_l1_to_l2_edges(l1_edges, timestamp, client):
     return l2_edges
 
 
-bbox_cg = get_bbox_cg(point_in_cg)
-
 # %%
+bbox_cg = get_bbox_cg(point_in_cg, bbox_halfwidth=2_500)
+
 
 operation_timestamp = details["timestamp"]
 post_timestamp = datetime.fromisoformat(operation_timestamp) + timedelta(microseconds=1)
@@ -105,6 +105,17 @@ post_l2_edges = post_l2_edges.set_index(["source", "target"]).index
 removed_edges_v1 = pre_l2_edges.difference(post_l2_edges).to_frame()
 added_edges_v1 = post_l2_edges.difference(pre_l2_edges).to_frame()
 print(len(removed_edges_v1), len(added_edges_v1))
+
+#%%
+
+
+#%%
+from networkframe import NetworkFrame
+
+nodes = pd.DataFrame(index=np.unique(l1_edges.values))
+nf = NetworkFrame(nodes=nodes, edges=l1_edges)
+nf.n_connected_components()
+
 # %%
 removed_edges_v1
 # %%

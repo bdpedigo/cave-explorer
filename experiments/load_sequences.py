@@ -49,7 +49,6 @@ mtypes = load_mtypes(client)
 
 
 def compute_target_stats(seq: NeuronFrameSequence):
-    seq.synapse_groupby_count(by="post_mtype", which="pre")
     post_mtype_stats = seq.synapse_groupby_metrics(by="post_mtype", which="pre")
     bouts = seq.sequence_info["has_merge"].fillna(False).cumsum()
     bouts.name = "bout"
@@ -265,7 +264,7 @@ X_pca_df["instance"] = (
 # %%
 fig, ax = plt.subplots(1, 1, figsize=(6, 5))
 
-group = 8
+group = 15
 x = 1
 y = 2
 sns.scatterplot(
@@ -278,6 +277,8 @@ sns.scatterplot(
     legend=False,
     color="lightgrey",
 )
+
+
 sns.lineplot(
     data=X_pca_df.query(f"ctype=='{group}'"),
     x=f"PC{x}",
@@ -289,6 +290,36 @@ sns.lineplot(
     linewidth=0.5,
 )
 
+lasts = X_pca_df.query(f"ctype=='{group}'")
+last_idxs = lasts.groupby(["root_id_str"])["cumulative_n_operations"].idxmax()
+last_idxs
+sns.scatterplot(
+    data=X_pca_df.loc[last_idxs],
+    x=f"PC{x}",
+    y=f"PC{y}",
+    hue="root_id_str",
+    legend=False,
+    s=50,
+    marker="^",
+    linewidth=1,
+    edgecolor="black",
+    zorder=2,
+)
+
+# %%
+
+fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+sns.scatterplot(
+    data=X_pca_df,
+    x=f"PC{x}",
+    y=f"PC{y}",
+    hue="cumulative_n_operations",
+    s=1,
+    linewidth=0,
+    alpha=0.3,
+    legend=True,
+    palette="RdBu_r",
+)
 
 # %%
 
@@ -308,25 +339,4 @@ sns.scatterplot(
     legend=True,
     s=1,
     linewidth=0,
-)
-
-# %%
-
-all_target_stats["ctype"] = all_target_stats["root_id"].map(ctype_map)
-
-# %%
-sub_target_stats = all_target_stats.query("ctype == 1")
-
-fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-sns.lineplot(
-    data=sub_target_stats.query("order_by == 'random'").reset_index(drop=False),
-    x="cumulative_n_operations",
-    y="prop",
-    hue="post_mtype",
-    palette=ctype_hues,
-    ax=ax,
-    legend=False,
-    linewidth=1,
-    units="random_seed",
-    estimator=None,
 )
