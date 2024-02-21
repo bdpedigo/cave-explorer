@@ -173,6 +173,8 @@ class NeuronFrameSequence:
             "n_operations"
         ].cumsum()
 
+        sequence_info["order"] = np.arange(len(sequence_info))
+
         return sequence_info
 
     @property

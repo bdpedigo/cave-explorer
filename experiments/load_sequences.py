@@ -85,22 +85,43 @@ for root_id, rows in files_finished.groupby("root_id"):
             target_stats["root_id"] = root_id
             target_stats["order_by"] = order_by
             target_stats["random_seed"] = random_seed
+
             all_targets_stats[(root_id, order_by, random_seed)] = target_stats
 
             info = sequence.sequence_info
             info["root_id"] = root_id
             info["order_by"] = order_by
             info["random_seed"] = random_seed
-            all_infos[(root_id, order_by, random_seed)] = info
 
+            all_infos[(root_id, order_by, random_seed)] = info
+    i += 1
+    if i > 10:
+        break
     pbar.update(1)
 
 pbar.close()
 
-# %%
 all_target_stats = pd.concat(all_targets_stats.values())
-# %%
+all_target_stats["cumulative_n_operations"].fillna(0, inplace=True)
+all_target_stats["root_id_str"] = all_target_stats["root_id"].astype(str)
+all_target_stats["sequence"] = (
+    all_target_stats["root_id_str"]
+    + "-"
+    + all_target_stats["order_by"]
+    + "-"
+    + all_target_stats["random_seed"].astype(str)
+)
+
 all_infos = pd.concat(all_infos.values())
+all_infos["root_id_str"] = all_infos["root_id"].astype(str)
+all_infos["sequence"] = (
+    all_infos["root_id_str"]
+    + "-"
+    + all_infos["order_by"]
+    + "-"
+    + all_infos["random_seed"].astype(str)
+)
+all_infos = all_infos.reset_index(drop=False).set_index(["sequence", "order"])
 # %%
 
 query_neurons = client.materialize.query_table("connectivity_groups_v507")
@@ -109,9 +130,10 @@ ctype_map = query_neurons.set_index("pt_root_id")["cell_type"]
 # %%
 
 ctype_hues = load_casey_palette()
+sns.set_context("talk")
 fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-root_id = all_target_stats["root_id"].unique()[12]
-root_target_stats = all_target_stats.query("root_id == @root_id")
+root_id = all_target_stats["root_id"].unique()[10]
+root_target_stats = all_target_stats.query("root_id == @root_id").reset_index()
 sns.lineplot(
     data=root_target_stats.query("order_by == 'time'"),
     x="cumulative_n_operations",
@@ -135,19 +157,20 @@ sns.lineplot(
     linewidth=0.5,
     alpha=0.5,
 )
+ax.set_xlabel("Cumulative number of operations")
+ax.set_ylabel("Proportion of synapses")
+ax.spines[["top", "right"]].set_visible(False)
 savefig(f"target-stats-random-vs-time-ordered-root_id={root_id}", fig)
 
 
 # %%
-# TODO pivot or pivot table
+# TODO pivot or pivot table here
 X_df = all_target_stats.pivot_table(
     index=["root_id", "order_by", "random_seed", "metaoperation_id"],
     columns="post_mtype",
     values="prop",
 ).fillna(0)
 print(X_df.shape)
-# %%
-X_df.loc[X_df.index.get_level_values("metaoperation_id").isna()]
 # %%
 all_target_stats
 
@@ -321,22 +344,64 @@ sns.scatterplot(
     palette="RdBu_r",
 )
 
+
 # %%
 
-fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-from umap import UMAP
+from scipy.spatial.distance import cdist
 
-umap = UMAP(
-    n_components=2, min_dist=0.6, n_neighbors=25, random_state=0, metric="cosine"
+
+def process_sequence_diffs(sequence_df):
+    sequence = sequence_df.index.get_level_values("sequence").unique()[0]
+    final_row_idx = sequence_df.index.get_level_values("order").max()
+    final_row = sequence_df.loc[(sequence, final_row_idx)].values.reshape(1, -1)
+    X = sequence_df.values
+
+    sample_wise_metrics = []
+    for metric in ["euclidean", "cityblock", "jensenshannon", "cosine"]:
+        distances = cdist(X, final_row, metric=metric)
+        distances = pd.Series(
+            distances.flatten(),
+            name=metric,
+            index=sequence_df.index.get_level_values("order"),
+        )
+        sample_wise_metrics.append(distances)
+    sample_wise_metrics = pd.concat(sample_wise_metrics, axis=1)
+
+    return sample_wise_metrics
+
+
+target_stats_by_state = all_target_stats.pivot(
+    index=["sequence", "order"], columns="post_mtype", values="prop"
+).fillna(0)
+
+diffs_from_final = target_stats_by_state.groupby("sequence").apply(
+    process_sequence_diffs
 )
-X_umap = umap.fit_transform(X)
+diffs_from_final = diffs_from_final.join(all_infos)
+# %%
+diffs_from_final
 
-sns.scatterplot(
-    x=X_umap[:, 0],
-    y=X_umap[:, 1],
-    hue=hue,
+# %%
+fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+sns.lineplot(
+    data=diffs_from_final,
+    x="cumulative_n_operations",
+    y="euclidean",
+    hue="root_id_str",
+    units="sequence",
+    estimator=None,
+    alpha=0.5,
+    linewidth=0.5,
     ax=ax,
-    legend=True,
-    s=1,
-    linewidth=0,
+    legend=False,
+)
+sns.lineplot(
+    data=diffs_from_final,
+    x="cumulative_n_operations",
+    y="euclidean",
+    hue="root_id_str",
+    alpha=1,
+    linewidth=2,
+    ax=ax,
+    legend=False,
 )

@@ -70,7 +70,7 @@ change_log = get_detailed_change_log(root_id, client, filtered=False)
 change_log[~change_log["is_merge"]]
 
 # %%%
-operation_id = 172185
+operation_id = 390649
 details = change_log.loc[operation_id]
 
 # %%
@@ -91,6 +91,70 @@ for root in after_root_ids:
     post_l2_nodes += list(client.chunkedgraph.get_leaves(root, stop_layer=2))
 post_l2_nodes = pd.Index(post_l2_nodes)
 print(f"{time.time() - currtime:.3f} seconds elapsed to hit get_leaves().")
+# %%
+
+removed_nodes = pre_l2_nodes.difference(post_l2_nodes)
+added_nodes = post_l2_nodes.difference(pre_l2_nodes)
+
+print(removed_nodes)
+print(added_nodes)
+
+# %%
+currtime = time.time()
+client.chunkedgraph.get_leaves(root_id, stop_layer=2)
+
+print(f"{time.time() - currtime:.3f} seconds elapsed.")
+
+# %%
+
+
+seg_res = np.array(client.chunkedgraph.segmentation_info["scales"][0]["resolution"])
+
+
+def get_bbox_cg(point_in_cg, bbox_halfwidth=10_000):
+    point_in_nm = point_in_cg * seg_res
+
+    x_center, y_center, z_center = point_in_nm
+
+    x_start = x_center - bbox_halfwidth
+    x_stop = x_center + bbox_halfwidth
+    y_start = y_center - bbox_halfwidth
+    y_stop = y_center + bbox_halfwidth
+    z_start = z_center - bbox_halfwidth
+    z_stop = z_center + bbox_halfwidth
+
+    start_point_cg = np.round(np.array([x_start, y_start, z_start]) / seg_res)
+    stop_point_cg = np.round(np.array([x_stop, y_stop, z_stop]) / seg_res)
+
+    bbox_cg = np.array([start_point_cg, stop_point_cg], dtype=int).T
+
+    return bbox_cg
+
+
+point_in_cg = 0.5 * np.mean(details["sink_coords"], axis=0) + 0.5 * np.mean(
+    details["source_coords"], axis=0
+)
+
+bbox = get_bbox_cg(point_in_cg, bbox_halfwidth=2_500)
+
+currtime = time.time()
+before_root_ids = details["before_root_ids"]
+after_root_ids = details["roots"]
+pre_l2_nodes = []
+for root in before_root_ids:
+    pre_l2_nodes += list(
+        client.chunkedgraph.get_leaves(root, stop_layer=2, bounds=bbox)
+    )
+pre_l2_nodes = pd.Index(pre_l2_nodes)
+
+post_l2_nodes = []
+for root in after_root_ids:
+    post_l2_nodes += list(
+        client.chunkedgraph.get_leaves(root, stop_layer=2, bounds=bbox)
+    )
+post_l2_nodes = pd.Index(post_l2_nodes)
+print(f"{time.time() - currtime:.3f} seconds elapsed to hit get_leaves() with bbox.")
+
 
 # %%
 
