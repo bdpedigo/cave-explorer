@@ -1,0 +1,71 @@
+---
+title: Methods
+toc: true
+# cap-location: margin
+---
+
+## Schemes for applying edits to a neuron
+
+Below, we detail the different schemes used for replaying edits onto a neuron.
+
+### Historical
+
+The simplest scheme is to simply apply the edits on the neuron in the same order in 
+which those edits happened in reality. We denote this the **historical** ordering of edits.
+
+**Algorithm:**
+---
+
+Input: a state of a neuron/segmentation
+
+1. From all edits in the history of a given neuron, select the earliest which has not been applied
+2. Apply the edit
+3. Compute the new connected component for this neuron from the nucleus
+4. Compute metrics
+5. Record the number of operations applied (always 1 for this scheme)
+6. Recurse (go back to 1.)
+
+---
+
+### Clean-and-merge
+
+Often, proofreaders will follow what we'll refer to as a "clean-and-merge" strategy. The
+idea is that one finds a segment which appears to be part of the current neuron, cleans
+up that segment by splitting off false-mergers, and then finally connects this (*clean*) [*Clean* means that all split edits have been applied to the segment]{.aside} segment back to the neuron.
+
+Below, we describe how we implement our idealized version of this strategy when applying
+edits on a neuron. There are two subtle variants of this idea which differ in the order 
+in which merges are applied to the neuron; see 2a. and 2b. in the algorithm below. We
+denote these strategies **clean-and-merge (historical)** and **clean-and-merge (random)**.
+
+**Algorithm:**
+---
+
+Input: a clean state of a neuron/segmentation
+
+1. Find all merge edits which are *available* [*Available* means an edit which connects to the current connected component]{.aside}
+2. Choose one of these available merges to apply
+   a. Choose the merge which is earliest in history (historical strategy)
+   b. Choose at among these at random (random strategy)
+3. Find the segment which would be added if this merge is applied
+4. For that segment, apply all available split edits
+5. Apply the merge to connect this new segment to the current connected component
+6. Compute the new connected component for this neuron from the nucleus
+7. Compute metrics
+8. Record the number of operations, equal to count of all operations needed for the clean (4.) and the merge (5.)
+9. Recurse (go back to 1.)
+ 
+---
+
+::: {.callout-note}
+I actually implement this as a merge-and-clean process since the recursion is a bit 
+easier to implement; but I reorder the metrics/counts of edits appropriately to match
+the above process. 
+:::
+
+
+## Metrics to evaluate
+
+### Proportion of inputs/outputs onto classes
+
+### Connectivity probability by distance

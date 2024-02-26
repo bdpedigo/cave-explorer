@@ -19,7 +19,6 @@ from tqdm.auto import tqdm
 from pkg.neuronframe import NeuronFrameSequence, load_neuronframe
 from pkg.paths import OUT_PATH
 from pkg.plot import savefig
-from pkg.sequence import create_merge_and_clean_sequence
 from pkg.utils import load_casey_palette, load_mtypes
 
 # %%
@@ -44,6 +43,9 @@ has_all = file_counts[file_counts == 12].index
 files_finished = files.query("root_id in @has_all")
 
 # %%
+time_files = files.query("order_by.isna()")
+
+# %%
 
 client = cc.CAVEclient("minnie65_phase3_v1")
 mtypes = load_mtypes(client)
@@ -51,7 +53,7 @@ mtypes = load_mtypes(client)
 # %%
 
 
-def compute_target_stats(seq: NeuronFrameSequence):
+def compute_target_stats(seq: NeuronFrameSequence, prefix=""):
     post_mtype_stats = seq.synapse_groupby_metrics(by="post_mtype", which="pre")
     bouts = seq.sequence_info["has_merge"].fillna(False).cumsum()
     bouts.name = "bout"
@@ -60,87 +62,62 @@ def compute_target_stats(seq: NeuronFrameSequence):
     )
     # bout_info = seq.sequence_info.loc[bout_exemplars.values]
     bout_post_mtype_stats = post_mtype_stats.query(
-        "metaoperation_id.isin(@bout_exemplars)"
+        f"{prefix}operation_id.isin(@bout_exemplars)"
     )
     return bout_post_mtype_stats
 
 
 # %%
 
-recompute = False
-if recompute:
-    root_ids = files_finished["root_id"].unique()
-    all_targets_stats = {}
-    all_infos = {}
-    pbar = tqdm(total=len(root_ids), desc="Computing target stats...")
-    i = 0
-    for root_id, rows in files_finished.groupby("root_id"):
-        neuron = load_neuronframe(root_id, client)
-        neuron.pre_synapses["post_mtype"] = neuron.pre_synapses["post_pt_root_id"].map(
-            mtypes["cell_type"]
-        )
-        for keys, sub_rows in rows.groupby(["order_by", "random_seed"]):
-            order_by, random_seed = keys
-            if order_by == "time" or order_by == "random":
-                sequence = create_merge_and_clean_sequence(
-                    neuron, root_id, order_by=order_by, random_seed=random_seed
-                )
+from pkg.sequence import create_time_ordered_sequence
 
-                target_stats = compute_target_stats(sequence)
-                target_stats["root_id"] = root_id
-                target_stats["order_by"] = order_by
-                target_stats["random_seed"] = random_seed
-                all_targets_stats[(root_id, order_by, random_seed)] = target_stats.drop(
-                    ["pre_synapses", "post_synapses", "applied_edits"], axis=1
-                )
-
-                info = sequence.sequence_info
-                info["root_id"] = root_id
-                info["order_by"] = order_by
-                info["random_seed"] = random_seed
-                all_infos[(root_id, order_by, random_seed)] = info.drop(
-                    ["pre_synapses", "post_synapses", "applied_edits"], axis=1
-                )
-        i += 1
-        # if i > 5:
-        #     break
-        pbar.update(1)
-
-    pbar.close()
-
-    save_path = OUT_PATH / "load_sequences"
-
-    all_target_stats = pd.concat(all_targets_stats.values())
-    all_target_stats["cumulative_n_operations"].fillna(0, inplace=True)
-    all_target_stats["root_id_str"] = all_target_stats["root_id"].astype(str)
-    all_target_stats["sequence"] = (
-        all_target_stats["root_id_str"]
-        + "-"
-        + all_target_stats["order_by"]
-        + "-"
-        + all_target_stats["random_seed"].astype(str)
+root_ids = files_finished["root_id"].unique()
+all_target_stats = {}
+all_infos = {}
+pbar = tqdm(total=len(root_ids), desc="Computing target stats...")
+i = 0
+for root_id, rows in files_finished.groupby("root_id"):
+    neuron = load_neuronframe(root_id, client)
+    neuron.pre_synapses["post_mtype"] = neuron.pre_synapses["post_pt_root_id"].map(
+        mtypes["cell_type"]
     )
-    all_target_stats.to_csv(save_path / "all_target_stats.csv")
+    sequence = create_time_ordered_sequence(neuron, root_id)
+    target_stats = compute_target_stats(sequence)
+    target_stats["root_id"] = root_id
+    all_target_stats[root_id] = target_stats
 
-    all_infos = pd.concat(all_infos.values())
-    all_infos["root_id_str"] = all_infos["root_id"].astype(str)
-    all_infos["sequence"] = (
-        all_infos["root_id_str"]
-        + "-"
-        + all_infos["order_by"]
-        + "-"
-        + all_infos["random_seed"].astype(str)
+    info = sequence.sequence_info
+    info["root_id"] = root_id
+
+    all_infos[root_id] = info.drop(
+        ["pre_synapses", "post_synapses", "applied_edits"], axis=1
     )
-    all_infos = all_infos.reset_index(drop=False).set_index(["sequence", "order"])
-    all_infos.to_csv(save_path / "all_infos.csv")
+    pbar.update(1)
 
-all_target_stats = pd.read_csv(
-    OUT_PATH / "load_sequences" / "all_target_stats.csv", index_col=0
-)
-all_target_stats["metaoperation_id"] = all_target_stats["metaoperation_id"].astype(
-    "Int64"
-)
-all_infos = pd.read_csv(OUT_PATH / "load_sequences" / "all_infos.csv", index_col=[0, 1])
+pbar.close()
+
+save_path = OUT_PATH / "load_sequences"
+
+all_target_stats = pd.concat(all_target_stats.values())
+all_target_stats["cumulative_n_operations"].fillna(0, inplace=True)
+all_target_stats["root_id_str"] = all_target_stats["root_id"].astype(str)
+all_target_stats["sequence"] = all_target_stats["root_id_str"]
+
+# all_target_stats.to_csv(save_path / "all_target_stats.csv")
+
+all_infos = pd.concat(all_infos.values())
+all_infos["root_id_str"] = all_infos["root_id"].astype(str)
+all_infos["sequence"] = all_infos["root_id_str"]
+all_infos = all_infos.reset_index(drop=False).set_index(["sequence", "order"])
+# all_infos.to_csv(save_path / "all_infos.csv")
+
+# all_target_stats = pd.read_csv(
+#     OUT_PATH / "load_sequences" / "all_target_stats.csv", index_col=0
+# )
+# all_target_stats["metaoperation_id"] = all_target_stats["metaoperation_id"].astype(
+#     "Int64"
+# )
+# all_infos = pd.read_csv(OUT_PATH / "load_sequences" / "all_infos.csv", index_col=[0, 1])
 
 # %%
 
@@ -186,49 +163,9 @@ diffs_from_final
 ctype_hues = load_casey_palette()
 sns.set_context("talk")
 
-# %%
-
-y = "cosine"
-fig, axs = plt.subplots(2, 2, figsize=(8, 8), constrained_layout=True, sharex=True)
-for i, y in enumerate(["euclidean", "cityblock", "jensenshannon", "cosine"]):
-    sns.lineplot(
-        data=diffs_from_final.loc["864691134886015738-time-None"],
-        x="cumulative_n_operations",
-        y=y,
-        estimator=None,
-        alpha=1,
-        linewidth=2,
-        legend=False,
-        ax=axs.flat[i],
-    )
 
 # %%
-y = "cityblock"
-fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-sns.lineplot(
-    data=diffs_from_final.query("order_by == 'random'"),
-    x="cumulative_n_operations",
-    y=y,
-    hue="root_id_str",
-    units="sequence",
-    estimator=None,
-    alpha=0.5,
-    linewidth=0.25,
-    ax=ax,
-    legend=False,
-)
-sns.lineplot(
-    data=diffs_from_final.query("order_by == 'time'"),
-    x="cumulative_n_operations",
-    y=y,
-    hue="root_id_str",
-    alpha=1,
-    linewidth=1,
-    ax=ax,
-    legend=False,
-)
-
-# %%
+y = "euclidean"
 fig, ax = plt.subplots(1, 1, figsize=(6, 5))
 sns.lineplot(
     data=diffs_from_final,
@@ -240,23 +177,6 @@ sns.lineplot(
     legend=False,
 )
 
-# %%
-fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-sns.kdeplot(
-    data=diffs_from_final,
-    x="cumulative_n_operations",
-    y=y,
-    kde=True,
-    ax=ax,
-    clip=((0, 1000), (0, 2)),
-)
-sns.histplot(
-    data=diffs_from_final,
-    x="cumulative_n_operations",
-    y=y,
-    kde=True,
-    ax=ax,
-)
 # %%
 column_mtypes = client.materialize.query_table("allen_column_mtypes_v2")
 column_mtypes.set_index("pt_root_id", inplace=True)
@@ -270,12 +190,10 @@ for i, y in enumerate(["euclidean", "cityblock", "jensenshannon", "cosine"]):
     for j, group in enumerate(diffs_from_final["mtype"].unique()):
         ax = axs[i, j]
         sns.lineplot(
-            data=diffs_from_final.query("mtype == @group").query(
-                "order_by == 'random'"
-            ),
+            data=diffs_from_final.query("mtype == @group"),
             x="cumulative_n_operations",
             y=y,
-            linewidth=0.1,
+            linewidth=1,
             units="sequence",
             estimator=None,
             alpha=0.5,
@@ -291,7 +209,7 @@ for i, y in enumerate(["euclidean", "cityblock", "jensenshannon", "cosine"]):
 
 fig.text(0.54, 0.0, "Cumulative operations", ha="center")
 plt.tight_layout()
-savefig("diffs-from-final-access-order-random-by-mtype", fig, folder="load_sequences")
+savefig("diffs-from-final-real-order-by-mtype", fig, folder="load_sequences")
 
 # TODO need a better way to visualize this, some kind of smoothing or binning
 

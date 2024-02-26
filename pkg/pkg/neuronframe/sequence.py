@@ -168,6 +168,7 @@ class NeuronFrameSequence:
         sequence_info["n_post_synapses"] = sequence_info["post_synapses"].apply(len)
 
         sequence_info = sequence_info.join(self.edits, how="left")
+        sequence_info["n_operations"].fillna(0, inplace=True)
 
         sequence_info["cumulative_n_operations"] = sequence_info[
             "n_operations"

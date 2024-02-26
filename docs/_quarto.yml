@@ -18,6 +18,7 @@ website:
     contents:
       - index.qmd
       - introduction.qmd
+      - methods.qmd
   comments:
     hypothesis:
       theme: clean
