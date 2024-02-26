@@ -1,10 +1,11 @@
 ---
 title: Methods
 toc: true
+number-sections: False
 # cap-location: margin
 ---
 
-## Schemes for applying edits to a neuron
+## Schemes for applying edits to a neuron {#sec-schemes}
 
 Below, we detail the different schemes used for replaying edits onto a neuron.
 
@@ -66,6 +67,28 @@ the above process.
 
 ## Metrics to evaluate
 
+Here, we describe the metrics that we evaluate for each *neuron-state* [A *neuron-state* is just a version of a particular neuron with a particular set of edits applied to it, according to one of the schemes described in [the schemes section](#sec-schemes)]{.aside}.
+
 ### Proportion of inputs/outputs onto classes
 
+Assume we have $K$-classes of neuron (e.g. morphological types). This metric associates
+each neuron-state with a $K$-length vector, $x$, where $x_k$ is the proportion of that 
+neuron-state's output synapses which target a neuron in class $k$.
+
+::: {.callout-note}
+
+For the categorization of target neurons, I am using `aibs_metamodel_mtypes_v661_v2`.
+
+:::
+
 ### Connectivity probability by distance
+
+
+
+## Other
+
+::: {.callout-note}
+
+For categorization of inhibitory neuron into broad morphological type, I am using `allen_column_mtypes_v2`
+
+:::
