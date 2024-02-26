@@ -75,6 +75,8 @@ Assume we have $K$-classes of neuron (e.g. morphological types). This metric ass
 each neuron-state with a $K$-length vector, $x$, where $x_k$ is the proportion of that 
 neuron-state's output synapses which target a neuron in class $k$.
 
+This metric could also be flipped in the definition above to consider the inputs to a cell. 
+
 ::: {.callout-note}
 
 For the categorization of target neurons, I am using `aibs_metamodel_mtypes_v661_v2`.
@@ -83,7 +85,7 @@ For the categorization of target neurons, I am using `aibs_metamodel_mtypes_v661
 
 ### Connectivity probability by distance
 
-
+Imagine space is discretized into bins of an arbitrary size/shape, for instace, concentric cylinders centered on the soma of a neuron. This metric captures the probability that cell $i$ targets a downstream neuron whose soma lives within a given bin, $l$. 
 
 ## Other
 
