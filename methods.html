@@ -291,6 +291,7 @@ Note
 <section id="proportion-of-inputsoutputs-onto-classes" class="level3">
 <h3 class="anchored" data-anchor-id="proportion-of-inputsoutputs-onto-classes">Proportion of inputs/outputs onto classes</h3>
 <p>Assume we have <span class="math inline">\(K\)</span>-classes of neuron (e.g.&nbsp;morphological types). This metric associates each neuron-state with a <span class="math inline">\(K\)</span>-length vector, <span class="math inline">\(x\)</span>, where <span class="math inline">\(x_k\)</span> is the proportion of that neuron-state’s output synapses which target a neuron in class <span class="math inline">\(k\)</span>.</p>
+<p>This metric could also be flipped in the definition above to consider the inputs to a cell.</p>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -307,6 +308,7 @@ Note
 </section>
 <section id="connectivity-probability-by-distance" class="level3">
 <h3 class="anchored" data-anchor-id="connectivity-probability-by-distance">Connectivity probability by distance</h3>
+<p>Imagine space is discretized into bins of an arbitrary size/shape, for instace, concentric cylinders centered on the soma of a neuron. This metric captures the probability that cell <span class="math inline">\(i\)</span> targets a downstream neuron whose soma lives within a given bin, <span class="math inline">\(l\)</span>.</p>
 </section>
 </section>
 <section id="other" class="level2">
