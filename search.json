@@ -97,8 +97,8 @@
     ]
   },
   {
-    "objectID": "methods.html#schemes-for-applying-edits-to-a-neuron",
-    "href": "methods.html#schemes-for-applying-edits-to-a-neuron",
+    "objectID": "methods.html#sec-schemes",
+    "href": "methods.html#sec-schemes",
     "title": "Methods",
     "section": "",
     "text": "Below, we detail the different schemes used for replaying edits onto a neuron.\n\n\nThe simplest scheme is to simply apply the edits on the neuron in the same order in which those edits happened in reality. We denote this the historical ordering of edits.\nAlgorithm:\n\nInput: a state of a neuron/segmentation\n\nFrom all edits in the history of a given neuron, select the earliest which has not been applied\nApply the edit\nCompute the new connected component for this neuron from the nucleus\nCompute metrics\nRecord the number of operations applied (always 1 for this scheme)\nRecurse (go back to 1.)\n\n\n\n\n\nOften, proofreaders will follow what we’ll refer to as a “clean-and-merge” strategy. The idea is that one finds a segment which appears to be part of the current neuron, cleans up that segment by splitting off false-mergers, and then finally connects this (clean)  segment back to the neuron.Clean means that all split edits have been applied to the segment\nBelow, we describe how we implement our idealized version of this strategy when applying edits on a neuron. There are two subtle variants of this idea which differ in the order in which merges are applied to the neuron; see 2a. and 2b. in the algorithm below. We denote these strategies clean-and-merge (historical) and clean-and-merge (random).\nAlgorithm:\n\nInput: a clean state of a neuron/segmentation\n\nFind all merge edits which are available \nChoose one of these available merges to apply\n\nChoose the merge which is earliest in history (historical strategy)\nChoose at among these at random (random strategy)\n\nFind the segment which would be added if this merge is applied\nFor that segment, apply all available split edits\nApply the merge to connect this new segment to the current connected component\nCompute the new connected component for this neuron from the nucleus\nCompute metrics\nRecord the number of operations, equal to count of all operations needed for the clean (4.) and the merge (5.)\nRecurse (go back to 1.)\n\nAvailable means an edit which connects to the current connected component\n\n\n\n\n\n\nNote\n\n\n\nI actually implement this as a merge-and-clean process since the recursion is a bit easier to implement; but I reorder the metrics/counts of edits appropriately to match the above process.",
@@ -111,7 +111,17 @@
     "href": "methods.html#metrics-to-evaluate",
     "title": "Methods",
     "section": "Metrics to evaluate",
-    "text": "Metrics to evaluate\n\nProportion of inputs/outputs onto classes\n\n\nConnectivity probability by distance",
+    "text": "Metrics to evaluate\nHere, we describe the metrics that we evaluate for each neuron-state .A neuron-state is just a version of a particular neuron with a particular set of edits applied to it, according to one of the schemes described in the schemes section\n\nProportion of inputs/outputs onto classes\nAssume we have \\(K\\)-classes of neuron (e.g. morphological types). This metric associates each neuron-state with a \\(K\\)-length vector, \\(x\\), where \\(x_k\\) is the proportion of that neuron-state’s output synapses which target a neuron in class \\(k\\).\n\n\n\n\n\n\nNote\n\n\n\nFor the categorization of target neurons, I am using aibs_metamodel_mtypes_v661_v2.\n\n\n\n\nConnectivity probability by distance",
+    "crumbs": [
+      "Methods"
+    ]
+  },
+  {
+    "objectID": "methods.html#other",
+    "href": "methods.html#other",
+    "title": "Methods",
+    "section": "Other",
+    "text": "Other\n\n\n\n\n\n\nNote\n\n\n\nFor categorization of inhibitory neuron into broad morphological type, I am using allen_column_mtypes_v2",
     "crumbs": [
       "Methods"
     ]
