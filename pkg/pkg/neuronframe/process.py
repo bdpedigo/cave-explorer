@@ -24,7 +24,9 @@ from pkg.neuronframe import NeuronFrame
     file_suffix="neuronframe.pkl",
     arg_keys=[0],
 )
-def load_neuronframe(root_id: int, client: cc.CAVEclient, cache_verbose: bool = False):
+def load_neuronframe(
+    root_id: int, client: cc.CAVEclient, cache_verbose: bool = False
+) -> NeuronFrame:
     cache_verbose
 
     print("Loading level 2 network edits...")
