@@ -6,6 +6,9 @@ os.environ["SKEDITS_RECOMPUTE"] = "False"
 os.environ["LAZYCLOUD_RECOMPUTE"] = "False"
 os.environ["LAZYCLOUD_USE_CLOUD"] = "True"
 
+import pickle
+import time
+
 import caveclient as cc
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,6 +22,7 @@ from sklearn.metrics import pairwise_distances
 from tqdm.auto import tqdm
 
 from pkg.neuronframe import NeuronFrame, NeuronFrameSequence, load_neuronframe
+from pkg.paths import OUT_PATH
 from pkg.plot import savefig
 from pkg.sequence import create_merge_and_clean_sequence, create_time_ordered_sequence
 from pkg.utils import load_casey_palette, load_mtypes
@@ -303,8 +307,10 @@ if recompute:
     all_infos = []
     all_sequence_features = {}
     pbar = tqdm(total=len(root_ids), desc="Computing target stats...")
-    for root_id, rows in files_finished.iloc[:13].groupby("root_id"):
+    for root_id, rows in files_finished.iloc[:].groupby("root_id"):
+        currtime = time.time()
         neuron = load_neuronframe(root_id, client)
+        print(f"{time.time() - currtime:.3f} seconds elapsed.")
 
         annotate_pre_synapses(neuron, mtypes)
         annotate_mtypes(neuron, mtypes)
@@ -369,50 +375,25 @@ if recompute:
 
     pbar.close()
 
-#     all_target_stats = pd.concat(all_targets_stats.values())
+    all_infos = pd.concat(all_infos)
 
-#     if save:
-#         save_path = OUT_PATH / "load_sequences"
+    meta_features_df = pd.DataFrame(all_sequence_features).T
+    meta_features_df.index.names = ["root_id", "scheme", "order_by", "random_seed"]
 
-#         all_target_stats["cumulative_n_operations"].fillna(0, inplace=True)
-#         all_target_stats["root_id_str"] = all_target_stats["root_id"].astype(str)
-#         all_target_stats["sequence"] = (
-#             all_target_stats["root_id_str"]
-#             + "-"
-#             + all_target_stats["order_by"]
-#             + "-"
-#             + all_target_stats["random_seed"].astype(str)
-#         )
-#         all_target_stats.to_csv(save_path / "all_target_stats.csv")
+    if save:
+        with open(OUT_PATH / "sequence_metrics" / "all_infos.pkl", "wb") as f:
+            pickle.dump(all_infos, f)
+        with open(OUT_PATH / "sequence_metrics" / "meta_features_df.pkl", "wb") as f:
+            pickle.dump(meta_features_df, f)
 
-#         all_infos = pd.concat(all_infos.values())
-#         all_infos["root_id_str"] = all_infos["root_id"].astype(str)
-#         all_infos["sequence"] = (
-#             all_infos["root_id_str"]
-#             + "-"
-#             + all_infos["order_by"]
-#             + "-"
-#             + all_infos["random_seed"].astype(str)
-#         )
-#         all_infos = all_infos.reset_index(drop=False).set_index(["sequence", "order"])
-#         all_infos.to_csv(save_path / "all_infos.csv")
+else:
+    with open(OUT_PATH / "sequence_metrics" / "all_infos.pkl", "rb") as f:
+        all_infos = pickle.load(f)
+    with open(OUT_PATH / "sequence_metrics" / "meta_features_df.pkl", "rb") as f:
+        meta_features_df = pickle.load(f)
 
-# if save or not recompute:
-#     all_target_stats = pd.read_csv(
-#         OUT_PATH / "load_sequences" / "all_target_stats.csv", index_col=0
-#     )
-#     all_target_stats["metaoperation_id"] = all_target_stats["metaoperation_id"].astype(
-#         "Int64"
-#     )
-#     all_infos = pd.read_csv(
-#         OUT_PATH / "load_sequences" / "all_infos.csv", index_col=[0, 1]
-#     )
+
 # %%
-
-meta_features_df = pd.DataFrame(all_sequence_features).T
-meta_features_df.index.names = ["root_id", "scheme", "order_by", "random_seed"]
-meta_features_df.reset_index()
-
 sub_df = pd.concat(
     meta_features_df.query("scheme == 'historical'")["spatial_props"].values
 )
@@ -422,14 +403,11 @@ sub_df = pd.concat(
 # perhaps a table of tables will work, and it can infill the index onto those tables
 # before doing a join or concat
 
-sub_df
-
 # TODO key the elements in the sequence on something other than metaoperation_id, this
 # will make it easier to join with the time-ordered dataframes which use "operation_id",
 # or do things like take "bouts" for computing metrics which are not tied to a specific
 # operation_id
-# %%
-sub_df.index = sub_df.index.droplevel(["root_id", "scheme", "order_by", "random_seed"])
+
 
 # %%
 
