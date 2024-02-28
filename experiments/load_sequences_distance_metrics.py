@@ -60,7 +60,7 @@ print(len(neuron.pre_synapses))
 # %%
 
 
-BINS = np.linspace(0, 1_000_000, 51)
+BINS = np.linspace(0, 1_000_000, 31)
 
 
 def annotate_pre_synapses(neuron: NeuronFrame, mtypes: pd.DataFrame) -> None:
@@ -282,6 +282,20 @@ for root_id, rows in files_finished.iloc[:13].groupby("root_id"):
     print(rows)
 # %%
 
+
+def apply_metadata(df, key):
+    index_name = df.index.name
+    df["root_id"] = key[0]
+    df["scheme"] = key[1]
+    df["order_by"] = key[2]
+    df["random_seed"] = key[3]
+    df.reset_index(drop=False, inplace=True)
+    df.set_index(
+        ["root_id", "scheme", "order_by", "random_seed", index_name], inplace=True
+    )
+    return df
+
+
 recompute = True
 save = False
 if recompute:
@@ -311,30 +325,22 @@ if recompute:
             sequence_key = (root_id, scheme, order_by, random_seed)
 
             sequence_feature_dfs = {}
-            base_attrs = {
-                "order_by": order_by,
-                "random_seed": random_seed,
-                "root_id": root_id,
-            }
             counts_by_mtype = sequence.apply_to_synapses_by_sample(
                 compute_target_counts, which="pre", by="post_mtype"
             )
-            counts_by_mtype.attrs = base_attrs
-            counts_by_mtype.attrs["name"] = "output_counts_by_mtype"
+            counts_by_mtype = apply_metadata(counts_by_mtype, sequence_key)
             sequence_feature_dfs["counts_by_mtype"] = counts_by_mtype
 
             props_by_mtype = sequence.apply_to_synapses_by_sample(
                 compute_target_proportions, which="pre", by="post_mtype"
             )
-            props_by_mtype.attrs = base_attrs
-            props_by_mtype.attrs["name"] = "output_props_by_mtype"
+            props_by_mtype = apply_metadata(props_by_mtype, sequence_key)
             sequence_feature_dfs["props_by_mtype"] = props_by_mtype
 
             spatial_props = sequence.apply_to_synapses_by_sample(
                 compute_spatial_target_proportions, which="pre", mtypes_df=mtypes
             )
-            spatial_props.attrs = base_attrs
-            spatial_props.attrs["name"] = "output_props_by_radial"
+            spatial_props = apply_metadata(spatial_props, sequence_key)
             sequence_feature_dfs["spatial_props"] = spatial_props
 
             spatial_props_by_mtype = sequence.apply_to_synapses_by_sample(
@@ -343,8 +349,9 @@ if recompute:
                 mtypes_df=mtypes,
                 by="post_mtype",
             )
-            spatial_props_by_mtype.attrs = base_attrs
-            spatial_props_by_mtype.attrs["name"] = "output_props_by_radial_mtype"
+            spatial_props_by_mtype = apply_metadata(
+                spatial_props_by_mtype, sequence_key
+            )
             sequence_feature_dfs["spatial_props_by_mtype"] = spatial_props_by_mtype
 
             all_sequence_features[sequence_key] = sequence_feature_dfs
@@ -406,20 +413,50 @@ meta_features_df = pd.DataFrame(all_sequence_features).T
 meta_features_df.index.names = ["root_id", "scheme", "order_by", "random_seed"]
 meta_features_df.reset_index()
 
-sub_dfs = meta_features_df.query('scheme == "clean-and-merge"').query(
-    "order_by == 'random'"
-)["props_by_mtype"]
+sub_df = pd.concat(
+    meta_features_df.query("scheme == 'historical'")["spatial_props"].values
+)
 
-#%%
-sub_dfs.iloc[0]
+# TODO whether to implement this as a table of tables, one massive table...
+# nothing really feels satisfying here
+# perhaps a table of tables will work, and it can infill the index onto those tables
+# before doing a join or concat
+
+sub_df
+
+# TODO key the elements in the sequence on something other than metaoperation_id, this
+# will make it easier to join with the time-ordered dataframes which use "operation_id",
+# or do things like take "bouts" for computing metrics which are not tied to a specific
+# operation_id
+# %%
+sub_df.index = sub_df.index.droplevel(["root_id", "scheme", "order_by", "random_seed"])
+
+# %%
+
+cols = sub_df.columns
+mids = [
+    interval.mid for interval in sub_df.columns.get_level_values("radial_to_nuc_bin")
+]
+
+fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+colors = sns.color_palette("coolwarm_r", n_colors=sub_df.shape[0])
+
+for i, (operation_id, row) in enumerate(sub_df.iterrows()):
+    sns.lineplot(
+        y=row.values,
+        x=mids,
+        ax=ax,
+        alpha=0.5,
+        linewidth=0.5,
+        color=colors[i],
+        legend=False,
+    )
+
 
 # %%
 
 query_neurons = client.materialize.query_table("connectivity_groups_v795")
 ctype_map = query_neurons.set_index("pt_root_id")["cell_type"]
-
-# %%
-ctype_map.loc[root_id]
 
 # %%
 
