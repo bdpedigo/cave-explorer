@@ -464,13 +464,18 @@ class NeuronFrame(NetworkFrame):
     def remove_unused_edits(self):
         pass
 
-    def to_skeleton_polydata(self, label: Optional[str] = None) -> pv.PolyData:
+    def to_skeleton_polydata(
+        self, label: Optional[str] = None, draw_lines: bool = True
+    ) -> pv.PolyData:
         nodes = self.nodes
         edges = self.edges
 
         points = nodes[["x", "y", "z"]].values.astype(float)
 
-        lines = _edges_to_lines(nodes, edges)
+        if draw_lines:
+            lines = _edges_to_lines(nodes, edges)
+        else:
+            lines = None
 
         skeleton = pv.PolyData(points, lines=lines)
 
@@ -479,15 +484,18 @@ class NeuronFrame(NetworkFrame):
 
         return skeleton
 
-    def to_merge_polydata(self, draw_edges=False) -> pv.PolyData:
-        merge_ids = self.edits.query("is_merge").index
+    def to_merge_polydata(self, draw_edges=False, prefix="") -> pv.PolyData:
+        if prefix == "meta":
+            merge_ids = self.metaedits.query("has_merge").index
+        else:
+            merge_ids = self.edits.query("is_merge").index
         merge_nodes = self.nodes.query(
-            "(operation_added in @merge_ids) and (operation_added != -1)"
+            f"({prefix}operation_added in @merge_ids) and ({prefix}operation_added != -1)"
         )
         points = merge_nodes[["x", "y", "z"]].values.astype(float)
 
         if draw_edges:
-            merge_edges = self.edges.query("operation_added.isin(@merge_ids)")
+            merge_edges = self.edges.query(f"{prefix}operation_added.isin(@merge_ids)")
             merge_edges = merge_edges.query(
                 "source in @merge_nodes.index and target in @merge_nodes.index"
             )
@@ -499,19 +507,22 @@ class NeuronFrame(NetworkFrame):
 
         return merge_poly
 
-    def to_split_polydata(self, draw_edges=False) -> pv.PolyData:
-        split_ids = self.edits.query("~is_merge").index
+    def to_split_polydata(self, draw_edges=False, prefix="") -> pv.PolyData:
+        if prefix == "meta":
+            split_ids = self.metaedits.query("~has_merge").index
+        else:
+            split_ids = self.edits.query("~is_merge").index
         split_nodes = self.nodes.query(
-            "(operation_added in @split_ids) and (operation_added != -1)"
+            f"({prefix}operation_removed in @split_ids) and ({prefix}operation_removed != -1)"
         )
         points = split_nodes[["x", "y", "z"]].values.astype(float)
 
         if draw_edges:
-            split_edges = self.edges.query("operation_added.isin(@split_ids)")
-            split_edges = split_edges.query(
-                "source in @split_nodes.index and target in @split_nodes.index"
-            )
-            lines = _edges_to_lines(split_nodes, split_edges)
+            split_edges = self.edges.query(f"{prefix}operation_removed.isin(@split_ids)")
+            # split_edges = split_edges.query(
+            #     "source in @split_nodes.index and target in @split_nodes.index"
+            # )
+            lines = _edges_to_lines(self.nodes, split_edges)
         else:
             lines = None
 

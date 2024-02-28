@@ -216,7 +216,9 @@ def load_casey_palette():
 
 
 def load_mtypes(client: CAVEclient):
-    mtypes = client.materialize.query_table("aibs_metamodel_mtypes_v661_v2")
+    mtypes = client.materialize.query_table(
+        "aibs_metamodel_mtypes_v661_v2", desired_resolution=[1, 1, 1]
+    )
     root_id_counts = mtypes["pt_root_id"].value_counts()
     root_id_singles = root_id_counts[root_id_counts == 1].index
     mtypes = mtypes.query("pt_root_id in @root_id_singles")

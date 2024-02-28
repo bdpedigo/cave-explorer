@@ -102,14 +102,12 @@ else:
 # this should give us a set of connected components which are meaningful "chunks" of
 # neuron that share the same edit history/relationship to the nucleus in terms of
 # operations.
-no_cross_neuron = neuron.query_edges(
-    f"(~cross_{prefix}operation) & (~was_removed)"
-)
+no_cross_neuron = neuron.query_edges(f"(~cross_{prefix}operation) & (~was_removed)")
 
 # %%
 
 n_connected_components = no_cross_neuron.n_connected_components()
-
+print(n_connected_components)
 # %%
 
 # create labels for these different connected component pieces
@@ -154,8 +152,9 @@ segment_nodes[f"{prefix}operation_removed"] = segment_nodes[
 segment_nodes.set_index("segment", inplace=True)
 segment_nodes
 
+# %%
 
-colors = list(sns.color_palette("husl", len(segment_nodes)).as_hex())
+colors = list(sns.color_palette("tab20", len(segment_nodes)).as_hex())
 
 neuron.nodes["segment_color"] = neuron.nodes["segment"].astype(float)
 
@@ -165,16 +164,43 @@ colors = [color.upper() for color in colors]
 
 plotter = pv.Plotter()
 
-poly = neuron.to_skeleton_polydata(label="segment_color")
+i = 5
 
-plotter.add_mesh(poly, line_width=1, scalars="segment_color", cmap=colors)
+row = neuron.metaedits.query("~has_merge").iloc[i]
+
+set_up_camera(
+    plotter,
+    row[["centroid_x", "centroid_y", "centroid_z"]],
+    -2_000_000,
+    25,
+    "-y",
+)
+
+
+merges = neuron.to_merge_polydata(draw_edges=True, prefix=prefix)
+splits = neuron.to_split_polydata(draw_edges=True, prefix=prefix)
+merges_points = neuron.to_merge_polydata(draw_edges=False, prefix=prefix)
+splits_points = neuron.to_split_polydata(draw_edges=False, prefix=prefix)
+
+plotter.add_mesh(merges, color="blue", point_size=20, line_width=10)
+plotter.add_mesh(splits, color="red", point_size=20, line_width=10)
+plotter.add_mesh(merges_points, color="blue", point_size=20, line_width=10)
+plotter.add_mesh(splits_points, color="red", point_size=20, line_width=10)
+
+poly = neuron.query_edges('~was_removed').to_skeleton_polydata()
+plotter.add_mesh(poly, line_width=3)
+# show_neuron = neuron.query_nodes("~was_removed")
+# poly = show_neuron.to_skeleton_polydata(label="segment_color")
+# point_poly = show_neuron.to_skeleton_polydata(label="segment_color", draw_lines=False)
+# plotter.add_mesh(poly, line_width=3, scalars="segment_color", cmap=colors)
+# plotter.add_mesh(point_poly, scalars="segment_color", cmap=colors, point_size=3)
 plotter.show()
 
 
-#%%
+# %%
 neuron.apply_node_features("segment", inplace=True)
 
-segment_edges = neuron.edges[['source_segment', 'target_segment']]
+segment_edges = neuron.edges[["source_segment", "target_segment"]]
 
 edges_array = np.unique(np.sort(segment_edges.values, axis=1), axis=0)
 
@@ -184,7 +210,7 @@ segment_edges = pd.DataFrame(edges_array, columns=["source", "target"]).set_inde
 segment_edges = segment_edges.query("source != target")
 segment_edges
 
-#%%
+# %%
 segment_nf = NetworkFrame(segment_nodes, segment_edges)
 
 segment_nf

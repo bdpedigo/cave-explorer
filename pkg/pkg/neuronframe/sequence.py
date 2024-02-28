@@ -1,4 +1,4 @@
-from typing import Literal, Optional, Self, Union
+from typing import Callable, Literal, Optional, Self, Union
 
 import numpy as np
 import pandas as pd
@@ -208,6 +208,43 @@ class NeuronFrameSequence:
         possible_edit_ids = possible_edit_ids[~possible_edit_ids.isin(applied_edit_ids)]
 
         return possible_edit_ids
+
+    def apply_to_synapses_by_sample(
+        self, func: Callable, which: Literal["pre", "post"], **kwargs
+    ) -> pd.DataFrame:
+        """
+        Apply a function which takes in a DataFrame of synapses and returns a DataFrame
+        of results.
+
+        Parameters
+        ----------
+        func
+            A function which takes in a DataFrame of synapses and returns a DataFrame
+            of results.
+        which
+            Whether to apply the function to the pre- or post-synaptic synapses.
+        kwargs
+            Additional keyword arguments to pass to `func`.
+        """
+        if which == "pre":
+            synapses_df = self.base_neuron.pre_synapses
+            resolved_synapses = self.sequence_info["pre_synapses"]
+        else:
+            synapses_df = self.base_neuron.post_synapses
+            resolved_synapses = self.sequence_info["post_synapses"]
+
+        results_by_sample = []
+        for i, key in enumerate(resolved_synapses.keys()):
+            sample_resolved_synapses = resolved_synapses[key]
+
+            input = synapses_df.loc[sample_resolved_synapses]
+            result = func(input, **kwargs)
+            result["sample"] = key
+
+            results_by_sample.append(result)
+
+        results_df = pd.concat(results_by_sample, axis=0)
+        return results_df
 
     def synapse_groupby_count(
         self, by: str, which: Literal["pre", "post"]

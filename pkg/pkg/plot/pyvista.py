@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Literal, Optional, Union
 
 import numpy as np
+import pandas as pd
 import pyvista as pv
 from tqdm.auto import tqdm
 
@@ -17,12 +18,15 @@ UP_MAP = {
 
 def set_up_camera(
     plotter: pv.Plotter,
-    neuron,
+    location: Union[np.ndarray, list, pd.Series, "NetworkFrame"],
     setback: Union[float, int] = -2_000_000,
     elevation: Union[float, int] = 25,
     up: Literal["x", "y", "z", "-x", "-y", "-z"] = "-y",
 ):
-    nuc_loc = neuron.nodes.loc[neuron.nucleus_id, ["x", "y", "z"]].values
+    if isinstance(location, (np.ndarray, list, pd.Series)):
+        nuc_loc = location
+    else:
+        nuc_loc = location.nodes.loc[location.nucleus_id, ["x", "y", "z"]].values
     plotter.camera_position = "zx"
     plotter.camera.focal_point = nuc_loc
     plotter.camera.position = nuc_loc + np.array([0, 0, setback])
