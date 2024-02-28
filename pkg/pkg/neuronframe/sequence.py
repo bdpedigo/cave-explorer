@@ -210,7 +210,11 @@ class NeuronFrameSequence:
         return possible_edit_ids
 
     def apply_to_synapses_by_sample(
-        self, func: Callable, which: Literal["pre", "post"], **kwargs
+        self,
+        func: Callable,
+        which: Literal["pre", "post"],
+        output="series",
+        **kwargs,
     ) -> pd.DataFrame:
         """
         Apply a function which takes in a DataFrame of synapses and returns a DataFrame
@@ -239,12 +243,20 @@ class NeuronFrameSequence:
 
             input = synapses_df.loc[sample_resolved_synapses]
             result = func(input, **kwargs)
-            result["sample"] = key
+            if output == "dataframe":
+                result[self.edit_label_name] = key
+            else:
+                result.name = key
 
             results_by_sample.append(result)
 
-        results_df = pd.concat(results_by_sample, axis=0)
-        return results_df
+        if output == "dataframe":
+            results_df = pd.concat(results_by_sample, axis=0)
+            return results_df
+        else:
+            results_df = pd.concat(results_by_sample, axis=1).T
+            results_df.index.name = self.edit_label_name
+            return results_df
 
     def synapse_groupby_count(
         self, by: str, which: Literal["pre", "post"]

@@ -19,9 +19,8 @@ from sklearn.metrics import pairwise_distances
 from tqdm.auto import tqdm
 
 from pkg.neuronframe import NeuronFrame, NeuronFrameSequence, load_neuronframe
-from pkg.paths import OUT_PATH
 from pkg.plot import savefig
-from pkg.sequence import create_merge_and_clean_sequence
+from pkg.sequence import create_merge_and_clean_sequence, create_time_ordered_sequence
 from pkg.utils import load_casey_palette, load_mtypes
 
 # %%
@@ -42,6 +41,9 @@ files["random_seed"] = files["file"].str.split("=").str[3].str.split("-").str[0]
 
 file_counts = files.groupby("root_id").size()
 has_all = file_counts[file_counts == 12].index
+
+files["scheme"] = "historical"
+files.loc[files["order_by"].notna(), "scheme"] = "clean-and-merge"
 
 files_finished = files.query("root_id in @has_all")
 
@@ -222,116 +224,194 @@ def compute_spatial_target_proportions(synapses_df, mtypes_df=None, by=None):
 
     p_cells_hit = cells_hit / cells_available
 
-    p_cells_hit = p_cells_hit.to_frame(name="prop").reset_index(drop=False)
-    mids = [interval.mid for interval in p_cells_hit["radial_to_nuc_bin"].values]
-    p_cells_hit["mid"] = mids
     return p_cells_hit
 
+    # p_cells_hit = p_cells_hit.to_frame(name="prop").reset_index(drop=False)
+    # mids = [interval.mid for interval in p_cells_hit["radial_to_nuc_bin"].values]
+    # p_cells_hit["mid"] = mids
+    # return p_cells_hit
 
-def compute_target_proportions(synapses_df, by=None):
+
+def compute_target_counts(synapses_df: pd.DataFrame, by=None):
     result = synapses_df.groupby(by).size()
-    out = result.to_frame(name="count").reset_index(drop=False)
-    total = out["count"].sum()
-    out["prop"] = out["count"] / total
-    return out
+    return result
 
 
-out0 = sequence.apply_to_synapses_by_sample(
+def compute_target_proportions(synapses_df: pd.DataFrame, by=None):
+    result = synapses_df.groupby(by).size()
+    result = result / result.sum()
+    return result
+    # out = result.to_frame(name="count").reset_index(drop=False)
+    # total = out["count"].sum()
+    # out["prop"] = out["count"] / total
+    # return out
+
+
+base_attrs = {
+    "order_by": order_by,
+    "random_seed": random_seed,
+    "root_id": root_id,
+}
+counts_by_mtype = sequence.apply_to_synapses_by_sample(
+    compute_target_counts, which="pre", by="post_mtype"
+)
+counts_by_mtype.attrs = base_attrs
+counts_by_mtype.attrs["name"] = "output_counts_by_mtype"
+
+props_by_mtype = sequence.apply_to_synapses_by_sample(
     compute_target_proportions, which="pre", by="post_mtype"
 )
+props_by_mtype.attrs = base_attrs
+props_by_mtype.attrs["name"] = "output_props_by_mtype"
 
-out1 = sequence.apply_to_synapses_by_sample(
+spatial_props = sequence.apply_to_synapses_by_sample(
     compute_spatial_target_proportions, which="pre", mtypes_df=mtypes
 )
+spatial_props.attrs = base_attrs
+spatial_props.attrs["name"] = "output_props_by_radial"
 
-out2 = sequence.apply_to_synapses_by_sample(
+spatial_props_by_mtype = sequence.apply_to_synapses_by_sample(
     compute_spatial_target_proportions, which="pre", mtypes_df=mtypes, by="post_mtype"
 )
+spatial_props_by_mtype.attrs = base_attrs
+spatial_props_by_mtype.attrs["name"] = "output_props_by_radial_mtype"
 
-#%%
-out1
+# %%
 
-
+for root_id, rows in files_finished.iloc[:13].groupby("root_id"):
+    print(rows)
 # %%
 
 recompute = True
 save = False
 if recompute:
     root_ids = files_finished["root_id"].unique()
-    all_targets_stats = {}
-    all_infos = {}
+    all_infos = []
+    all_sequence_features = {}
     pbar = tqdm(total=len(root_ids), desc="Computing target stats...")
-    for root_id, rows in files_finished.iloc[:12].groupby("root_id"):
+    for root_id, rows in files_finished.iloc[:13].groupby("root_id"):
         neuron = load_neuronframe(root_id, client)
 
         annotate_pre_synapses(neuron, mtypes)
         annotate_mtypes(neuron, mtypes)
 
-        for keys, sub_rows in rows.groupby(["order_by", "random_seed"]):
-            order_by, random_seed = keys
-            if order_by == "time" or order_by == "random":
+        for keys, sub_rows in rows.groupby(
+            ["scheme", "order_by", "random_seed"], dropna=False
+        ):
+            scheme, order_by, random_seed = keys
+            if scheme == "clean-and-merge":
                 sequence = create_merge_and_clean_sequence(
                     neuron, root_id, order_by=order_by, random_seed=random_seed
                 )
+            elif scheme == "historical":
+                sequence = create_time_ordered_sequence(neuron, root_id)
+            else:
+                raise ValueError(f"Scheme {scheme} not recognized.")
 
-                target_stats = compute_target_stats(sequence)
-                target_stats["root_id"] = root_id
-                target_stats["order_by"] = order_by
-                target_stats["random_seed"] = random_seed
-                all_targets_stats[(root_id, order_by, random_seed)] = target_stats.drop(
-                    ["pre_synapses", "post_synapses", "applied_edits"], axis=1
-                )
+            sequence_key = (root_id, scheme, order_by, random_seed)
 
-                info = sequence.sequence_info
-                info["root_id"] = root_id
-                info["order_by"] = order_by
-                info["random_seed"] = random_seed
-                all_infos[(root_id, order_by, random_seed)] = info.drop(
-                    ["pre_synapses", "post_synapses", "applied_edits"], axis=1
-                )
+            sequence_feature_dfs = {}
+            base_attrs = {
+                "order_by": order_by,
+                "random_seed": random_seed,
+                "root_id": root_id,
+            }
+            counts_by_mtype = sequence.apply_to_synapses_by_sample(
+                compute_target_counts, which="pre", by="post_mtype"
+            )
+            counts_by_mtype.attrs = base_attrs
+            counts_by_mtype.attrs["name"] = "output_counts_by_mtype"
+            sequence_feature_dfs["counts_by_mtype"] = counts_by_mtype
+
+            props_by_mtype = sequence.apply_to_synapses_by_sample(
+                compute_target_proportions, which="pre", by="post_mtype"
+            )
+            props_by_mtype.attrs = base_attrs
+            props_by_mtype.attrs["name"] = "output_props_by_mtype"
+            sequence_feature_dfs["props_by_mtype"] = props_by_mtype
+
+            spatial_props = sequence.apply_to_synapses_by_sample(
+                compute_spatial_target_proportions, which="pre", mtypes_df=mtypes
+            )
+            spatial_props.attrs = base_attrs
+            spatial_props.attrs["name"] = "output_props_by_radial"
+            sequence_feature_dfs["spatial_props"] = spatial_props
+
+            spatial_props_by_mtype = sequence.apply_to_synapses_by_sample(
+                compute_spatial_target_proportions,
+                which="pre",
+                mtypes_df=mtypes,
+                by="post_mtype",
+            )
+            spatial_props_by_mtype.attrs = base_attrs
+            spatial_props_by_mtype.attrs["name"] = "output_props_by_radial_mtype"
+            sequence_feature_dfs["spatial_props_by_mtype"] = spatial_props_by_mtype
+
+            all_sequence_features[sequence_key] = sequence_feature_dfs
+
+            info = sequence.sequence_info
+            info["root_id"] = root_id
+            info["scheme"] = scheme
+            info["order_by"] = order_by
+            info["random_seed"] = random_seed
+            all_infos.append(
+                info.drop(["pre_synapses", "post_synapses", "applied_edits"], axis=1)
+            )
 
         pbar.update(1)
 
     pbar.close()
 
-    all_target_stats = pd.concat(all_targets_stats.values())
+#     all_target_stats = pd.concat(all_targets_stats.values())
 
-    if save:
-        save_path = OUT_PATH / "load_sequences"
+#     if save:
+#         save_path = OUT_PATH / "load_sequences"
 
-        all_target_stats["cumulative_n_operations"].fillna(0, inplace=True)
-        all_target_stats["root_id_str"] = all_target_stats["root_id"].astype(str)
-        all_target_stats["sequence"] = (
-            all_target_stats["root_id_str"]
-            + "-"
-            + all_target_stats["order_by"]
-            + "-"
-            + all_target_stats["random_seed"].astype(str)
-        )
-        all_target_stats.to_csv(save_path / "all_target_stats.csv")
+#         all_target_stats["cumulative_n_operations"].fillna(0, inplace=True)
+#         all_target_stats["root_id_str"] = all_target_stats["root_id"].astype(str)
+#         all_target_stats["sequence"] = (
+#             all_target_stats["root_id_str"]
+#             + "-"
+#             + all_target_stats["order_by"]
+#             + "-"
+#             + all_target_stats["random_seed"].astype(str)
+#         )
+#         all_target_stats.to_csv(save_path / "all_target_stats.csv")
 
-        all_infos = pd.concat(all_infos.values())
-        all_infos["root_id_str"] = all_infos["root_id"].astype(str)
-        all_infos["sequence"] = (
-            all_infos["root_id_str"]
-            + "-"
-            + all_infos["order_by"]
-            + "-"
-            + all_infos["random_seed"].astype(str)
-        )
-        all_infos = all_infos.reset_index(drop=False).set_index(["sequence", "order"])
-        all_infos.to_csv(save_path / "all_infos.csv")
+#         all_infos = pd.concat(all_infos.values())
+#         all_infos["root_id_str"] = all_infos["root_id"].astype(str)
+#         all_infos["sequence"] = (
+#             all_infos["root_id_str"]
+#             + "-"
+#             + all_infos["order_by"]
+#             + "-"
+#             + all_infos["random_seed"].astype(str)
+#         )
+#         all_infos = all_infos.reset_index(drop=False).set_index(["sequence", "order"])
+#         all_infos.to_csv(save_path / "all_infos.csv")
 
-if save or not recompute:
-    all_target_stats = pd.read_csv(
-        OUT_PATH / "load_sequences" / "all_target_stats.csv", index_col=0
-    )
-    all_target_stats["metaoperation_id"] = all_target_stats["metaoperation_id"].astype(
-        "Int64"
-    )
-    all_infos = pd.read_csv(
-        OUT_PATH / "load_sequences" / "all_infos.csv", index_col=[0, 1]
-    )
+# if save or not recompute:
+#     all_target_stats = pd.read_csv(
+#         OUT_PATH / "load_sequences" / "all_target_stats.csv", index_col=0
+#     )
+#     all_target_stats["metaoperation_id"] = all_target_stats["metaoperation_id"].astype(
+#         "Int64"
+#     )
+#     all_infos = pd.read_csv(
+#         OUT_PATH / "load_sequences" / "all_infos.csv", index_col=[0, 1]
+#     )
+# %%
+
+meta_features_df = pd.DataFrame(all_sequence_features).T
+meta_features_df.index.names = ["root_id", "scheme", "order_by", "random_seed"]
+meta_features_df.reset_index()
+
+sub_dfs = meta_features_df.query('scheme == "clean-and-merge"').query(
+    "order_by == 'random'"
+)["props_by_mtype"]
+
+#%%
+sub_dfs.iloc[0]
 
 # %%
 
