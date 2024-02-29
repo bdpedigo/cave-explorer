@@ -338,7 +338,69 @@ class NeuronFrameSequence:
 
         for label, row in sequence_info.iterrows():
             out._sequence_info[label] = row.to_dict()
+
+        out.applied_edit_ids = pd.Index(out.sequence_info.iloc[-1]["applied_edits"])
+
+        # TODO set the state of the current neuron to the sequence info's final state?
+
         return out
+
+    def select(
+        self,
+        edits: Union[list, np.ndarray, pd.Index, pd.Series, int, np.integer],
+    ):
+        if isinstance(edits, (int, np.integer)):
+            edit_ids = pd.Index([edits])
+        elif isinstance(edits, (list, np.ndarray)):
+            edit_ids = pd.Index(edits)
+        elif isinstance(edits, (pd.Series, pd.DataFrame)):
+            edit_ids = edits.index
+        else:  # pd.Index
+            edit_ids = edits
+
+        for edit_id in edit_ids:
+            if edit_id not in self._sequence_info:
+                raise ValueError(f"Edit ID {edit_id} not found in sequence.")
+
+        out = self.__class__(
+            self.base_neuron,
+            prefix=self.prefix,
+            edit_label_name=self.edit_label_name,
+            edits=self.edits,
+        )
+
+        for label, info in self._sequence_info.items():
+            if label in edit_ids:
+                out._sequence_info[label] = info
+        out.applied_edit_ids = pd.Index(out.sequence_info.iloc[-1]["applied_edits"])
+
+        return out
+
+    def select_by_bout(self, by: str, keep: Literal["first", "last"] = "last"):
+        """Select a subset of the edit sequence using a bout of activity.
+
+        Parameters
+        ----------
+        by
+            The column to use for grouping the sequence into bouts. This column should
+            have boolean values. Nan values will be treated as False. True values will
+            denote the start of a new bout of edits.
+        keep
+            Whether to keep the first or last edit in each bout as the exemplar.
+        """
+        bouts = self.sequence_info[by].fillna(False).cumsum()
+        bouts.name = "bout"
+        if keep == "first":
+            keep_ind = 0
+        else:
+            keep_ind = -1
+        bout_exemplars = (
+            self.sequence_info.index.to_series()
+            .groupby(bouts, sort=False)
+            .apply(lambda x: x.iloc[keep_ind])
+        ).values
+        bout_exemplars = pd.Index(bout_exemplars)
+        return self.select(bout_exemplars)
 
     # def reconstruct_neuron_states(self) -> None:
     #     for

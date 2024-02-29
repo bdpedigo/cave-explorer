@@ -21,7 +21,7 @@ from sklearn.decomposition import PCA
 from sklearn.metrics import pairwise_distances
 from tqdm.auto import tqdm
 
-from pkg.neuronframe import NeuronFrame, NeuronFrameSequence, load_neuronframe
+from pkg.neuronframe import NeuronFrame, load_neuronframe
 from pkg.paths import OUT_PATH
 from pkg.plot import savefig
 from pkg.sequence import create_merge_and_clean_sequence, create_time_ordered_sequence
@@ -51,15 +51,6 @@ files.loc[files["order_by"].notna(), "scheme"] = "clean-and-merge"
 
 files_finished = files.query("root_id in @has_all")
 
-# %%
-
-client = cc.CAVEclient("minnie65_phase3_v1")
-mtypes = load_mtypes(client)
-
-# %%
-root_id = files_finished["root_id"].unique()[1]
-neuron = load_neuronframe(root_id, client)
-print(len(neuron.pre_synapses))
 
 # %%
 
@@ -114,11 +105,6 @@ def annotate_pre_synapses(neuron: NeuronFrame, mtypes: pd.DataFrame) -> None:
     return None
 
 
-annotate_pre_synapses(neuron, mtypes)
-
-# %%
-
-
 def annotate_mtypes(neuron: NeuronFrame, mtypes: pd.DataFrame):
     mtypes["post_mtype"] = mtypes["cell_type"]
     mtypes["x"] = mtypes["pt_position"].apply(lambda x: x[0])
@@ -141,82 +127,7 @@ def annotate_mtypes(neuron: NeuronFrame, mtypes: pd.DataFrame):
     return None
 
 
-annotate_mtypes(neuron, mtypes)
-
-# %%
-
-
-set_neuron = neuron.set_edits(neuron.metaedits.index, prefix="meta")
-set_neuron = set_neuron.select_nucleus_component(inplace=False)
-set_neuron = set_neuron.remove_unused_synapses(inplace=False)
-
-pre_synapses = set_neuron.pre_synapses
-
-
-by = ["radial_to_nuc_bin", "post_mtype"]
-cells_hit = pre_synapses.groupby(by)["post_pt_root_id"].nunique()
-
-cells_available = mtypes.groupby(by).size()
-
-p_cells_hit = cells_hit / cells_available
-
-p_cells_hit = p_cells_hit.to_frame(name="prop").reset_index(drop=False)
-mids = [interval.mid for interval in p_cells_hit["radial_to_nuc_bin"].values]
-p_cells_hit["mid"] = mids
-p_cells_hit["mid_um"] = p_cells_hit["mid"] / 1000
-
-sns.set_context("talk")
-fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-palette = load_casey_palette()
-sns.lineplot(
-    data=p_cells_hit,
-    x="mid_um",
-    y="prop",
-    hue="post_mtype",
-    palette=palette,
-    ax=ax,
-    legend=True,
-)
-ax.set_xlabel("Radial distance to post-nucleus (um)")
-ax.spines[["top", "right"]].set_visible(False)
-ax.set_ylabel("Proportion of cells hit")
-ax.get_legend().set_title("M-type")
-sns.move_legend(ax, "upper right", ncol=2, bbox_to_anchor=(2, 1))
-# %%
-idxmax = p_cells_hit.groupby("radial_to_nuc_bin")["prop"].idxmax().dropna().astype(int)
-
-p_cells_hit.loc[idxmax]
-
-# %%
-
-
-def compute_target_stats(seq: NeuronFrameSequence):
-    post_mtype_stats = seq.synapse_groupby_metrics(by="post_mtype", which="pre")
-    bouts = seq.sequence_info["has_merge"].fillna(False).cumsum()
-    bouts.name = "bout"
-    bout_exemplars = (
-        seq.sequence_info.index.to_series().groupby(bouts).apply(lambda x: x.iloc[-1])
-    )
-    # bout_info = seq.sequence_info.loc[bout_exemplars.values]
-    bout_post_mtype_stats = post_mtype_stats.query(
-        "metaoperation_id.isin(@bout_exemplars)"
-    )
-    return bout_post_mtype_stats
-
-
-# %%
-neuron = load_neuronframe(root_id, client)
-annotate_pre_synapses(neuron, mtypes)
-annotate_mtypes(neuron, mtypes)
-order_by = "time"
-random_seed = None
-sequence = create_merge_and_clean_sequence(
-    neuron, root_id, order_by=order_by, random_seed=random_seed
-)
-# %%
-
-
-def compute_spatial_target_proportions(synapses_df, mtypes_df=None, by=None):
+def compute_spatial_target_proportions(synapses_df, mtypes=None, by=None):
     if by is not None:
         spatial_by = ["radial_to_nuc_bin", by]
     else:
@@ -230,11 +141,6 @@ def compute_spatial_target_proportions(synapses_df, mtypes_df=None, by=None):
 
     return p_cells_hit
 
-    # p_cells_hit = p_cells_hit.to_frame(name="prop").reset_index(drop=False)
-    # mids = [interval.mid for interval in p_cells_hit["radial_to_nuc_bin"].values]
-    # p_cells_hit["mid"] = mids
-    # return p_cells_hit
-
 
 def compute_target_counts(synapses_df: pd.DataFrame, by=None):
     result = synapses_df.groupby(by).size()
@@ -245,46 +151,6 @@ def compute_target_proportions(synapses_df: pd.DataFrame, by=None):
     result = synapses_df.groupby(by).size()
     result = result / result.sum()
     return result
-    # out = result.to_frame(name="count").reset_index(drop=False)
-    # total = out["count"].sum()
-    # out["prop"] = out["count"] / total
-    # return out
-
-
-base_attrs = {
-    "order_by": order_by,
-    "random_seed": random_seed,
-    "root_id": root_id,
-}
-counts_by_mtype = sequence.apply_to_synapses_by_sample(
-    compute_target_counts, which="pre", by="post_mtype"
-)
-counts_by_mtype.attrs = base_attrs
-counts_by_mtype.attrs["name"] = "output_counts_by_mtype"
-
-props_by_mtype = sequence.apply_to_synapses_by_sample(
-    compute_target_proportions, which="pre", by="post_mtype"
-)
-props_by_mtype.attrs = base_attrs
-props_by_mtype.attrs["name"] = "output_props_by_mtype"
-
-spatial_props = sequence.apply_to_synapses_by_sample(
-    compute_spatial_target_proportions, which="pre", mtypes_df=mtypes
-)
-spatial_props.attrs = base_attrs
-spatial_props.attrs["name"] = "output_props_by_radial"
-
-spatial_props_by_mtype = sequence.apply_to_synapses_by_sample(
-    compute_spatial_target_proportions, which="pre", mtypes_df=mtypes, by="post_mtype"
-)
-spatial_props_by_mtype.attrs = base_attrs
-spatial_props_by_mtype.attrs["name"] = "output_props_by_radial_mtype"
-
-# %%
-
-for root_id, rows in files_finished.iloc[:13].groupby("root_id"):
-    print(rows)
-# %%
 
 
 def apply_metadata(df, key):
@@ -293,75 +159,123 @@ def apply_metadata(df, key):
     df["scheme"] = key[1]
     df["order_by"] = key[2]
     df["random_seed"] = key[3]
+    df["order"] = np.arange(len(df))
     df.reset_index(drop=False, inplace=True)
     df.set_index(
-        ["root_id", "scheme", "order_by", "random_seed", index_name], inplace=True
+        ["root_id", "scheme", "order_by", "random_seed", index_name, "order"],
+        inplace=True,
     )
     return df
 
 
+# %%
+
+client = cc.CAVEclient("minnie65_phase3_v1")
+mtypes = load_mtypes(client)
+
+if False:
+    root_id = 864691134886015738
+    neuron = load_neuronframe(root_id, client)
+    annotate_pre_synapses(neuron, mtypes)
+    annotate_mtypes(neuron, mtypes)
+    order_by = "time"
+    random_seed = None
+    sequence = create_merge_and_clean_sequence(
+        neuron, root_id, order_by=order_by, random_seed=random_seed
+    )
+
+# %%
+
+total_time = time.time()
+
+load_neuron_time = 0
+annotate_time = 0
+load_sequence_time = 0
+counts_time = 0
+props_time = 0
+spatial_props_time = 0
+spatial_props_by_mtype_time = 0
+sequence_time = 0
+
 recompute = True
 save = False
 if recompute:
-    root_ids = files_finished["root_id"].unique()
+    root_ids = files_finished["root_id"].unique()[:10]
     all_infos = []
     all_sequence_features = {}
     pbar = tqdm(total=len(root_ids), desc="Computing target stats...")
-    for root_id, rows in files_finished.iloc[:].groupby("root_id"):
+    for root_id, rows in files_finished.query("root_id.isin(@root_ids)").groupby(
+        "root_id"
+    ):
         currtime = time.time()
         neuron = load_neuronframe(root_id, client)
-        print(f"{time.time() - currtime:.3f} seconds elapsed.")
+        load_neuron_time += time.time() - currtime
 
+        currtime = time.time()
         annotate_pre_synapses(neuron, mtypes)
         annotate_mtypes(neuron, mtypes)
+        annotate_time += time.time() - currtime
 
         for keys, sub_rows in rows.groupby(
             ["scheme", "order_by", "random_seed"], dropna=False
         ):
             scheme, order_by, random_seed = keys
+
+            currtime = time.time()
             if scheme == "clean-and-merge":
                 sequence = create_merge_and_clean_sequence(
                     neuron, root_id, order_by=order_by, random_seed=random_seed
                 )
+                sequence = sequence.select_by_bout("has_merge", keep="last")
             elif scheme == "historical":
                 sequence = create_time_ordered_sequence(neuron, root_id)
             else:
                 raise ValueError(f"Scheme {scheme} not recognized.")
+            load_sequence_time += time.time() - currtime
 
             sequence_key = (root_id, scheme, order_by, random_seed)
 
+            currtime = time.time()
             sequence_feature_dfs = {}
             counts_by_mtype = sequence.apply_to_synapses_by_sample(
                 compute_target_counts, which="pre", by="post_mtype"
             )
             counts_by_mtype = apply_metadata(counts_by_mtype, sequence_key)
             sequence_feature_dfs["counts_by_mtype"] = counts_by_mtype
+            counts_time += time.time() - currtime
 
+            currtime = time.time()
             props_by_mtype = sequence.apply_to_synapses_by_sample(
                 compute_target_proportions, which="pre", by="post_mtype"
             )
             props_by_mtype = apply_metadata(props_by_mtype, sequence_key)
             sequence_feature_dfs["props_by_mtype"] = props_by_mtype
+            props_time += time.time() - currtime
 
+            currtime = time.time()
             spatial_props = sequence.apply_to_synapses_by_sample(
-                compute_spatial_target_proportions, which="pre", mtypes_df=mtypes
+                compute_spatial_target_proportions, which="pre", mtypes=mtypes
             )
             spatial_props = apply_metadata(spatial_props, sequence_key)
             sequence_feature_dfs["spatial_props"] = spatial_props
+            spatial_props_time += time.time() - currtime
 
+            currtime = time.time()
             spatial_props_by_mtype = sequence.apply_to_synapses_by_sample(
                 compute_spatial_target_proportions,
                 which="pre",
-                mtypes_df=mtypes,
+                mtypes=mtypes,
                 by="post_mtype",
             )
             spatial_props_by_mtype = apply_metadata(
                 spatial_props_by_mtype, sequence_key
             )
             sequence_feature_dfs["spatial_props_by_mtype"] = spatial_props_by_mtype
+            spatial_props_by_mtype_time += time.time() - currtime
 
             all_sequence_features[sequence_key] = sequence_feature_dfs
 
+            currtime = time.time()
             info = sequence.sequence_info
             info["root_id"] = root_id
             info["scheme"] = scheme
@@ -370,6 +284,7 @@ if recompute:
             all_infos.append(
                 info.drop(["pre_synapses", "post_synapses", "applied_edits"], axis=1)
             )
+            sequence_time += time.time() - currtime
 
         pbar.update(1)
 
@@ -392,11 +307,23 @@ else:
     with open(OUT_PATH / "sequence_metrics" / "meta_features_df.pkl", "rb") as f:
         meta_features_df = pickle.load(f)
 
+total_time = time.time() - total_time
+
+print(f"Total time: {total_time:.2f} seconds")
+print(f"Load neuron proportion: {load_neuron_time / total_time:.2f}")
+print(f"Annotate proportion: {annotate_time / total_time:.2f}")
+print(f"Load sequence proportion: {load_sequence_time / total_time:.2f}")
+print(f"Counts proportion: {counts_time / total_time:.2f}")
+print(f"Props proportion: {props_time / total_time:.2f}")
+print(f"Spatial props proportion: {spatial_props_time / total_time:.2f}")
+print(
+    f"Spatial props by mtype proportion: {spatial_props_by_mtype_time / total_time:.2f}"
+)
+print(f"Sequence proportion: {sequence_time / total_time:.2f}")
+
 
 # %%
-sub_df = pd.concat(
-    meta_features_df.query("scheme == 'historical'")["spatial_props"].values
-)
+
 
 # TODO whether to implement this as a table of tables, one massive table...
 # nothing really feels satisfying here
@@ -410,7 +337,11 @@ sub_df = pd.concat(
 
 
 # %%
-
+sub_df = pd.concat(
+    meta_features_df.query("root_id == @root_id & scheme == 'historical'")[
+        "spatial_props"
+    ].values
+)
 cols = sub_df.columns
 mids = [
     interval.mid for interval in sub_df.columns.get_level_values("radial_to_nuc_bin")
@@ -433,17 +364,12 @@ for i, (operation_id, row) in enumerate(sub_df.iterrows()):
 
 # %%
 
-query_neurons = client.materialize.query_table("connectivity_groups_v795")
-ctype_map = query_neurons.set_index("pt_root_id")["cell_type"]
-
-# %%
-
 
 def process_sequence_diffs(sequence_df):
-    sequence = sequence_df.index.get_level_values("sequence").unique()[0]
+    # sequence = sequence_df.index.get_level_values("sequence").unique()[0]
     final_row_idx = sequence_df.index.get_level_values("order").max()
-    final_row = sequence_df.loc[(sequence, final_row_idx)].values.reshape(1, -1)
-    X = sequence_df.values
+    final_row = sequence_df.loc[final_row_idx].fillna(0).values.reshape(1, -1)
+    X = sequence_df.fillna(0).values
 
     sample_wise_metrics = []
     for metric in ["euclidean", "cityblock", "jensenshannon", "cosine"]:
@@ -459,6 +385,28 @@ def process_sequence_diffs(sequence_df):
     return sample_wise_metrics
 
 
+meta_diff_df = pd.DataFrame(
+    index=meta_features_df.index, columns=meta_features_df.columns, dtype=object
+)
+
+all_sequence_diffs = {}
+for sequence_label, row in meta_features_df.iterrows():
+    sequence_diffs = {}
+    for metric_label, df in row.items():
+        df = df.loc[sequence_label]
+        df.index = df.index.droplevel(0)
+        diffs = process_sequence_diffs(df)
+        sequence_diffs[metric_label] = diffs
+    all_sequence_diffs[sequence_label] = sequence_diffs
+
+meta_diff_df = pd.DataFrame(all_sequence_diffs).T
+        # meta_diff_df.loc[sequence_label, metric_label] = diffs
+
+meta_diff_df
+# %%
+
+
+# %%
 target_stats_by_state = all_target_stats.pivot(
     index=["sequence", "order"], columns="post_mtype", values="prop"
 ).fillna(0)
@@ -743,6 +691,10 @@ print(X_df.shape)
 # %%
 all_target_stats
 
+# %%
+
+query_neurons = client.materialize.query_table("connectivity_groups_v795")
+ctype_map = query_neurons.set_index("pt_root_id")["cell_type"]
 
 # %%
 X = X_df.values
