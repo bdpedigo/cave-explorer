@@ -198,9 +198,9 @@ spatial_props_by_mtype_time = 0
 sequence_time = 0
 
 recompute = True
-save = False
+save = True
 if recompute:
-    root_ids = files_finished["root_id"].unique()[:10]
+    root_ids = files_finished["root_id"].unique()[:]
     all_infos = []
     all_sequence_features = {}
     pbar = tqdm(total=len(root_ids), desc="Computing target stats...")
@@ -365,7 +365,7 @@ for i, (operation_id, row) in enumerate(sub_df.iterrows()):
 # %%
 
 
-def process_sequence_diffs(sequence_df):
+def compute_diffs_to_final(sequence_df):
     # sequence = sequence_df.index.get_level_values("sequence").unique()[0]
     final_row_idx = sequence_df.index.get_level_values("order").max()
     final_row = sequence_df.loc[final_row_idx].fillna(0).values.reshape(1, -1)
@@ -393,291 +393,211 @@ all_sequence_diffs = {}
 for sequence_label, row in meta_features_df.iterrows():
     sequence_diffs = {}
     for metric_label, df in row.items():
+        old_index = df.index
         df = df.loc[sequence_label]
         df.index = df.index.droplevel(0)
-        diffs = process_sequence_diffs(df)
+        diffs = compute_diffs_to_final(df)
+        diffs.index = old_index
         sequence_diffs[metric_label] = diffs
     all_sequence_diffs[sequence_label] = sequence_diffs
 
 meta_diff_df = pd.DataFrame(all_sequence_diffs).T
-        # meta_diff_df.loc[sequence_label, metric_label] = diffs
+meta_diff_df.index.names = ["root_id", "scheme", "order_by", "random_seed"]
 
 meta_diff_df
-# %%
-
-
-# %%
-target_stats_by_state = all_target_stats.pivot(
-    index=["sequence", "order"], columns="post_mtype", values="prop"
-).fillna(0)
-
-diffs_from_final = target_stats_by_state.groupby("sequence").apply(
-    process_sequence_diffs
-)
-diffs_from_final = diffs_from_final.join(all_infos)
-# %%
-diffs_from_final
 
 # %%
 ctype_hues = load_casey_palette()
-sns.set_context("talk")
-
-# %%
-
-y = "cosine"
-fig, axs = plt.subplots(2, 2, figsize=(8, 8), constrained_layout=True, sharex=True)
-for i, y in enumerate(["euclidean", "cityblock", "jensenshannon", "cosine"]):
-    sns.lineplot(
-        data=diffs_from_final.loc["864691134886015738-time-None"],
-        x="cumulative_n_operations",
-        y=y,
-        estimator=None,
-        alpha=1,
-        linewidth=2,
-        legend=False,
-        ax=axs.flat[i],
-    )
-
-# %%
-y = "cityblock"
-fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-sns.lineplot(
-    data=diffs_from_final.query("order_by == 'random'"),
-    x="cumulative_n_operations",
-    y=y,
-    hue="root_id_str",
-    units="sequence",
-    estimator=None,
-    alpha=0.5,
-    linewidth=0.25,
-    ax=ax,
-    legend=False,
-)
-sns.lineplot(
-    data=diffs_from_final.query("order_by == 'time'"),
-    x="cumulative_n_operations",
-    y=y,
-    hue="root_id_str",
-    alpha=1,
-    linewidth=1,
-    ax=ax,
-    legend=False,
-)
-
-# %%
-fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-sns.lineplot(
-    data=diffs_from_final,
-    x="cumulative_n_operations",
-    y=y,
-    hue="root_id_str",
-    linewidth=1,
-    ax=ax,
-    legend=False,
-)
-
-# %%
-fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-sns.kdeplot(
-    data=diffs_from_final,
-    x="cumulative_n_operations",
-    y=y,
-    kde=True,
-    ax=ax,
-    clip=((0, 1000), (0, 2)),
-)
-sns.histplot(
-    data=diffs_from_final,
-    x="cumulative_n_operations",
-    y=y,
-    kde=True,
-    ax=ax,
-)
-# %%
 column_mtypes = client.materialize.query_table("allen_column_mtypes_v2")
-column_mtypes.set_index("pt_root_id", inplace=True)
-diffs_from_final["mtype"] = diffs_from_final["root_id"].map(column_mtypes["cell_type"])
+column_mtypes = column_mtypes.set_index("pt_root_id")["cell_type"]
+column_mtypes
+
+root_ids = meta_diff_df.index.get_level_values("root_id").to_series()
+root_mtypes = root_ids.map(column_mtypes)
+root_id_ctype_hues = root_mtypes.map(ctype_hues)
+root_id_ctype_hues.index = root_id_ctype_hues.index.astype(str)
 
 # %%
-fig, axs = plt.subplots(4, 4, figsize=(10, 10), sharey="row", sharex=True)
 
-sns.set_context("talk")
-for i, y in enumerate(["euclidean", "cityblock", "jensenshannon", "cosine"]):
-    for j, group in enumerate(diffs_from_final["mtype"].unique()):
+# TODO make it so that the X-axes align? i think this just means getting rid of some
+# unconsequential edits from the log in the historical
+
+sns.set_context("paper", font_scale=2)
+
+fig, axs = plt.subplots(
+    3, 3, figsize=(16, 12), constrained_layout=True, sharey="row", sharex=False
+)
+
+
+info = all_infos.set_index(["root_id", "scheme", "order_by", "random_seed", "order"])
+
+idx = pd.IndexSlice
+
+# distance = "jensenshannon"
+distance = "euclidean"
+
+name_map = {
+    "props_by_mtype": "Proportion of outputs\n by M-type",
+    "spatial_props": "Out synapse probability\n by radial distance",
+    "spatial_props_by_mtype": "Out synapse probability\n by radial distance\nand M-type",
+}
+scheme_map = {
+    "historical": "Historical",
+    "clean-and-merge-time": "Clean-and-merge\nordered by time",
+    "clean-and-merge-random": "Clean-and-merge\nordered randomly",
+}
+
+for i, feature in enumerate(
+    ["props_by_mtype", "spatial_props", "spatial_props_by_mtype"]
+):
+    for j, scheme in enumerate(
+        ["historical", "clean-and-merge-time", "clean-and-merge-random"]
+    ):
+        if scheme == "historical":
+            historical_diff_df = meta_diff_df.loc[idx[:, "historical", :, :]]
+        elif scheme == "clean-and-merge-time":
+            historical_diff_df = meta_diff_df.loc[idx[:, "clean-and-merge", "time", :]]
+        elif scheme == "clean-and-merge-random":
+            historical_diff_df = meta_diff_df.loc[
+                idx[:, "clean-and-merge", "random", :]
+            ]
+
+        historical_diff_df = pd.concat(historical_diff_df[feature].to_list())
+        historical_diff_df = historical_diff_df.reset_index(drop=False)
+        cumulative_n_operations = historical_diff_df.set_index(
+            ["root_id", "scheme", "order_by", "random_seed", "order"]
+        ).index.map(info["cumulative_n_operations"])
+        historical_diff_df["root_id_str"] = historical_diff_df["root_id"].astype(str)
+        historical_diff_df["cumulative_n_operations"] = cumulative_n_operations
+        historical_diff_df["mtype"] = historical_diff_df["root_id"].map(column_mtypes)
         ax = axs[i, j]
         sns.lineplot(
-            data=diffs_from_final.query("mtype == @group").query(
-                "order_by == 'random'"
-            ),
+            data=historical_diff_df,
             x="cumulative_n_operations",
-            y=y,
-            linewidth=0.1,
-            units="sequence",
-            estimator=None,
-            alpha=0.5,
-            legend=False,
+            y=distance,
             ax=ax,
+            legend=False,
+            linewidth=1,
+            hue="root_id_str",
+            alpha=0.5,
+            palette=root_id_ctype_hues.to_dict(),
+            # units="root_id_str",
+            # estimator=None,
         )
-        ax.set_xlabel("")
-        ax.set_ylabel(y.capitalize())
-        ax.set_xticks([0, 100, 200, 300])
         if i == 0:
-            ax.set_title(group)
-        ax.spines[["top", "right"]].set_visible(False)
+            ax.set_title(scheme_map[scheme])
+        if i == 2:
+            ax.set_xlabel("# operations")
+        else:
+            ax.set_xlabel("")
+        if j == 0:
+            ax.text(
+                -0.45,
+                0.5,
+                name_map[feature],
+                transform=ax.transAxes,
+                ha="right",
+                va="center",
+                rotation=0,
+            )
+            ax.set_ylabel(distance.capitalize())
 
-fig.text(0.54, 0.0, "Cumulative operations", ha="center")
-plt.tight_layout()
-savefig("diffs-from-final-access-order-random-by-mtype", fig, folder="load_sequences")
 
-# TODO need a better way to visualize this, some kind of smoothing or binning
-
-# %%
-
-import numpy as np
-
-bins = np.arange(0, 300, 25)
-for i in range(len(bins) - 1):
-    start = bins[i]
-    stop = bins[i + 1]
-    query_data = diffs_from_final.query(
-        "cumulative_n_operations < @stop & cumulative_n_operations >= @start"
-    )
-    fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-    sns.histplot(
-        data=query_data,
-        x="euclidean",
-        hue="mtype",
-        stat="density",
-        common_norm=False,
-        alpha=0.3,
-        linewidth=0.5,
-        bins=15,
-        ax=ax,
-    )
-    sns.kdeplot(
-        data=query_data,
-        x="euclidean",
-        hue="mtype",
-        common_norm=False,
-        linewidth=3,
-        clip=(0, 4),
-        ax=ax,
-    )
-
-# %%
-bins = np.arange(0, 300, 25)
-diffs_from_final["cumulative_n_operations_bin"] = pd.cut(
-    diffs_from_final["cumulative_n_operations"], bins
-)
-
-fig, ax = plt.subplots(1, 1, figsize=(12, 5))
-
-sns.violinplot(
-    data=diffs_from_final,
-    x="cumulative_n_operations_bin",
-    y="euclidean",
-    hue="mtype",
-    inner="quartile",
-    linewidth=0.5,
-    ax=ax,
-    scale="count",
-)
-ax.set_ylabel("L2 distance from final")
-ax.set_xlabel("Cumulative operations")
-ax.get_legend().set_title("M-type")
-# rotate x labels
-for item in ax.get_xticklabels():
-    item.set_rotation(45)
-
-ax.axhline(0, color="black", linewidth=1)
 savefig(
-    "diffs-from-final-access-order-random-by-mtype-violin", fig, folder="load_sequences"
+    f"diffs-from-final-by-scheme-distance={distance}", fig, folder="sequence_metrics"
 )
 
 # %%
-bins = np.arange(0, 300, 25)
-diffs_from_final["cumulative_n_operations_bin"] = pd.cut(
-    diffs_from_final["cumulative_n_operations"], bins
-)
 
-fig, ax = plt.subplots(1, 1, figsize=(12, 5))
+root_ids = np.random.choice(meta_diff_df.index.get_level_values("root_id").unique(), 20)
+for root_id in root_ids:
+    fig, axs = plt.subplots(
+        3, 3, figsize=(16, 12), constrained_layout=True, sharey="row", sharex=False
+    )
+    for i, feature in enumerate(
+        ["props_by_mtype", "spatial_props", "spatial_props_by_mtype"]
+    ):
+        for j, scheme in enumerate(
+            ["historical", "clean-and-merge-time", "clean-and-merge-random"]
+        ):
+            if scheme == "historical":
+                historical_diff_df = meta_diff_df.loc[idx[root_id, "historical", :, :]]
+            elif scheme == "clean-and-merge-time":
+                historical_diff_df = meta_diff_df.loc[
+                    idx[root_id, "clean-and-merge", "time", :]
+                ]
+            elif scheme == "clean-and-merge-random":
+                historical_diff_df = meta_diff_df.loc[
+                    idx[root_id, "clean-and-merge", "random", :]
+                ]
 
-sns.stripplot(
-    data=diffs_from_final,
-    x="cumulative_n_operations_bin",
-    y="euclidean",
-    hue="mtype",
-    ax=ax,
-    dodge=True,
-    s=0.5,
-    alpha=0.5,
-    jitter=0.4,
-    linewidth=0,
-    zorder=2,
-    legend=False,
-    color="black",
-)
-sns.violinplot(
-    data=diffs_from_final,
-    x="cumulative_n_operations_bin",
-    y="euclidean",
-    hue="mtype",
-    inner="quartile",
-    linewidth=1,
-    ax=ax,
-    scale="count",
-    zorder=1,
-)
+            historical_diff_df = pd.concat(historical_diff_df[feature].to_list()).copy()
+            historical_diff_df = historical_diff_df.reset_index(drop=False)
+            cumulative_n_operations = historical_diff_df.set_index(
+                ["root_id", "scheme", "order_by", "random_seed", "order"]
+            ).index.map(info["cumulative_n_operations"])
+            historical_diff_df["root_id_str"] = historical_diff_df["root_id"].astype(
+                str
+            )
+            historical_diff_df[
+                "cumulative_n_operations"
+            ] = cumulative_n_operations.copy()
 
-# rotate x labels
-for item in ax.get_xticklabels():
-    item.set_rotation(45)
+            historical_diff_df["mtype"] = historical_diff_df["root_id"].map(
+                column_mtypes
+            )
 
-ax.axhline(0, color="black", linewidth=1)
-ax.set_ylabel("L2 distance from final")
-ax.set_xlabel("Cumulative operations")
+            ax = axs[i, j]
+            if scheme == "clean-and-merge-random":
+                sns.lineplot(
+                    data=historical_diff_df,
+                    x="cumulative_n_operations",
+                    y=distance,
+                    ax=ax,
+                    legend=False,
+                    linewidth=1,
+                    hue="root_id_str",
+                    alpha=0.75,
+                    palette=root_id_ctype_hues.to_dict(),
+                    units="random_seed",
+                    estimator=None,
+                )
+            sns.lineplot(
+                data=historical_diff_df,
+                x="cumulative_n_operations",
+                y=distance,
+                ax=ax,
+                legend=False,
+                linewidth=2,
+                hue="root_id_str",
+                alpha=1,
+                palette=root_id_ctype_hues.to_dict(),
+            )
+            if i == 0:
+                ax.set_title(scheme_map[scheme])
+            if i == 2:
+                ax.set_xlabel("# operations")
+            else:
+                ax.set_xlabel("")
+            if j == 0:
+                ax.text(
+                    -0.45,
+                    0.5,
+                    name_map[feature],
+                    transform=ax.transAxes,
+                    ha="right",
+                    va="center",
+                    rotation=0,
+                )
+                ax.set_ylabel(distance.capitalize())
 
-# %%
-pd.Series(diffs_from_final["root_id"].unique()).map(column_mtypes["cell_type"])
-
-# %%
-
-import numpy as np
-
-bins = np.arange(0, 500, 50)
+    savefig(
+        f"diffs-from-final-by-scheme-distance={distance}-root_id={root_id}",
+        fig,
+        folder="sequence_metrics",
+    )
 
 
-# %%
-fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-root_id = all_target_stats["root_id"].unique()[10]
-root_target_stats = all_target_stats.query("root_id == @root_id").reset_index()
-sns.lineplot(
-    data=root_target_stats.query("order_by == 'time'"),
-    x="cumulative_n_operations",
-    y="prop",
-    hue="post_mtype",
-    palette=ctype_hues,
-    ax=ax,
-    legend=False,
-    linewidth=3,
-)
-sns.lineplot(
-    data=root_target_stats.query("order_by == 'random'"),
-    x="cumulative_n_operations",
-    y="prop",
-    hue="post_mtype",
-    palette=ctype_hues,
-    ax=ax,
-    legend=False,
-    units="random_seed",
-    estimator=None,
-    linewidth=0.5,
-    alpha=0.5,
-)
-ax.set_xlabel("Cumulative number of operations")
-ax.set_ylabel("Proportion of synapses")
-ax.spines[["top", "right"]].set_visible(False)
-savefig(f"target-stats-random-vs-time-ordered-root_id={root_id}", fig)
 
 
 # %%
