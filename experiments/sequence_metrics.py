@@ -507,13 +507,14 @@ savefig(
 
 # %%
 
+
 root_ids = np.random.choice(meta_diff_df.index.get_level_values("root_id").unique(), 20)
 for root_id in root_ids:
     fig, axs = plt.subplots(
-        3, 3, figsize=(16, 12), constrained_layout=True, sharey="row", sharex=False
+        4, 3, figsize=(16, 12), constrained_layout=True, sharey="row", sharex=False
     )
     for i, feature in enumerate(
-        ["props_by_mtype", "spatial_props", "spatial_props_by_mtype"]
+        ["counts_by_mtype", "props_by_mtype", "spatial_props", "spatial_props_by_mtype"]
     ):
         for j, scheme in enumerate(
             ["historical", "clean-and-merge-time", "clean-and-merge-random"]
@@ -594,3 +595,5 @@ for root_id in root_ids:
         fig,
         folder="sequence_metrics",
     )
+
+# %%

@@ -165,6 +165,13 @@ print(removed_nodes)
 print(added_nodes)
 
 #####################
+
+#%%
+delta.removed_edges
+
+#%%
+delta.added_edges
+
 # %%
 
 final_edges = client.chunkedgraph.level2_chunk_graph(root_id)
