@@ -1,10 +1,60 @@
 [
   {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "Abstract",
+    "section": "",
+    "text": "Historically, connectomes have been extremely labor-intensive to generate, requiring vast amounts of person-hours to annotate electron microscopy (EM) image volumes. Automated reconstruction from EM images using computer vision has recently developed to the point where it is being deployed widely to reconstruct connectomes at unprecedented scales. However, these automated techniques, while impressive, typically still have many errors that require human proofreading of these datasets, which involves linking together fragments of the same neuron which have been separated or separating false-merges of distinct cells. Here, we study the effect that these proofreading modifications have on the cortical wiring diagram of a region of mouse visual cortex. We compute several connectivity metrics such as the probability of two cell types or two specific neurons connecting, and study how this connectivity changes as we artificially replay a specific subset of edits onto the neurons in the volume. We show that while X changes drastically with proofreading, Z and Y metrics are relatively stable after a key subset of edits are applied. Our analysis reveals quantitative estimates of one aspect of the variability associated with connectome reconstruction, a key part of the interpretation of inferences in connectomics including comparisons between datasets. Our work also lays the foundation for a quantitative assessment of which areas for human or machine proofreading will be the most influential for downstream analysis, guiding future connectomics reconstructions towards answering scientific questions with a practical amount of effort.",
+    "crumbs": [
+      "Abstract"
+    ]
+  },
+  {
     "objectID": "test.html",
     "href": "test.html",
     "title": "test",
     "section": "",
     "text": "test"
+  },
+  {
+    "objectID": "methods.html",
+    "href": "methods.html",
+    "title": "Methods",
+    "section": "",
+    "text": "Below, we detail the different schemes used for replaying edits onto a neuron.\n\n\nThe simplest scheme is to simply apply the edits on the neuron in the same order in which those edits happened in reality. We denote this the historical ordering of edits.\nAlgorithm:\n\nInput: a state of a neuron/segmentation\n\nFrom all edits in the history of a given neuron, select the earliest which has not been applied\nApply the edit\nCompute the new connected component for this neuron from the nucleus\nCompute metrics\nRecord the number of operations applied (always 1 for this scheme)\nRecurse (go back to 1.)\n\n\n\n\n\nOften, proofreaders will follow what we’ll refer to as a “clean-and-merge” strategy. The idea is that one finds a segment which appears to be part of the current neuron, cleans up that segment by splitting off false-mergers, and then finally connects this (clean)  segment back to the neuron.Clean means that all split edits have been applied to the segment\nBelow, we describe how we implement our idealized version of this strategy when applying edits on a neuron. There are two subtle variants of this idea which differ in the order in which merges are applied to the neuron; see 2a. and 2b. in the algorithm below. We denote these strategies clean-and-merge (historical) and clean-and-merge (random).\nAlgorithm:\n\nInput: a clean state of a neuron/segmentation\n\nFind all merge edits which are available \nChoose one of these available merges to apply\n\nChoose the merge which is earliest in history (historical strategy)\nChoose at among these at random (random strategy)\n\nFind the segment which would be added if this merge is applied\nFor that segment, apply all available split edits\nApply the merge to connect this new segment to the current connected component\nCompute the new connected component for this neuron from the nucleus\nCompute metrics\nRecord the number of operations, equal to count of all operations needed for the clean (4.) and the merge (5.)\nRecurse (go back to 1.)\n\nAvailable means an edit which connects to the current connected component\n\n\n\n\n\n\nNote\n\n\n\nI actually implement this as a merge-and-clean process since the recursion is a bit easier to implement; but I reorder the metrics/counts of edits appropriately to match the above process.",
+    "crumbs": [
+      "Methods"
+    ]
+  },
+  {
+    "objectID": "methods.html#sec-schemes",
+    "href": "methods.html#sec-schemes",
+    "title": "Methods",
+    "section": "",
+    "text": "Below, we detail the different schemes used for replaying edits onto a neuron.\n\n\nThe simplest scheme is to simply apply the edits on the neuron in the same order in which those edits happened in reality. We denote this the historical ordering of edits.\nAlgorithm:\n\nInput: a state of a neuron/segmentation\n\nFrom all edits in the history of a given neuron, select the earliest which has not been applied\nApply the edit\nCompute the new connected component for this neuron from the nucleus\nCompute metrics\nRecord the number of operations applied (always 1 for this scheme)\nRecurse (go back to 1.)\n\n\n\n\n\nOften, proofreaders will follow what we’ll refer to as a “clean-and-merge” strategy. The idea is that one finds a segment which appears to be part of the current neuron, cleans up that segment by splitting off false-mergers, and then finally connects this (clean)  segment back to the neuron.Clean means that all split edits have been applied to the segment\nBelow, we describe how we implement our idealized version of this strategy when applying edits on a neuron. There are two subtle variants of this idea which differ in the order in which merges are applied to the neuron; see 2a. and 2b. in the algorithm below. We denote these strategies clean-and-merge (historical) and clean-and-merge (random).\nAlgorithm:\n\nInput: a clean state of a neuron/segmentation\n\nFind all merge edits which are available \nChoose one of these available merges to apply\n\nChoose the merge which is earliest in history (historical strategy)\nChoose at among these at random (random strategy)\n\nFind the segment which would be added if this merge is applied\nFor that segment, apply all available split edits\nApply the merge to connect this new segment to the current connected component\nCompute the new connected component for this neuron from the nucleus\nCompute metrics\nRecord the number of operations, equal to count of all operations needed for the clean (4.) and the merge (5.)\nRecurse (go back to 1.)\n\nAvailable means an edit which connects to the current connected component\n\n\n\n\n\n\nNote\n\n\n\nI actually implement this as a merge-and-clean process since the recursion is a bit easier to implement; but I reorder the metrics/counts of edits appropriately to match the above process.",
+    "crumbs": [
+      "Methods"
+    ]
+  },
+  {
+    "objectID": "methods.html#metrics-to-evaluate",
+    "href": "methods.html#metrics-to-evaluate",
+    "title": "Methods",
+    "section": "Metrics to evaluate",
+    "text": "Metrics to evaluate\nHere, we describe the metrics that we evaluate for each neuron-state .A neuron-state is just a version of a particular neuron with a particular set of edits applied to it, according to one of the schemes described in the schemes section\n\nProportion of inputs/outputs onto classes\nAssume we have \\(K\\)-classes of neuron (e.g. morphological types). This metric associates each neuron-state with a \\(K\\)-length vector, \\(x\\), where \\(x_k\\) is the proportion of that neuron-state’s output synapses which target a neuron in class \\(k\\).\nThis metric could also be flipped in the definition above to consider the inputs to a cell.\n\n\n\n\n\n\nNote\n\n\n\nFor the categorization of target neurons, I am using aibs_metamodel_mtypes_v661_v2.\n\n\n\n\nConnectivity probability by distance\nImagine space is discretized into bins of an arbitrary size/shape, for instace, concentric cylinders centered on the soma of a neuron. This metric captures the probability that cell \\(i\\) targets a downstream neuron whose soma lives within a given bin, \\(l\\).",
+    "crumbs": [
+      "Methods"
+    ]
+  },
+  {
+    "objectID": "methods.html#other",
+    "href": "methods.html#other",
+    "title": "Methods",
+    "section": "Other",
+    "text": "Other\n\n\n\n\n\n\nNote\n\n\n\nFor categorization of inhibitory neuron into broad morphological type, I am using allen_column_mtypes_v2",
+    "crumbs": [
+      "Methods"
+    ]
   },
   {
     "objectID": "introduction.html",
@@ -74,56 +124,6 @@
     "text": "Outline\nWe start by clearly defining a set of connectivity features to consider for this work.\nThen, we extract the complete set of proofreading edits performed on a highly curated column of cortical connectivity in a mouse’s visual cortex. We also map each synapse between neurons in this column to the edits it depends on, in the sense that those edits had to happen for a statement about soma \\(i\\) to soma \\(j\\) connectivity to be made.\nUsing this information, we then construct various “sloppy” networks, instantiated by replaying particular edits over the network and omitting others. These networks vary in their degree of completeness (i.e. some measure of how many of the edits were used) from the original segmentation all the way to the final proofread dataset. We also vary the “proofreader model” used to assign edits to “ON” or “OFF” in some ordering (i.e. whether edits are replayed uniformly at random, in the order they happened, in order of euclidean distance from the soma, etc.).\nFor these sloppy networks, we study how connectivity metrics vary as a function of these (real and imagined) proofreading endeavors. We also explore a ranking of individual edits from most to least important from the perspective of a particular connectivity measure, creating a scoring that could be used in future work to predict the location of key edits.",
     "crumbs": [
       "Introduction"
-    ]
-  },
-  {
-    "objectID": "index.html",
-    "href": "index.html",
-    "title": "Abstract",
-    "section": "",
-    "text": "Historically, connectomes have been extremely labor-intensive to generate, requiring vast amounts of person-hours to annotate electron microscopy (EM) image volumes. Automated reconstruction from EM images using computer vision has recently developed to the point where it is being deployed widely to reconstruct connectomes at unprecedented scales. However, these automated techniques, while impressive, typically still have many errors that require human proofreading of these datasets, which involves linking together fragments of the same neuron which have been separated or separating false-merges of distinct cells. Here, we study the effect that these proofreading modifications have on the cortical wiring diagram of a region of mouse visual cortex. We compute several connectivity metrics such as the probability of two cell types or two specific neurons connecting, and study how this connectivity changes as we artificially replay a specific subset of edits onto the neurons in the volume. We show that while X changes drastically with proofreading, Z and Y metrics are relatively stable after a key subset of edits are applied. Our analysis reveals quantitative estimates of one aspect of the variability associated with connectome reconstruction, a key part of the interpretation of inferences in connectomics including comparisons between datasets. Our work also lays the foundation for a quantitative assessment of which areas for human or machine proofreading will be the most influential for downstream analysis, guiding future connectomics reconstructions towards answering scientific questions with a practical amount of effort.",
-    "crumbs": [
-      "Abstract"
-    ]
-  },
-  {
-    "objectID": "methods.html",
-    "href": "methods.html",
-    "title": "Methods",
-    "section": "",
-    "text": "Below, we detail the different schemes used for replaying edits onto a neuron.\n\n\nThe simplest scheme is to simply apply the edits on the neuron in the same order in which those edits happened in reality. We denote this the historical ordering of edits.\nAlgorithm:\n\nInput: a state of a neuron/segmentation\n\nFrom all edits in the history of a given neuron, select the earliest which has not been applied\nApply the edit\nCompute the new connected component for this neuron from the nucleus\nCompute metrics\nRecord the number of operations applied (always 1 for this scheme)\nRecurse (go back to 1.)\n\n\n\n\n\nOften, proofreaders will follow what we’ll refer to as a “clean-and-merge” strategy. The idea is that one finds a segment which appears to be part of the current neuron, cleans up that segment by splitting off false-mergers, and then finally connects this (clean)  segment back to the neuron.Clean means that all split edits have been applied to the segment\nBelow, we describe how we implement our idealized version of this strategy when applying edits on a neuron. There are two subtle variants of this idea which differ in the order in which merges are applied to the neuron; see 2a. and 2b. in the algorithm below. We denote these strategies clean-and-merge (historical) and clean-and-merge (random).\nAlgorithm:\n\nInput: a clean state of a neuron/segmentation\n\nFind all merge edits which are available \nChoose one of these available merges to apply\n\nChoose the merge which is earliest in history (historical strategy)\nChoose at among these at random (random strategy)\n\nFind the segment which would be added if this merge is applied\nFor that segment, apply all available split edits\nApply the merge to connect this new segment to the current connected component\nCompute the new connected component for this neuron from the nucleus\nCompute metrics\nRecord the number of operations, equal to count of all operations needed for the clean (4.) and the merge (5.)\nRecurse (go back to 1.)\n\nAvailable means an edit which connects to the current connected component\n\n\n\n\n\n\nNote\n\n\n\nI actually implement this as a merge-and-clean process since the recursion is a bit easier to implement; but I reorder the metrics/counts of edits appropriately to match the above process.",
-    "crumbs": [
-      "Methods"
-    ]
-  },
-  {
-    "objectID": "methods.html#sec-schemes",
-    "href": "methods.html#sec-schemes",
-    "title": "Methods",
-    "section": "",
-    "text": "Below, we detail the different schemes used for replaying edits onto a neuron.\n\n\nThe simplest scheme is to simply apply the edits on the neuron in the same order in which those edits happened in reality. We denote this the historical ordering of edits.\nAlgorithm:\n\nInput: a state of a neuron/segmentation\n\nFrom all edits in the history of a given neuron, select the earliest which has not been applied\nApply the edit\nCompute the new connected component for this neuron from the nucleus\nCompute metrics\nRecord the number of operations applied (always 1 for this scheme)\nRecurse (go back to 1.)\n\n\n\n\n\nOften, proofreaders will follow what we’ll refer to as a “clean-and-merge” strategy. The idea is that one finds a segment which appears to be part of the current neuron, cleans up that segment by splitting off false-mergers, and then finally connects this (clean)  segment back to the neuron.Clean means that all split edits have been applied to the segment\nBelow, we describe how we implement our idealized version of this strategy when applying edits on a neuron. There are two subtle variants of this idea which differ in the order in which merges are applied to the neuron; see 2a. and 2b. in the algorithm below. We denote these strategies clean-and-merge (historical) and clean-and-merge (random).\nAlgorithm:\n\nInput: a clean state of a neuron/segmentation\n\nFind all merge edits which are available \nChoose one of these available merges to apply\n\nChoose the merge which is earliest in history (historical strategy)\nChoose at among these at random (random strategy)\n\nFind the segment which would be added if this merge is applied\nFor that segment, apply all available split edits\nApply the merge to connect this new segment to the current connected component\nCompute the new connected component for this neuron from the nucleus\nCompute metrics\nRecord the number of operations, equal to count of all operations needed for the clean (4.) and the merge (5.)\nRecurse (go back to 1.)\n\nAvailable means an edit which connects to the current connected component\n\n\n\n\n\n\nNote\n\n\n\nI actually implement this as a merge-and-clean process since the recursion is a bit easier to implement; but I reorder the metrics/counts of edits appropriately to match the above process.",
-    "crumbs": [
-      "Methods"
-    ]
-  },
-  {
-    "objectID": "methods.html#metrics-to-evaluate",
-    "href": "methods.html#metrics-to-evaluate",
-    "title": "Methods",
-    "section": "Metrics to evaluate",
-    "text": "Metrics to evaluate\nHere, we describe the metrics that we evaluate for each neuron-state .A neuron-state is just a version of a particular neuron with a particular set of edits applied to it, according to one of the schemes described in the schemes section\n\nProportion of inputs/outputs onto classes\nAssume we have \\(K\\)-classes of neuron (e.g. morphological types). This metric associates each neuron-state with a \\(K\\)-length vector, \\(x\\), where \\(x_k\\) is the proportion of that neuron-state’s output synapses which target a neuron in class \\(k\\).\nThis metric could also be flipped in the definition above to consider the inputs to a cell.\n\n\n\n\n\n\nNote\n\n\n\nFor the categorization of target neurons, I am using aibs_metamodel_mtypes_v661_v2.\n\n\n\n\nConnectivity probability by distance\nImagine space is discretized into bins of an arbitrary size/shape, for instace, concentric cylinders centered on the soma of a neuron. This metric captures the probability that cell \\(i\\) targets a downstream neuron whose soma lives within a given bin, \\(l\\).",
-    "crumbs": [
-      "Methods"
-    ]
-  },
-  {
-    "objectID": "methods.html#other",
-    "href": "methods.html#other",
-    "title": "Methods",
-    "section": "Other",
-    "text": "Other\n\n\n\n\n\n\nNote\n\n\n\nFor categorization of inhibitory neuron into broad morphological type, I am using allen_column_mtypes_v2",
-    "crumbs": [
-      "Methods"
     ]
   }
 ]

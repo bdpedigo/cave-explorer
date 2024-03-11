@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.4.550">
+<meta name="generator" content="quarto-1.4.551">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -147,7 +147,7 @@ window.Quarto = {
     <span class="navbar-title">Proofreading retrospective</span>
     </a>
   </div>
-        <div class="quarto-navbar-tools">
+        <div class="quarto-navbar-tools tools-end">
     <div class="dropdown">
       <a href="" title="" id="quarto-navigation-tool-dropdown-0" class="quarto-navigation-tool dropdown-toggle px-1" data-bs-toggle="dropdown" aria-expanded="false" aria-label=""><i class="bi bi-github"></i></a>
       <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="quarto-navigation-tool-dropdown-0">
@@ -263,7 +263,7 @@ window.Quarto = {
 <p>This question of technical variability and proofreading tangentially arose in <span class="citation" data-cites="schlegel2023">Schlegel et al. (<a href="#ref-schlegel2023" role="doc-biblioref">2023</a>)</span> as the authors examined a comparison of two fly connectomes: <a href="https://flywire.ai/">FlyWire</a> and <a href="https://www.janelia.org/project-team/flyem/hemibrain">Hemibrain</a>. The authors were interested in quantitative comparisons of connectivity between cell types that were cross-matched between the left and right hemispheres of the FlyWire connectome and the single hemisphere Hemibrain connectome. They found a general agreement in cell-type-to-cell-type connections both within (FlyWire-left:FlyWire-right) and between (FlyWire:Hemibrain) datasets; still, they wondered how much technical differences in reconstruction between these reconstructions could explain the differences they saw. The authors created synthetic datasets by subsampling data to estimated completion rates (on the basis of how many synapses were attached to both somas for a given neuropil). They found that, on average, 65% of the observed differences in cell-type-to-cell-type edge weights fell within a range one would expect from this simple model of technical noise. In other words, for many of these connections, one can not rule out that a difference that large came from differences in the technical details of connectome reconstruction, highlighting the importance of understanding this variability for comparisons of connectivity.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="images/schlegel-variability.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:75.0%"></p>
+<p><img src="images/schlegel-variability.png" class="img-fluid figure-img" style="width:75.0%"></p>
 <figcaption>Figure 4H from <span class="citation" data-cites="schlegel2023">Schlegel et al. (<a href="#ref-schlegel2023" role="doc-biblioref">2023</a>)</span>, credit to the authors of that work. Diagram depicts method for probabilistically scaling observed data by completion rates, an indicator of reconstruction completeness. Plot shows confidence regions for technical variability under said model.</figcaption>
 </figure>
 </div>
@@ -415,6 +415,24 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
     // clear code selection
     e.clearSelection();
   });
+    var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+    var mailtoRegex = new RegExp(/^mailto:/);
+      var filterRegex = new RegExp("https:\/\/bdpedigo\.github\.io\/skedits\/");
+    var isInternal = (href) => {
+        return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+    }
+    // Inspect non-navigation links and adorn them if external
+ 	var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool)');
+    for (var i=0; i<links.length; i++) {
+      const link = links[i];
+      if (!isInternal(link.href)) {
+        // undo the damage that might have been done by quarto-nav.js in the case of
+        // links that we want to consider external
+        if (link.dataset.originalHref !== undefined) {
+          link.href = link.dataset.originalHref;
+        }
+      }
+    }
   function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
     const config = {
       allowHTML: true,
@@ -449,7 +467,11 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
       try { href = new URL(href).hash; } catch {}
       const id = href.replace(/^#\/?/, "");
       const note = window.document.getElementById(id);
-      return note.innerHTML;
+      if (note) {
+        return note.innerHTML;
+      } else {
+        return "";
+      }
     });
   }
   const xrefs = window.document.querySelectorAll('a.quarto-xref');
