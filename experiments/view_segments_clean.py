@@ -53,9 +53,6 @@ neuron = load_neuronframe(root_id, client)
 neuron.n_connected_components()
 
 # %%
-neuron.to_skeleton_polydata()
-
-# %%
 
 pv.set_jupyter_backend("client")
 
@@ -72,12 +69,8 @@ for i, (label, component) in enumerate(components):
     plotter.add_mesh(component.to_skeleton_polydata(), color=colors[i], line_width=0.1)
 plotter.show()
 
-
 # %%
-# give the edges info about when those nodes were added
-neuron.apply_node_features("operation_added", inplace=True)
-neuron.apply_node_features("metaoperation_added", inplace=True)
-
+prefix = "meta"
 # label edges which cross operations/metaoperations
 neuron.edges["cross_operation"] = (
     neuron.edges["source_operation_added"] != neuron.edges["target_operation_added"]
@@ -86,9 +79,6 @@ neuron.edges["cross_metaoperation"] = (
     neuron.edges["source_metaoperation_added"]
     != neuron.edges["target_metaoperation_added"]
 )
-neuron.edges["was_removed"] = neuron.edges["operation_removed"] != -1
-neuron.nodes["was_removed"] = neuron.nodes["operation_removed"] != -1
-
 # %%
 
 meta = True
@@ -117,7 +107,8 @@ neuron.nodes["segment"] = -1
 segment_nodes = []
 
 for i, component in tqdm(
-    enumerate(no_cross_neuron.connected_components()), total=n_connected_components
+    enumerate(no_cross_neuron.connected_components(directed=False)),
+    total=n_connected_components,
 ):
     data = {
         "segment": i,
@@ -167,46 +158,6 @@ shuffle(colors)
 
 colors = [color.upper() for color in colors]
 
-plotter = pv.Plotter()
-
-i = 5
-
-row = neuron.metaedits.query("~has_merge").iloc[i]
-
-set_up_camera(
-    plotter,
-    row[["centroid_x", "centroid_y", "centroid_z"]],
-    -2_000_000,
-    25,
-    "-y",
-)
-
-
-# merges = neuron.to_merge_polydata(draw_edges=True, prefix=prefix)
-# splits = neuron.to_split_polydata(draw_edges=True, prefix=prefix)
-merges_points = neuron.to_merge_polydata(draw_edges=False, prefix=prefix)
-splits_points = neuron.to_split_polydata(draw_edges=False, prefix=prefix)
-
-# plotter.add_mesh(merges, color="blue", point_size=20, line_width=10)
-# plotter.add_mesh(splits, color="red", point_size=20, line_width=10)
-plotter.add_mesh(merges_points, color="blue", point_size=10)
-plotter.add_mesh(splits_points, color="red", point_size=10)
-
-# poly = neuron.query_edges("~was_removed").to_skeleton_polydata()
-# plotter.add_mesh(poly, line_width=3)
-# show_neuron = neuron.query_nodes("~was_removed")
-# poly = show_neuron.to_skeleton_polydata(label="segment_color")
-# point_poly = show_neuron.to_skeleton_polydata(label="segment_color", draw_lines=False)
-# plotter.add_mesh(poly, line_width=3, scalars="segment_color", cmap=colors)
-# plotter.add_mesh(point_poly, scalars="segment_color", cmap=colors, point_size=3)
-
-poly = neuron.to_skeleton_polydata()
-plotter.add_mesh(poly, line_width=0.5, color="black")
-
-plotter.show()
-
-# %%
-neuron.k_hop_neighborhood(neuron.nodes.index[0], 2)
 
 # %%
 plotter = pv.Plotter()
@@ -224,6 +175,7 @@ set_up_camera(
 
 for segment_id in tqdm(segment_nodes.index):
     segment = neuron.query_nodes(f"segment == {segment_id}")
+    assert segment.n_connected_components() == 1
     poly = segment.to_skeleton_polydata()
     plotter.add_mesh(poly, line_width=0.5, color=colors[segment_id])
 
@@ -262,10 +214,31 @@ set_up_camera(
 
 nuc_segment = neuron.nodes.loc[neuron.nucleus_id, "segment"]
 
-#%%
-sub_seg_nf = segment_nf.k_hop_neighborhood(nuc_segment, 5)
+
+# %%
+
+activation_tracker = pd.DataFrame(index=segment_nf.nodes.index)
+
+for i in range(15):
+    active_nodes = segment_nf.k_hop_neighborhood(nuc_segment, i).nodes.index
+    activation_tracker[i] = False
+    activation_tracker.loc[active_nodes, i] = True
+
+activation_tracker[activation_tracker.any(axis=1)]
+
+for row_id, row in activation_tracker.iterrows():
+    first = row.argmax()
+    if not (row.values[first:] == row.values[first]).all(): 
+        print(row_id, row)
 
 #%%
+print(6 in segment_nf.k_hop_neighborhood(nuc_segment, 7).nodes.index)
+print(6 in segment_nf.k_hop_neighborhood(nuc_segment, 8).nodes.index)
+
+# %%
+sub_seg_nf = segment_nf.k_hop_neighborhood(nuc_segment, 3)
+
+
 plotter = pv.Plotter()
 
 row = neuron.nodes.loc[neuron.nucleus_id]
@@ -278,20 +251,31 @@ set_up_camera(
     "-y",
 )
 
-for node_id in sub_seg_nf.nodes.index:
-    segment = neuron.query_nodes(f"segment == {node_id}")
-    poly = segment.to_skeleton_polydata()
-    plotter.add_mesh(poly, line_width=3, color=colors[node_id])
+# for node_id in sub_seg_nf.nodes.index:
+#     segment = neuron.query_nodes(f"segment == {node_id}")
+#     poly = segment.to_skeleton_polydata()
+#     plotter.add_mesh(poly, line_width=3, color=colors[node_id])
 
-merges = neuron.to_merge_polydata(draw_edges=True, prefix=prefix)
-splits = neuron.to_split_polydata(draw_edges=True, prefix=prefix)
-merges_points = neuron.to_merge_polydata(draw_edges=False, prefix=prefix)
-splits_points = neuron.to_split_polydata(draw_edges=False, prefix=prefix)
+sub_neuron = neuron.query_nodes(
+    "segment.isin(@sub_seg_nf.nodes.index)", local_dict=locals()
+)
+poly = sub_neuron.to_skeleton_polydata(label="segment_color")
+plotter.add_mesh(poly, line_width=3)
 
-plotter.add_mesh(merges, color="blue", point_size=10, line_width=2)
-plotter.add_mesh(splits, color="red", point_size=10, line_width=2)
-plotter.add_mesh(merges_points, color="blue", point_size=10)
-plotter.add_mesh(splits_points, color="red", point_size=10)
+# sub_neuron = segment.query_edges(
+#     "source_segment.isin(@sub_seg_nf.nodes.index) | target_segment.isin(@sub_seg_nf.nodes.index) & (source_segment != target_segment)",
+#     local_dict=locals(),
+# )
+
+# merges = sub_neuron.to_merge_polydata(draw_edges=True, prefix=prefix)
+# splits = sub_neuron.to_split_polydata(draw_edges=True, prefix=prefix)
+# merges_points = sub_neuron.to_merge_polydata(draw_edges=False, prefix=prefix)
+# splits_points = sub_neuron.to_split_polydata(draw_edges=False, prefix=prefix)
+
+# plotter.add_mesh(merges, color="blue", point_size=10, line_width=2)
+# plotter.add_mesh(splits, color="red", point_size=10, line_width=2)
+# plotter.add_mesh(merges_points, color="blue", point_size=10)
+# plotter.add_mesh(splits_points, color="red", point_size=10)
 
 plotter.show()
 

@@ -68,12 +68,17 @@ def get_detailed_change_log(root_id, client, filtered=True):
 
 class NetworkDelta:
     def __init__(
-        self, removed_nodes, added_nodes, removed_edges, added_edges, metadata={}
+        self,
+        removed_nodes: pd.DataFrame,
+        added_nodes: pd.DataFrame,
+        removed_edges: pd.DataFrame,
+        added_edges: pd.DataFrame,
+        metadata: dict = {},
     ):
         self.removed_nodes = removed_nodes
         self.added_nodes = added_nodes
-        self.removed_edges = removed_edges
-        self.added_edges = added_edges
+        self.removed_edges = removed_edges.reset_index(drop=True)
+        self.added_edges = added_edges.reset_index(drop=True)
         self.metadata = metadata
 
     def __repr__(self):
@@ -115,6 +120,19 @@ class NetworkDelta:
     def from_json(cls, input):
         return cls.from_dict(json.loads(input))
 
+    def __eq__(self, other: "NetworkDelta") -> bool:
+        if not isinstance(other, NetworkDelta):
+            return False
+        if not self.removed_nodes.equals(other.removed_nodes):
+            return False
+        if not self.added_nodes.equals(other.added_nodes):
+            return False
+        if not self.removed_edges.equals(other.removed_edges):
+            return False
+        if not self.added_edges.equals(other.added_edges):
+            return False
+        return True
+
 
 def combine_deltas(deltas):
     total_added_nodes = pd.concat(
@@ -147,6 +165,23 @@ def combine_deltas(deltas):
     )
 
 
+def make_bbox(bbox_halfwidth, point_in_nm, seg_resolution):
+    x_center, y_center, z_center = point_in_nm
+
+    x_start = x_center - bbox_halfwidth
+    x_stop = x_center + bbox_halfwidth
+    y_start = y_center - bbox_halfwidth
+    y_stop = y_center + bbox_halfwidth
+    z_start = z_center - bbox_halfwidth
+    z_stop = z_center + bbox_halfwidth
+
+    start_point_cg = np.array([x_start, y_start, z_start]) / seg_resolution
+    stop_point_cg = np.array([x_stop, y_stop, z_stop]) / seg_resolution
+
+    bbox_cg = np.array([start_point_cg, stop_point_cg], dtype=int)
+    return bbox_cg
+
+
 def get_network_edits(root_id, client, verbose=True):
     change_log = get_detailed_change_log(root_id, client, filtered=False)
     filtered_change_log = get_detailed_change_log(root_id, client, filtered=True)
@@ -164,13 +199,19 @@ def get_network_edits(root_id, client, verbose=True):
         before_root_ids = row["before_root_ids"]
         after_root_ids = row["roots"]
 
+        point_in_cg = np.array(row["sink_coords"][0])
+        seg_resolution = client.chunkedgraph.base_resolution
+        point_in_nm = point_in_cg * seg_resolution
+        BBOX_HALFWIDTH = 10_000
+        bbox_cg = make_bbox(BBOX_HALFWIDTH, point_in_nm, seg_resolution).T
+
         # grabbing the union of before/after nodes/edges
         # NOTE: this is where all the compute time comes from
         all_before_nodes, all_before_edges = get_all_nodes_edges(
-            before_root_ids, client, positions=False
+            before_root_ids, client, positions=False, bounds=bbox_cg
         )
         all_after_nodes, all_after_edges = get_all_nodes_edges(
-            after_root_ids, client, positions=False
+            after_root_ids, client, positions=False, bounds=bbox_cg
         )
 
         # finding the nodes that were added or removed, simple set logic

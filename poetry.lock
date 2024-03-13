@@ -593,13 +593,12 @@ files = [
 
 [[package]]
 name = "caveclient"
-version = "5.11.0"
+version = "5.16.1"
 description = "a service for interacting with the Connectome Annotation Versioning Engine"
 optional = false
-python-versions = "*"
-files = [
-    {file = "caveclient-5.11.0.tar.gz", hash = "sha256:e8370e11c1cdf1852e90acaa7495a1085857595ba94515bd4cd7f84d22fef580"},
-]
+python-versions = ">=3.7,<3.12"
+files = []
+develop = true
 
 [package.dependencies]
 attrs = ">=21.3.0"
@@ -612,6 +611,10 @@ pandas = "*"
 pyarrow = ">=3,<12"
 requests = "*"
 urllib3 = "*"
+
+[package.source]
+type = "directory"
+url = "../caveclient"
 
 [[package]]
 name = "certifi"
@@ -4495,7 +4498,7 @@ description = "Local package"
 optional = false
 python-versions = "*"
 files = []
-develop = false
+develop = true
 
 [package.dependencies]
 matplotlib = "*"
@@ -6882,4 +6885,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">3.11.0,<3.12.0"
-content-hash = "2e7492563ebc76df6e9645cc19d5f7b1c0a1f18a02e20a48f40ae0ffa321f626"
+content-hash = "c634b4f864dd2856a264c8b64b4c99e5e4cc4a5a1ed50215d9ad6f1414ff1f00"

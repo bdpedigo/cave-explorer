@@ -58,9 +58,11 @@ def get_positions(nodelist, client: CAVEclient, n_retries=2, retry_delay=10):
     return nodes
 
 
-def get_level2_nodes_edges(root_id: int, client: CAVEclient, positions=True):
+def get_level2_nodes_edges(
+    root_id: int, client: CAVEclient, positions=True, bounds=None
+):
     try:
-        edgelist = client.chunkedgraph.level2_chunk_graph(root_id)
+        edgelist = client.chunkedgraph.level2_chunk_graph(root_id, bounds=bounds)
         nodelist = set()
         for edge in edgelist:
             for node in edge:
@@ -84,8 +86,10 @@ def get_level2_nodes_edges(root_id: int, client: CAVEclient, positions=True):
     else:
         nodes = pd.DataFrame(index=nodelist)
 
-    edges = pd.DataFrame(edgelist)
-    edges.columns = ["source", "target"]
+    if len(edgelist) == 0:
+        edges = pd.DataFrame(columns=["source", "target"])
+    else:
+        edges = pd.DataFrame(edgelist, columns=["source", "target"])
 
     edges = edges.drop_duplicates(keep="first")
 
@@ -143,11 +147,13 @@ def pt_to_xyz(pts):
     return positions
 
 
-def get_all_nodes_edges(root_ids, client: CAVEclient, positions=False):
+def get_all_nodes_edges(root_ids, client: CAVEclient, positions=False, bounds=None):
     all_nodes = []
     all_edges = []
     for root_id in root_ids:
-        nodes, edges = get_level2_nodes_edges(root_id, client, positions=positions)
+        nodes, edges = get_level2_nodes_edges(
+            root_id, client, positions=positions, bounds=bounds
+        )
         all_nodes.append(nodes)
         all_edges.append(edges)
     all_nodes = pd.concat(all_nodes, axis=0)
