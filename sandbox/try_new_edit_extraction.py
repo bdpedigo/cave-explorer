@@ -4,7 +4,6 @@ import time
 import caveclient as cc
 import numpy as np
 import pandas as pd
-from tqdm.auto import tqdm
 
 from pkg.edits import (
     NetworkDelta,
@@ -44,11 +43,12 @@ def make_bbox(bbox_halfwidth, point_in_nm, seg_resolution):
 
 
 root_id = proofreading_table.index[0]
+root_id = 864691134918493450
 # out = get_network_edits(root_id, client)
-
 # change_log = change_log.sample(n=len(change_log), replace=False)
+from tqdm.auto import tqdm
 
-recompute = False
+recompute = True
 if recompute:
     change_log = get_detailed_change_log(root_id, client, filtered=False)
 
@@ -57,6 +57,7 @@ if recompute:
     for operation_id in tqdm(
         change_log.index, desc="Finding network changes for each edit"
     ):
+        # for operation_id in [280460]:
         row = change_log.loc[operation_id]
 
         before_root_ids = row["before_root_ids"]
@@ -65,7 +66,7 @@ if recompute:
         point_in_cg = np.array(row["sink_coords"][0])
         seg_resolution = client.chunkedgraph.base_resolution
         point_in_nm = point_in_cg * seg_resolution
-        BBOX_HALFWIDTH = 10_000
+        BBOX_HALFWIDTH = 20_000
         bbox_cg = make_bbox(BBOX_HALFWIDTH, point_in_nm, seg_resolution).T
 
         # grabbing the union of before/after nodes/edges
@@ -169,5 +170,5 @@ close_ops = time_comparison.query("difference > 0 & difference < 0.2").index
 # %%
 time_comparison[["bounded", "full"]].sum() / 60
 
-#%%
-summary.query('operation_id in @close_ops')
+# %%
+summary.query("operation_id in @close_ops")

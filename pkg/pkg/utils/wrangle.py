@@ -12,7 +12,9 @@ from sklearn.metrics import pairwise_distances_argmin
 from pkg.paths import DATA_PATH
 
 
-def get_positions(nodelist, client: CAVEclient, n_retries=2, retry_delay=10):
+def get_positions(
+    nodelist, client: CAVEclient, n_retries=1, retry_delay=20, skip=False
+):
     nodelist = list(nodelist)
     chunk_size = 100_000
     if len(nodelist) > chunk_size:
@@ -26,7 +28,11 @@ def get_positions(nodelist, client: CAVEclient, n_retries=2, retry_delay=10):
         for chunk in chunks:
             nodes.append(
                 get_positions(
-                    chunk, client, n_retries=n_retries, retry_delay=retry_delay
+                    chunk,
+                    client,
+                    n_retries=n_retries,
+                    retry_delay=retry_delay,
+                    skip=skip,
                 )
             )
         nodes = pd.concat(nodes, axis=0)
@@ -46,14 +52,23 @@ def get_positions(nodelist, client: CAVEclient, n_retries=2, retry_delay=10):
         )
         sleep(retry_delay)
         return get_positions(
-            nodelist, client, n_retries=n_retries - 1, retry_delay=retry_delay
+            nodelist,
+            client,
+            n_retries=n_retries - 1,
+            retry_delay=retry_delay,
+            skip=skip,
         )
 
     if nodes.isna().any().any():
         missing = nodes.loc[nodes.isna().any(axis=1)]
-        raise HTTPError(
-            f"Missing positions for some L2 nodes, for instance: {missing.index[:5].to_list()}"
-        )
+
+        msg = f"Missing positions for some L2 nodes, for instance: {missing.index[:5].to_list()}"
+
+        if skip:
+            print(msg)
+            return nodes
+        else:
+            raise HTTPError(msg)
 
     return nodes
 
@@ -140,9 +155,27 @@ def pt_to_xyz(pts):
         positions["z"] = np.nan
         return positions
 
-    positions["x"] = pts.apply(lambda x: x[0])
-    positions["y"] = pts.apply(lambda x: x[1])
-    positions["z"] = pts.apply(lambda x: x[2])
+    def x_mapper(x):
+        if isinstance(x, list):
+            return x[0]
+        else:
+            return np.nan
+
+    def y_mapper(y):
+        if isinstance(y, list):
+            return y[1]
+        else:
+            return np.nan
+
+    def z_mapper(z):
+        if isinstance(z, list):
+            return z[2]
+        else:
+            return np.nan
+
+    positions["x"] = pts.apply(x_mapper)
+    positions["y"] = pts.apply(y_mapper)
+    positions["z"] = pts.apply(z_mapper)
 
     return positions
 

@@ -3,8 +3,9 @@ import os
 import pickle
 from functools import wraps
 from pathlib import Path
-from typing import Callable, Literal, Union
+from typing import Callable, Literal, Optional, Union
 
+import numpy as np
 from cloudfiles import CloudFiles
 
 from pkg.paths import OUT_PATH
@@ -37,6 +38,15 @@ def parametrized(dec):
     return layer
 
 
+class CustomJSONizer(json.JSONEncoder):
+    def default(self, obj):
+        return (
+            super().encode(bool(obj))
+            if isinstance(obj, np.bool_)
+            else super().default(obj)
+        )
+
+
 @parametrized
 def lazycloud(
     func: Callable,
@@ -47,6 +57,8 @@ def lazycloud(
     kwarg_keys: Union[str, list[str]] = [],
     local_path: Union[str, Path] = OUT_PATH,
     save_format: Literal["pickle", "json"] = "pickle",
+    load_func: Optional[Callable] = None,
+    save_func: Optional[Callable] = None,
     verify: bool = False,
 ) -> Callable:
     """
@@ -71,26 +83,37 @@ def lazycloud(
     local_path :
         The local path to use for caching.
     save_format :
-        The format to use for saving the cache, can be "pickle" or "json".
+        The format to use for saving the cache, can be "pickle" or "json". If None, will
+        use the `load_func` and `save_func` instead.
+    load_func :
+        A function to use prior to pickling/json-ing, depending on `save_format`. This
+        can be used to prepare an object for these operations.
+    save_func :
+        A function to use after unpickling/loading, depending on `save_format`. This can
+        be used to prepare an object for use after these operations.
     verify :
         Whether to check if the loaded result from the cache matches the one computed
         when running the function. Requires the result to implement the `__eq__` method.
     """
-    use_cloud = os.environ.get("LAZYCLOUD_USE_CLOUD") == "True"
 
     if save_format == "pickle":
         loader = pickle.loads
         saver = pickle.dumps
     elif save_format == "json":
         loader = json.loads
-        saver = json.dumps
+
+        def saver(obj):
+            return json.dumps(obj, cls=CustomJSONizer)
     else:
         raise ValueError(f"Unknown save_format: {save_format}")
 
-    cf = get_cloudfiles(use_cloud, cloud_bucket, folder, local_path=local_path)
-
     @wraps(func)
     def wrapper(*args, **kwargs):
+        # use_cloud = (
+        #     os.environ.get("LAZYCLOUD_USE_CLOUD", "False").capitalize() == "True"
+        # )
+        cf = get_cloudfiles(True, cloud_bucket, folder, local_path=local_path)
+
         file_name = ""
         for arg_key in arg_keys:
             file_name += str(args[arg_key]) + "-"
@@ -98,27 +121,38 @@ def lazycloud(
             file_name += f"{str(kwarg_key)}={str(kwargs[kwarg_key])}-"
         file_name += file_suffix
 
-        if "use_cache" in kwargs:
-            use_cache = kwargs.pop("use_cache")
-            if not use_cache:
-                recompute = True
-            else:
-                recompute = False
-        else:
-            recompute = False
-
-        if "only_load" in kwargs:
-            only_load = kwargs.pop("only_load")
-        else:
-            only_load = False
-
         if "cache_verbose" in kwargs:
-            cache_verbose = kwargs.pop("cache_verbose")
+            cache_verbose = kwargs.get("cache_verbose")
         else:
             cache_verbose = False
 
-        if (not cf.exists(file_name) or recompute) and not only_load:
+        if "use_cache" in kwargs:
+            use_cache = kwargs.get("use_cache")
+            if not use_cache:
+                force_recompute = True
+            else:
+                force_recompute = False
+        elif "LAZYCLOUD_RECOMPUTE" in os.environ:
+            force_recompute = (
+                os.environ.get("LAZYCLOUD_RECOMPUTE").capitalize() == "True"
+            )
+        else:
+            force_recompute = False
+        print(
+            f"LAZYCLOUD forcing recompute for function {func.__name__}:",
+            force_recompute,
+        )
+
+        if "only_load" in kwargs:
+            only_load = kwargs.get("only_load")
+        else:
+            only_load = False
+
+        if (not cf.exists(file_name) or force_recompute) and not only_load:
             result = func(*args, **kwargs)
+            if save_func:
+                result = save_func(result)
+
             result = saver(result)
             if cache_verbose:
                 print(f"LAZYCLOUD: Writing {file_name} to cloud...")
@@ -131,6 +165,8 @@ def lazycloud(
         if cache_verbose:
             print(f"LAZYCLOUD: Loading result {file_name} from cloud...")
         loaded_result = loader(cf.get(file_name))
+        if load_func:
+            loaded_result = load_func(loaded_result)
 
         if verify:
             is_same = result == loaded_result

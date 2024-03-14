@@ -9,6 +9,7 @@ from networkframe import NetworkFrame
 from requests import HTTPError
 from tqdm import tqdm
 
+from ..io import lazycloud
 from ..morphology import (
     find_component_by_l2_id,
     get_alltime_synapses,
@@ -182,7 +183,39 @@ def make_bbox(bbox_halfwidth, point_in_nm, seg_resolution):
     return bbox_cg
 
 
-def get_network_edits(root_id, client, verbose=True):
+def _network_edits_saver(networkdeltas_by_operation: dict) -> dict:
+    networkdelta_dicts = {}
+    for operation_id, delta in networkdeltas_by_operation.items():
+        networkdelta_dicts[operation_id] = delta.to_dict()
+    return networkdelta_dicts
+
+
+def _network_edits_loader(networkdelta_dicts: dict) -> dict:
+    networkdeltas_by_operation = {}
+    for operation_id, delta in networkdelta_dicts.items():
+        networkdeltas_by_operation[int(operation_id)] = NetworkDelta.from_dict(delta)
+    return networkdeltas_by_operation
+
+
+@lazycloud(
+    cloud_bucket="allen-minnie-phase3",
+    folder="edit_info",
+    file_suffix="operations.json",
+    arg_keys=[0],
+    kwarg_keys=[],
+    save_format="json",
+    load_func=_network_edits_loader,
+    save_func=_network_edits_saver,
+)
+def get_network_edits(
+    root_id,
+    client,
+    verbose=True,
+    bounds_halfwidth=10_000,
+    use_cache: bool = True,
+    cache_verbose: bool = False,
+    only_load: bool = False,
+):
     change_log = get_detailed_change_log(root_id, client, filtered=False)
     filtered_change_log = get_detailed_change_log(root_id, client, filtered=True)
     change_log["is_filtered"] = False
@@ -202,8 +235,11 @@ def get_network_edits(root_id, client, verbose=True):
         point_in_cg = np.array(row["sink_coords"][0])
         seg_resolution = client.chunkedgraph.base_resolution
         point_in_nm = point_in_cg * seg_resolution
-        BBOX_HALFWIDTH = 10_000
-        bbox_cg = make_bbox(BBOX_HALFWIDTH, point_in_nm, seg_resolution).T
+
+        if bounds_halfwidth is None:
+            bbox_cg = None
+        else:
+            bbox_cg = make_bbox(bounds_halfwidth, point_in_nm, seg_resolution).T
 
         # grabbing the union of before/after nodes/edges
         # NOTE: this is where all the compute time comes from
@@ -226,13 +262,6 @@ def get_network_edits(root_id, client, verbose=True):
         )
 
         # keep track of what changed
-        # metadata = dict(
-        #     operation_id=operation_id,
-        #     is_merge=bool(is_merge),
-        #     before_root_ids=before_root_ids,
-        #     after_root_ids=after_root_ids,
-        #     timestamp=row["timestamp"],
-        # )
         metadata = {
             **row.to_dict(),
             "operation_id": operation_id,
@@ -252,7 +281,24 @@ def get_network_edits(root_id, client, verbose=True):
     return networkdeltas_by_operation
 
 
-def get_network_metaedits(networkdeltas_by_operation, root_id, client):
+@lazycloud(
+    cloud_bucket="allen-minnie-phase3",
+    folder="edit_info",
+    file_suffix="meta_operations.json",
+    arg_keys=[1],
+    kwarg_keys=[],
+    save_format="json",
+    load_func=_network_edits_loader,
+    save_func=_network_edits_saver,
+)
+def get_network_metaedits(
+    networkdeltas_by_operation,
+    root_id,
+    client,
+    use_cache: bool = True,
+    cache_verbose: bool = False,
+    only_load: bool = False,
+):
     # find the nodes that are modified in any way by each operation
     mod_sets = {}
     for edit_id, delta in networkdeltas_by_operation.items():
@@ -302,14 +348,15 @@ def get_network_metaedits(networkdeltas_by_operation, root_id, client):
     # for each meta-operation, combine the deltas of the operations that make it up
     networkdeltas_by_meta_operation = {}
     for meta_operation_id, operation_ids in meta_operation_map.items():
+        meta_operation_id = int(meta_operation_id)
         deltas = [
             networkdeltas_by_operation[operation_id] for operation_id in operation_ids
         ]
         meta_networkdelta = combine_deltas(deltas)
 
-        is_relevant = meta_networkdelta.added_nodes.index.isin(
-            final_nf.nodes.index
-        ).any()
+        is_relevant = bool(
+            meta_networkdelta.added_nodes.index.isin(final_nf.nodes.index).any()
+        )
 
         all_metadata = {}
         for delta in deltas:
@@ -342,7 +389,7 @@ def get_network_metaedits(networkdeltas_by_operation, root_id, client):
         )
         networkdeltas_by_meta_operation[meta_operation_id] = meta_networkdelta
 
-    return networkdeltas_by_meta_operation, meta_operation_map
+    return networkdeltas_by_meta_operation
 
 
 def find_supervoxel_component(supervoxel: int, nf: NetworkFrame, client):
@@ -925,3 +972,56 @@ def apply_synapses(
     nf.nodes["has_synapses"] = nf.nodes["synapses"].apply(len) > 0
 
     return pre_synapses, post_synapses
+
+
+# def load_network_edits(root_id: int, client: cc.CAVEclient):
+#     out_file = f"{root_id}_operations.json"
+
+#     if not cf.exists(out_file) or recompute:
+#         networkdeltas_by_operation = get_network_edits(root_id, client)
+
+#         networkdelta_dicts = {}
+#         for operation_id, delta in networkdeltas_by_operation.items():
+#             networkdelta_dicts[operation_id] = delta.to_dict()
+
+#         _ = cf.put_json(out_file, networkdelta_dicts)
+#         assert cf.exists(out_file)
+
+#     networkdelta_dicts = cf.get_json(out_file)
+#     networkdeltas_by_operation = {}
+#     for operation_id, delta in networkdelta_dicts.items():
+#         networkdeltas_by_operation[int(operation_id)] = NetworkDelta.from_dict(delta)
+
+#     out_file = f"{root_id}_meta_operations.json"
+
+#     if not cf.exists(out_file) or recompute:
+#         networkdeltas_by_meta_operation, meta_operation_map = get_network_metaedits(
+#             networkdeltas_by_operation, root_id, client
+#         )
+
+#         # remap all of the keys to strings
+#         networkdelta_dicts = {}
+#         for meta_operation_id, delta in networkdeltas_by_meta_operation.items():
+#             networkdelta_dicts[str(meta_operation_id)] = delta.to_dict()
+#         out_meta_operation_map = {}
+#         for meta_operation_id, operation_ids in meta_operation_map.items():
+#             out_meta_operation_map[str(meta_operation_id)] = operation_ids
+
+#         _ = cf.put_json(out_file, networkdelta_dicts)
+#         assert cf.exists(out_file)
+#         _ = cf.put_json(f"{root_id}_meta_operation_map.json", out_meta_operation_map)
+#         assert cf.exists(f"{root_id}_meta_operation_map.json")
+
+#     networkdelta_dicts = cf.get_json(out_file)
+
+#     networkdeltas_by_meta_operation = {}
+#     for meta_operation_id, delta in networkdelta_dicts.items():
+#         networkdeltas_by_meta_operation[
+#             int(meta_operation_id)
+#         ] = NetworkDelta.from_dict(delta)
+#     in_meta_operation_map = cf.get_json(f"{root_id}_meta_operation_map.json")
+#     meta_operation_map = {}
+#     for meta_operation_id, operation_ids in in_meta_operation_map.items():
+#         meta_operation_map[int(meta_operation_id)] = operation_ids
+
+#     return networkdeltas_by_operation, networkdeltas_by_meta_operation

@@ -1,11 +1,13 @@
 import caveclient as cc
 import numpy as np
 import pandas as pd
+
 # import pcg_skel.skel_utils as sk_utils
 from meshparty import skeletonize, trimesh_io
 from meshparty.skeleton import Skeleton
 from navis import TreeNeuron
 from networkframe import NetworkFrame
+
 # from pcg_skel.chunk_tools import build_spatial_graph
 from sklearn.metrics import pairwise_distances_argmin
 
@@ -108,8 +110,8 @@ def find_component_by_l2_id(nf: NetworkFrame, l2_id: int):
     return query_nf
 
 
-def apply_positions(nf: NetworkFrame, client: cc.CAVEclient):
-    node_positions = get_positions(list(nf.nodes.index), client)
+def apply_positions(nf: NetworkFrame, client: cc.CAVEclient, skip=False):
+    node_positions = get_positions(list(nf.nodes.index), client, skip=skip)
     nf.nodes[["rep_coord_nm", "x", "y", "z"]] = node_positions[
         ["rep_coord_nm", "x", "y", "z"]
     ]
