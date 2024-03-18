@@ -3,11 +3,13 @@
 import time
 
 import caveclient as cc
+import numpy as np
 import pandas as pd
 from cloudfiles import CloudFiles
 from joblib import Parallel, delayed
 
 from pkg.neuronframe import load_neuronframe
+from pkg.sequence import create_time_ordered_sequence
 
 # %%
 cloud_bucket = "allen-minnie-phase3"
@@ -63,7 +65,6 @@ for pre, post in pre_posts:
 
 # %%
 
-import numpy as np
 
 currtime = time.time()
 induced_synapses = np.intersect1d(all_pre_synapses, all_post_synapses)
@@ -71,76 +72,36 @@ print(f"{time.time() - currtime:.3f} seconds elapsed.")
 
 print("number of induced synapses:", len(induced_synapses))
 
-#%%
-
-
-
+# %%
+root_id = root_options[0]
+neuron = load_neuronframe(root_id, client, cache_verbose=False)
+sequence = create_time_ordered_sequence(neuron, root_id)
 # %%
 
 
-def get_relevant_roots(root_id):
-    lineage_graph = client.chunkedgraph.get_lineage_graph(root_id, as_nx_graph=True)
-    nodes = list(lineage_graph.nodes)
-    return nodes
-
-
-currtime = time.time()
-relevant_roots = Parallel(n_jobs=8, verbose=10)(
-    delayed(get_relevant_roots)(root_id) for root_id in root_options[:]
-)
-print(f"{time.time() - currtime:.3f} seconds elapsed.")
-
-relevant_roots = [item for sublist in relevant_roots for item in sublist]
-
-# %%
-
-
-all_relevant_pre_synapses = []
-all_relevant_post_synapses = []
-
-
-def get_relevant_synapses(root_id, relevant_roots):
-    neuron = load_neuronframe(root_id, client, cache_verbose=False)
-    relevant_pre_synapses = neuron.pre_synapses.query(
-        "post_pt_root_id in @relevant_roots"
-    ).copy()
-    relevant_pre_synapses["root_id"] = root_id
-    relevant_post_synapses = neuron.post_synapses.query(
-        "pre_pt_root_id in @relevant_roots"
-    ).copy()
-    relevant_post_synapses["root_id"] = root_id
-    return relevant_pre_synapses, relevant_post_synapses
-
-
-all_relevant = Parallel(n_jobs=8, verbose=10)(
-    delayed(lambda x: get_relevant_synapses(x, relevant_roots))(root_id)
-    for root_id in root_options[:]
-)
-
-all_relevant_pre_synapses = [item[0] for item in all_relevant]
-all_relevant_post_synapses = [item[1] for item in all_relevant]
-# all_relevant_pre_synapses = pd.concat(all_relevant_pre_synapses)
-# all_relevant_post_synapses = pd.concat(all_relevant_post_/synapses)
-
-# %%
-
-import numpy as np
-from tqdm.auto import tqdm
-
-from pkg.sequence import create_time_ordered_sequence
-
-for root_id in tqdm(root_options[:10]):
-    neuron = load_neuronframe(root_id, client)
-    sequence = create_time_ordered_sequence(neuron, root_id)
-
-    pre_synapse_sets = sequence.sequence_info["pre_synapses"]
-    pre_synapse_sets = pre_synapse_sets.apply(
-        lambda x: np.intersect1d(x, all_relevant_pre_synapses.index)
+def process_resolved_synapses(sequence, root_id, which="pre"):
+    synapse_sets = sequence.sequence_info[f"{which}_synapses"]
+    synapse_sets = synapse_sets.apply(
+        lambda x: np.intersect1d(x, induced_synapses)
     ).to_frame()
-    pre_synapse_sets["time"] = sequence.edits["time"]
-    # for _, row in pre_synapse_set
+    synapse_sets["time"] = sequence.edits["time"]
+    synapse_sets["time"] = synapse_sets["time"].fillna("2020-07-01 00:00:00")
+    synapse_sets["datetime"] = pd.to_datetime(synapse_sets["time"])
+    synapse_sets[f"{which}_root_id"] = root_id
+
+    breaks = list(synapse_sets["datetime"])
+    breaks.append(
+        pd.to_datetime("2070-01-01 00:00:00")
+    )  # TODO could make this explicit about now
+    intervals = pd.IntervalIndex.from_breaks(breaks, closed="left")
+    synapse_sets["interval"] = intervals
+
+    synapse_sets = synapse_sets.reset_index(drop=False)
+    synapses = synapse_sets.explode(f"{which}_synapses").rename(
+        columns={f"{which}_synapses": "synapse_id"}
+    )
+    return synapses
 
 
-# %%
-
-pre_synapse_sets.explode("pre_synapses")
+pre_synapse_sets = process_resolved_synapses(sequence, root_id, which="pre")
+post_synapse_sets = process_resolved_synapses(sequence, root_id, which="post")
