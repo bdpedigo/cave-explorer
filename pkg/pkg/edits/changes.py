@@ -1,13 +1,15 @@
 import json
+import time
 from typing import Union
 
-import caveclient as cc
 import networkx as nx
 import numpy as np
 import pandas as pd
-from networkframe import NetworkFrame
 from requests import HTTPError
 from tqdm import tqdm
+
+import caveclient as cc
+from networkframe import NetworkFrame
 
 from ..io import lazycloud
 from ..morphology import (
@@ -436,10 +438,13 @@ def get_initial_network(root_id, client, positions=False, verbose=True):
                 had_error = True
     if had_error:
         print("HTTPError on at least one leaf node, continuing...")
+
     all_nodes = pd.concat(all_nodes, axis=0)
     all_edges = pd.concat(all_edges, axis=0, ignore_index=True)
 
-    nf = NetworkFrame(all_nodes, all_edges)
+    print("Creating NetworkFrame...")
+    nf = NetworkFrame(all_nodes, all_edges, validate=False)
+
     return nf
 
 

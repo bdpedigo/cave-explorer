@@ -593,12 +593,13 @@ files = [
 
 [[package]]
 name = "caveclient"
-version = "5.16.1"
+version = "5.17.2"
 description = "a service for interacting with the Connectome Annotation Versioning Engine"
 optional = false
 python-versions = ">=3.7,<3.12"
-files = []
-develop = true
+files = [
+    {file = "caveclient-5.17.2.tar.gz", hash = "sha256:147f9c5d89f7798a6a8cd62c8e3405f7b058c4ab90a46bddf3863d3df0c9a2ff"},
+]
 
 [package.dependencies]
 attrs = ">=21.3.0"
@@ -611,10 +612,6 @@ pandas = "*"
 pyarrow = ">=3,<12"
 requests = "*"
 urllib3 = "*"
-
-[package.source]
-type = "directory"
-url = "../caveclient"
 
 [[package]]
 name = "certifi"
@@ -4492,26 +4489,6 @@ uncertainties = ["uncertainties (>=3.1.6)"]
 xarray = ["xarray"]
 
 [[package]]
-name = "pkg"
-version = "0.1.0"
-description = "Local package"
-optional = false
-python-versions = "*"
-files = []
-develop = true
-
-[package.dependencies]
-matplotlib = "*"
-numpy = ">=1.19"
-pandas = ">=2.0"
-scipy = ">=1.11.0"
-seaborn = ">=0.13.0"
-
-[package.source]
-type = "directory"
-url = "pkg"
-
-[[package]]
 name = "platformdirs"
 version = "3.10.0"
 description = "A small Python package for determining appropriate platform-specific dirs, e.g. a \"user data dir\"."
@@ -6885,4 +6862,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">3.11.0,<3.12.0"
-content-hash = "c634b4f864dd2856a264c8b64b4c99e5e4cc4a5a1ed50215d9ad6f1414ff1f00"
+content-hash = "90b6c8d2993df8ff1e7f6951aef7bd66ee2f934a473b85dbfe284631e1cab3c6"

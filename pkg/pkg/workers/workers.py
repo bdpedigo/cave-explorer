@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 from taskqueue import queueable
 
@@ -29,10 +31,19 @@ def extract_initial_network(root_id):
 
 @queueable
 def create_neuronframe(root_id):
+    print()
+    print()
+    print("Working on root_id:", root_id)
+    print()
+    currtime = time.time()
+
     client = cc.CAVEclient("minnie65_phase3_v1")
 
-    load_neuronframe(root_id, client)
-
+    load_neuronframe(root_id, client, cache_verbose=True)
+    print()
+    print(f"{time.time() - currtime:.3f} seconds elapsed for root_id: {root_id}.")
+    print()
+    print()
     return 1
 
 
@@ -54,5 +65,3 @@ def create_sequences(root_id):
         )
 
     return 1
-
-

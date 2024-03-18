@@ -8,7 +8,7 @@ version = "0.1.0"
 Jinja2 = ">=3.1.2"
 POT = "^0.9.1"
 brotlicffi = "^1.1.0.0"
-caveclient = {path = "../caveclient", develop = true}
+caveclient = "^5.17.2"
 cloud-volume = "^8.27.0"
 gcsfs = "^2023.12.2.post1"
 glasbey = "^0.2.0"
@@ -26,7 +26,6 @@ scikit-learn = "1.2.2"
 tables = { git = "https://github.com/PyTables/PyTables" }
 task-queue = "^2.13.0"
 urllib3 = "^1.26.17"
-pkg = {path = "pkg", develop = true}
 
 [tool.poetry.group.dev]
 optional = true

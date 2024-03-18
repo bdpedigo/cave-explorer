@@ -1,11 +1,4 @@
 # %%
-import os
-
-os.environ["SKEDITS_USE_CLOUD"] = "True"
-os.environ["SKEDITS_RECOMPUTE"] = "False"
-os.environ["LAZYCLOUD_RECOMPUTE"] = "False"
-os.environ["LAZYCLOUD_USE_CLOUD"] = "True"
-
 from random import shuffle
 
 import caveclient as cc
@@ -181,23 +174,38 @@ for segment_id in tqdm(segment_nodes.index):
 
 plotter.show()
 
+
 # %%
 neuron.apply_node_features("segment", inplace=True)
 
-segment_edges = neuron.edges[["source_segment", "target_segment"]]
-
-edges_array = np.unique(np.sort(segment_edges.values, axis=1), axis=0)
-
-segment_edges = pd.DataFrame(edges_array, columns=["source", "target"]).set_index(
-    ["source", "target"], drop=False
-)
-segment_edges = segment_edges.query("source != target")
-segment_edges
+# %%
+neuron.nodes["segment"].value_counts()
+# %%
+len(neuron.groupby_nodes("segment"))
 
 # %%
-segment_nf = NetworkFrame(segment_nodes, segment_edges)
+neuron.groupby_nodes("segment").size_edges()
 
-segment_nf
+# %%
+segment_nf = neuron.condense(by='segment', func='size')
+
+
+# # %%
+
+# segment_edges = neuron.edges[["source_segment", "target_segment"]]
+
+# edges_array = np.unique(np.sort(segment_edges.values, axis=1), axis=0)
+
+# segment_edges = pd.DataFrame(edges_array, columns=["source", "target"]).set_index(
+#     ["source", "target"], drop=False
+# )
+# segment_edges = segment_edges.query("source != target")
+# segment_edges
+
+# # %%
+# segment_nf = NetworkFrame(segment_nodes, segment_edges)
+
+# segment_nf
 
 # %%
 plotter = pv.Plotter()
@@ -214,26 +222,6 @@ set_up_camera(
 
 nuc_segment = neuron.nodes.loc[neuron.nucleus_id, "segment"]
 
-
-# %%
-
-activation_tracker = pd.DataFrame(index=segment_nf.nodes.index)
-
-for i in range(15):
-    active_nodes = segment_nf.k_hop_neighborhood(nuc_segment, i).nodes.index
-    activation_tracker[i] = False
-    activation_tracker.loc[active_nodes, i] = True
-
-activation_tracker[activation_tracker.any(axis=1)]
-
-for row_id, row in activation_tracker.iterrows():
-    first = row.argmax()
-    if not (row.values[first:] == row.values[first]).all(): 
-        print(row_id, row)
-
-#%%
-print(6 in segment_nf.k_hop_neighborhood(nuc_segment, 7).nodes.index)
-print(6 in segment_nf.k_hop_neighborhood(nuc_segment, 8).nodes.index)
 
 # %%
 sub_seg_nf = segment_nf.k_hop_neighborhood(nuc_segment, 3)

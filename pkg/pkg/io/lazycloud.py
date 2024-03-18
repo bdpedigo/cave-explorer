@@ -138,10 +138,12 @@ def lazycloud(
             )
         else:
             force_recompute = False
-        print(
-            f"LAZYCLOUD forcing recompute for function {func.__name__}:",
-            force_recompute,
-        )
+
+        if cache_verbose:
+            print(
+                f"LAZYCLOUD forcing recompute for function {func.__name__}:",
+                force_recompute,
+            )
 
         if "only_load" in kwargs:
             only_load = kwargs.get("only_load")
