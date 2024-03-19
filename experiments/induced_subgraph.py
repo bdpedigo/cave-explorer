@@ -86,12 +86,12 @@ def process_resolved_synapses(sequence, root_id, which="pre"):
     ).to_frame()
     synapse_sets["time"] = sequence.edits["time"]
     synapse_sets["time"] = synapse_sets["time"].fillna("2019-07-01 00:00:00")
-    synapse_sets["datetime"] = pd.to_datetime(synapse_sets["time"])
+    synapse_sets["datetime"] = pd.to_datetime(synapse_sets["time"], utc=True)
     synapse_sets[f"{which}_root_id"] = root_id
 
     breaks = list(synapse_sets["datetime"])
     breaks.append(
-        pd.to_datetime("2070-01-01 00:00:00")
+        pd.to_datetime("2070-01-01 00:00:00", utc=True)
     )  # TODO could make this explicit about now
     intervals = pd.IntervalIndex.from_breaks(breaks, closed="left")
     synapse_sets["interval"] = intervals
@@ -133,12 +133,9 @@ for pre, post in pre_post_synapses:
 pre_synapses = pd.concat(pre_synapselist)
 post_synapses = pd.concat(post_synapselist)
 
-# %%
-pre_synapses.set_index("interval")
-
 
 # %%
-def synapselist_at_time(timestamp):
+def synapselist_at_time(timestamp, remove_loops=True):
     # pre_synapses_at_time = pre_synapses.query("@timestamp in interval")
     # post_synapses_at_time = post_synapses.query("@timestamp in interval")
     pre_synapses_at_time = pre_synapses[
@@ -155,26 +152,29 @@ def synapselist_at_time(timestamp):
     )
     synapselist["source"] = synapselist["pre_root_id"]
     synapselist["target"] = synapselist["post_root_id"]
+    if remove_loops:
+        synapselist = synapselist.query("source != target")
     return synapselist
 
 
-synapselist = synapselist_at_time(pd.to_datetime("2021-07-01 00:00:00"))
+synapselist = synapselist_at_time(pd.to_datetime("2021-07-01 00:00:00", utc=True))
 
 # %%
 
 synapselist
 # %%
 
-timestamp = pd.to_datetime("2021-07-01 00:00:00")
+timestamp = pd.to_datetime("2021-07-01 00:00:00", utc=True)
 
 # convert this timestamp to a utc timestamp
-timestamp = timestamp.tz_localize("US/Pacific").tz_convert("UTC")
+# timestamp = timestamp.tz_localize("UTC")
 
-synapse_table = client.materialize.query_table(
-    "synapses_pni_2",
-    filter_in_dict={"pre_pt_root_id": root_options, "post_pt_root_id": root_options},
-    timestamp=timestamp,
-)
+# synapse_table = client.materialize.query_table(
+#     "synapses_pni_2",
+#     filter_in_dict={"pre_pt_root_id": root_options, "post_pt_root_id": root_options},
+#     timestamp=timestamp,
+# )
+# synapse_table.query("pre_pt_root_id != post_pt_root_id")
 
 # %%
 nuc_table = client.materialize.query_table("nucleus_detection_v0")
@@ -192,24 +192,23 @@ for outdated_root in outdated_roots:
 updated_root_options = np.array([root_map[root] for root in root_options])
 assert np.all(np.isin(updated_root_options, nuc_table.pt_root_id.unique()))
 
-# %%
 relevant_nuc_table = nuc_table.set_index("pt_root_id").loc[updated_root_options]
 
-# %%
 old_root_ids = client.chunkedgraph.get_roots(
     relevant_nuc_table["pt_supervoxel_id"], timestamp=timestamp
 )
 relevant_nuc_table["old_root_id"] = old_root_ids
 
-# %%
 old_synapse_table = client.materialize.query_table(
     "synapses_pni_2",
     filter_in_dict={"pre_pt_root_id": old_root_ids, "post_pt_root_id": old_root_ids},
     timestamp=timestamp,
 )
 
-# %%
-old_synapse_table
+old_synapse_table = old_synapse_table.query("pre_pt_root_id != post_pt_root_id")
+
+old_synapse_table = old_synapse_table.set_index("id")
+old_synapse_table.index.name = "synapse_id"
 
 # %%
 synapselist
@@ -223,12 +222,22 @@ old_synapse_table["post_pt_root_id"].isin(old_root_ids).all()
 
 # %%
 # all of my synapses are present in the "correct" synapse table
-synapselist.index.isin(old_synapse_table["id"]).mean()
+mask = synapselist.index.isin(old_synapse_table.index)
+mask.mean()
 
 # %%
 
-# only 2/3 of these are even in the induced synapses table
-old_synapse_table["id"].isin(induced_synapses).mean()
+# .99 of these are even in the induced synapses table
+mask = old_synapse_table.index.isin(synapselist.index)
+print(mask.mean())
+
+old_synapse_table[~mask]
+
+#%%
+old_synapse_table.index.isin(induced_synapses).mean()
+
+# %%
+old_synapse_table[~old_synapse_table.index.isin(induced_synapses)]
 
 # %%
 # 1/3 of synapses from the true version are not even in the intersection of pre and post
@@ -266,7 +275,12 @@ candidate_synapses = client.materialize.query_table(
     filter_in_dict={f"{side}_pt_root_id": latest_roots},
 )
 
-#%%
-# everything in the correct answer ends up in this candidate pool 
-query_pre_synapses['id'].isin(candidate_synapses['id']).mean()
+# %%
+# everything in the correct answer ends up in this candidate pool
+query_pre_synapses["id"].isin(candidate_synapses["id"]).mean()
 
+# %%
+query_pre_synapses["id"].isin(neuron.pre_synapses.index).mean()
+
+# %%
+query_pre_synapses.query("pre_pt_root_id != post_pt_root_id")
