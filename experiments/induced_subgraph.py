@@ -177,10 +177,35 @@ timestamp = pd.to_datetime("2021-07-01 00:00:00", utc=True)
 # synapse_table.query("pre_pt_root_id != post_pt_root_id")
 
 # %%
-nuc_table = client.materialize.query_table("nucleus_detection_v0")
+nuc_table = client.materialize.query_table(
+    "nucleus_detection_v0", filter_in_dict={"pt_root_id": root_options}
+)
+
 
 # %%
 
+client = cc.CAVEclient("minnie65_phase3_v1")
+
+root_options = np.array(
+    [
+        864691135323181212,
+        864691135383669466,
+        864691135416719546,
+        864691135571546917,
+        864691135660772080,
+        864691135772774651,
+        864691135808473885,
+        864691135953216547,
+        864691136005322698,
+        864691136389585015,
+        864691137197468481,
+    ]
+)
+object_table = pd.DataFrame()
+object_table["working_root_id"] = root_options
+
+# take my list of root IDs
+# make sure I have the latest root ID for each, using `get_latest_roots`
 is_current_mask = np.isin(root_options, nuc_table.pt_root_id.unique())
 outdated_roots = root_options[~is_current_mask]
 root_map = dict(zip(root_options[is_current_mask], root_options[is_current_mask]))
@@ -188,25 +213,176 @@ for outdated_root in outdated_roots:
     latest_roots = client.chunkedgraph.get_latest_roots(outdated_root)
     for latest_root in latest_roots:
         root_map[outdated_root] = latest_root
-
 updated_root_options = np.array([root_map[root] for root in root_options])
-assert np.all(np.isin(updated_root_options, nuc_table.pt_root_id.unique()))
+object_table["current_root_id"] = updated_root_options
 
+# map to nucleus IDs
+current_nucs = client.materialize.query_table(
+    "nucleus_detection_v0",
+    filter_in_dict={"pt_root_id": updated_root_options},
+    select_columns=["id", "pt_root_id"],
+).set_index("pt_root_id")["id"]
+object_table["target_id"] = object_table["current_root_id"].map(current_nucs)
+
+# for those nucleus IDs, get previous root IDs
+past_nucs = client.materialize.query_table(
+    "nucleus_detection_v0",
+    filter_in_dict={"id": object_table["target_id"].to_list()},
+    # select_columns=["id", "pt_root_id"],
+    timestamp=timestamp,
+)
+
+# .set_index("id")["pt_root_id"]
+# object_table["past_root_id"] = object_table["target_id"].map(past_nucs)
+
+# # for those past root IDs, get the synapses
+# client_synapse_table = client.materialize.synapse_query(
+#     pre_ids=past_nucs,
+#     post_ids=past_nucs,
+#     timestamp=timestamp,
+#     remove_autapses=True,
+# )
+
+object_table
+
+# %%
+import caveclient as cc
+import numpy as np
+import pandas as pd
+
+client = cc.CAVEclient("minnie65_phase3_v1")
+
+root_options = np.array(
+    [
+        864691135323181212,
+        864691135383669466,
+        864691135416719546,
+        864691135571546917,
+        864691135660772080,
+        864691135772774651,
+        864691135808473885,
+        864691135953216547,
+        864691136005322698,
+        864691136389585015,
+        864691137197468481,
+    ]
+)
+object_table = pd.DataFrame()
+object_table["working_root_id"] = root_options
+
+nuc_table = client.materialize.tables.nucleus_detection_v0(
+    pt_root_id=object_table["working_root_id"]
+).query()
+
+object_table = object_table.merge(
+    nuc_table[["pt_root_id", "id"]].rename(
+        columns={"pt_root_id": "working_root_id", "id": "soma_id"}
+    ),
+    on="working_root_id",
+)
+
+timestamp = pd.to_datetime("2021-07-01 00:00:00", utc=True)
+
+old_roots = client.materialize.tables.nucleus_detection_v0(
+    id=object_table["soma_id"]
+).query(timestamp=timestamp)
+
+object_table = object_table.merge(
+    old_roots[["id", "pt_root_id"]].rename(
+        columns={"id": "soma_id", "pt_root_id": "old_root_id"}
+    ),
+    on="soma_id",
+)
+
+# client_synapse_table = client.materialize.synapse_query(
+#     pre_ids=object_table["old_root_id"],
+#     post_ids=object_table["old_root_id"],
+#     timestamp=timestamp,
+#     remove_autapses=True,
+# )
+
+object_table
+
+# %%
+
+import caveclient as cc
+import numpy as np
+import pandas as pd
+
+client = cc.CAVEclient("minnie65_phase3_v1")
+
+timestamp = pd.to_datetime("2021-07-01 00:00:00", utc=True)
+
+soma_ids = [
+    292864,
+    291116,
+    303149,
+    264824,
+    292670,
+    260541,
+    301085,
+    294825,
+    292649,
+    298937,
+    262678,
+]
+
+old_roots = client.materialize.query_table(
+    "nucleus_detection_v0",
+    filter_in_dict={"id": soma_ids},
+    timestamp=timestamp,
+).set_index("id")["pt_root_id"]
+print(old_roots)
+
+old_roots_w_select = client.materialize.query_table(
+    "nucleus_detection_v0",
+    filter_in_dict={"id": soma_ids},
+    select_columns=["id", "pt_root_id"],
+    timestamp=timestamp,
+).set_index("id")["pt_root_id"]
+print(old_roots_w_select)
+
+old_roots_w_select_no_time = client.materialize.query_table(
+    "nucleus_detection_v0",
+    filter_in_dict={"id": soma_ids},
+    select_columns=["id", "pt_root_id"],
+).set_index("id")["pt_root_id"]
+print(old_roots_w_select_no_time)
+
+
+# %%
+from datetime import timedelta
+
+start = timestamp - timedelta(microseconds=1)
+end = timestamp + timedelta(microseconds=1)
+client.chunkedgraph.is_valid_nodes(object_table["past_root_id"].to_list(), start, end)
+
+
+# %%
+
+# find the nucleus supervoxel ID that anchors each of these
 relevant_nuc_table = nuc_table.set_index("pt_root_id").loc[updated_root_options]
 
+# now for the timestamp I am interested in, get the root IDs of the nucleus at that time
 old_root_ids = client.chunkedgraph.get_roots(
     relevant_nuc_table["pt_supervoxel_id"], timestamp=timestamp
 )
 relevant_nuc_table["old_root_id"] = old_root_ids
 
+# for those root IDs, do a synapse lookup
+# TODO use synapse query here
+# synapse table has a lot of false positives at nuclei
+#
 old_synapse_table = client.materialize.query_table(
     "synapses_pni_2",
     filter_in_dict={"pre_pt_root_id": old_root_ids, "post_pt_root_id": old_root_ids},
     timestamp=timestamp,
 )
 
+# remove loops
 old_synapse_table = old_synapse_table.query("pre_pt_root_id != post_pt_root_id")
 
+# formatting
 old_synapse_table = old_synapse_table.set_index("id")
 old_synapse_table.index.name = "synapse_id"
 
@@ -233,7 +409,7 @@ print(mask.mean())
 
 old_synapse_table[~mask]
 
-#%%
+# %%
 old_synapse_table.index.isin(induced_synapses).mean()
 
 # %%
