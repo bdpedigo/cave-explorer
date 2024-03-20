@@ -1,51 +1,27 @@
 # %%
 
+import datetime
 
 import caveclient as cc
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
-from cloudfiles import CloudFiles
-
-# %%
-cloud_bucket = "allen-minnie-phase3"
-folder = "edit_sequences"
-
-cf = CloudFiles(f"gs://{cloud_bucket}/{folder}")
-
-files = list(cf.list())
-files = pd.DataFrame(files, columns=["file"])
-
-# pattern is root_id=number as the beginning of the file name
-# extract the number from the file name and store it in a new column
-files["root_id"] = files["file"].str.split("=").str[1].str.split("-").str[0].astype(int)
-files["order_by"] = files["file"].str.split("=").str[2].str.split("-").str[0]
-files["random_seed"] = files["file"].str.split("=").str[3].str.split("-").str[0]
-
-
-file_counts = files.groupby("root_id").size()
-has_all = file_counts[file_counts == 12].index
-
-files_finished = files.query("root_id in @has_all")
-
-root_options = files_finished["root_id"].unique()
-
+import seaborn as sns
+from joblib import Parallel, delayed
+from networkframe import NetworkFrame
 
 client = cc.CAVEclient("minnie65_phase3_v1")
 
+query_neurons = client.materialize.query_table("connectivity_groups_v507")
+
+root_options = query_neurons["pt_root_id"].values
 
 # %%
 
-timestamp = pd.to_datetime("2021-07-01 00:00:00", utc=True)
-
-# # %%
-# nuc_table = client.materialize.query_table(
-#     "nucleus_detection_v0", filter_in_dict={"pt_root_id": root_options}
-# )
-
-# %%
+# timestamp = pd.to_datetime("2021-07-01 00:00:00", utc=True)
 timestamps = pd.date_range("2021-07-01", "2024-01-01", freq="M", tz="UTC")
 
 # %%
-import numpy as np
 
 object_table = pd.DataFrame()
 object_table["working_root_id"] = root_options
@@ -94,6 +70,7 @@ def query_for_timestamp(timestamp, timestamp_id, object_table):
         pre_ids=past_nucs,
         post_ids=past_nucs,
         timestamp=timestamp,
+        metadata=False,
         remove_autapses=True,
     ).set_index("id")
     client_synapse_table["timestamp"] = timestamp
@@ -112,22 +89,12 @@ def query_for_timestamp(timestamp, timestamp_id, object_table):
     return client_synapse_table
 
 
-# parallelize using joblib
-
-from joblib import Parallel, delayed
-
 synapse_tables_by_time = Parallel(n_jobs=8, verbose=10)(
     delayed(query_for_timestamp)(timestamp, timestamp_id, object_table)
     for timestamp_id, timestamp in enumerate(timestamps)
 )
-# synapse_tables_by_time = dict(zip(timestamps, synapse_tables_by_time))
 
 # %%
-for table in synapse_tables_by_time:
-    table.attrs = {}
-# %%
-
-from networkframe import NetworkFrame
 
 nodes = object_table.copy().set_index("target_id")
 edges = pd.concat(synapse_tables_by_time, axis=0)
@@ -136,11 +103,6 @@ edges["target"] = edges["post_target_id"]
 mega_nf = NetworkFrame(nodes, edges)
 
 # %%
-import matplotlib.pyplot as plt
-
-# %%
-import seaborn as sns
-from graspologic.plot import heatmap
 
 # TODO figure out why everything looks the same in this plot; I would expect to see
 # many more differences over time for these adjacency matrices
@@ -151,21 +113,49 @@ for i in range(0, 30, 2):
     month_nf = mega_nf.query_edges(f"timestamp== @timestamps[{i}]", local_dict=locals())
     adj = month_nf.to_sparse_adjacency(weight_col=None)
     print(adj.sum())
-    adj = adj.todense()[:20, :20]
+    adj = adj.todense()[:30, :30]
     ax = axs.flat[i // 2]
-    heatmap(
+    sns.heatmap(
         adj,
         ax=ax,
-        # xticklabels=False,
-        # yticklabels=False,
-        # square=True,
+        xticklabels=False,
+        yticklabels=False,
+        square=True,
         cbar=False,
         cmap="RdBu_r",
         center=0,
-        transform="simple-all",
+        # transform="simple-all",
     )
     ax.set_title(timestamps[i].strftime("%Y-%m"))
 
+# %%
+diffs_by_time = pd.DataFrame(index=timestamps, columns=timestamps, dtype=float)
+for i in range(0, 30):
+    adj1 = mega_nf.query_edges(
+        f"timestamp== @timestamps[{i}]", local_dict=locals()
+    ).to_sparse_adjacency(weight_col=None)
+    adj1 = adj1.todense()
+    for j in range(i + 1, 30):
+        adj2 = mega_nf.query_edges(
+            f"timestamp== @timestamps[{j}]", local_dict=locals()
+        ).to_sparse_adjacency(weight_col=None)
+        adj2 = adj2.todense()
+        diff = np.linalg.norm(adj1 - adj2, ord="fro")
+        diffs_by_time.loc[timestamps[i], timestamps[j]] = diff
+        diffs_by_time.loc[timestamps[j], timestamps[i]] = diff
+
+diffs_by_time.fillna(0.0, inplace=True)
+
+# %%
+
+fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+sns.heatmap(
+    diffs_by_time, cmap="RdBu_r", center=0, square=True, ax=ax, cbar_kws={"shrink": 0.5}
+)
+labels = diffs_by_time.columns.strftime("%Y-%m")
+ax.set_yticklabels(labels, rotation=0)
+ax.set_xticklabels([])
+ax.set_xticks([])
 
 # %%
 client_synapse_table.index.difference(synapselist.index)
@@ -287,7 +277,6 @@ query_pre_synapses["id"].isin(pre_syns.index).mean()
 
 # %%
 
-import datetime
 
 timestamp = datetime.datetime.now(datetime.timezone.utc)
 
