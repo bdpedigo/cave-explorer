@@ -1,15 +1,9 @@
 # %%
 
-import time
 
 import caveclient as cc
-import numpy as np
 import pandas as pd
 from cloudfiles import CloudFiles
-from joblib import Parallel, delayed
-
-from pkg.neuronframe import load_neuronframe
-from pkg.sequence import create_time_ordered_sequence
 
 # %%
 cloud_bucket = "allen-minnie-phase3"
@@ -39,163 +33,38 @@ client = cc.CAVEclient("minnie65_phase3_v1")
 
 
 # %%
-# all_root_ids = []
-# relevant_synapses = []
-# for root_id in tqdm(root_options[:]):
-#     pass
-#     # neuron = load_neuronframe(root_id, client, cache_verbose=False)
-
-
-def get_pre_post_synapse_ids(root_id):
-    neuron = load_neuronframe(root_id, client, cache_verbose=False)
-    return neuron.pre_synapses.index, neuron.post_synapses.index
-
-
-currtime = time.time()
-pre_posts = Parallel(n_jobs=8, verbose=10)(
-    delayed(get_pre_post_synapse_ids)(root_id) for root_id in root_options[:]
-)
-print(f"{time.time() - currtime:.3f} seconds elapsed.")
-
-all_pre_synapses = []
-all_post_synapses = []
-for pre, post in pre_posts:
-    all_pre_synapses.extend(pre)
-    all_post_synapses.extend(post)
-
-# %%
-
-
-currtime = time.time()
-induced_synapses = np.intersect1d(all_pre_synapses, all_post_synapses)
-print(f"{time.time() - currtime:.3f} seconds elapsed.")
-
-print("number of induced synapses:", len(induced_synapses))
-
-# %%
-root_id = root_options[0]
-neuron = load_neuronframe(root_id, client, cache_verbose=False)
-sequence = create_time_ordered_sequence(neuron, root_id)
-# %%
-
-
-def process_resolved_synapses(sequence, root_id, which="pre"):
-    synapse_sets = sequence.sequence_info[f"{which}_synapses"]
-    synapse_sets = synapse_sets.apply(
-        lambda x: np.intersect1d(x, induced_synapses)
-    ).to_frame()
-    synapse_sets["time"] = sequence.edits["time"]
-    synapse_sets["time"] = synapse_sets["time"].fillna("2019-07-01 00:00:00")
-    synapse_sets["datetime"] = pd.to_datetime(synapse_sets["time"], utc=True)
-    synapse_sets[f"{which}_root_id"] = root_id
-
-    breaks = list(synapse_sets["datetime"])
-    breaks.append(
-        pd.to_datetime("2070-01-01 00:00:00", utc=True)
-    )  # TODO could make this explicit about now
-    intervals = pd.IntervalIndex.from_breaks(breaks, closed="left")
-    synapse_sets["interval"] = intervals
-
-    synapse_sets = synapse_sets.reset_index(drop=False)
-    synapses = synapse_sets.explode(f"{which}_synapses").rename(
-        columns={f"{which}_synapses": "synapse_id"}
-    )
-    return synapses
-
-
-pre_synapse_sets = process_resolved_synapses(sequence, root_id, which="pre")
-post_synapse_sets = process_resolved_synapses(sequence, root_id, which="post")
-
-# %%
-
-
-def get_pre_post_synapses_by_time(root_id):
-    neuron = load_neuronframe(root_id, client, cache_verbose=False)
-    sequence = create_time_ordered_sequence(neuron, root_id)
-    pre_synapse_sets = process_resolved_synapses(sequence, root_id, which="pre")
-    post_synapse_sets = process_resolved_synapses(sequence, root_id, which="post")
-    return pre_synapse_sets, post_synapse_sets
-
-
-pre_post_synapses = Parallel(n_jobs=8, verbose=10)(
-    delayed(get_pre_post_synapses_by_time)(root_id) for root_id in root_options[:]
-)
-
-# %%
-
-pre_synapselist = []
-post_synapselist = []
-
-for pre, post in pre_post_synapses:
-    pre_synapselist.append(pre)
-    post_synapselist.append(post)
-
-pre_synapses = pd.concat(pre_synapselist)
-post_synapses = pd.concat(post_synapselist)
-
-
-# %%
-def synapselist_at_time(timestamp, remove_loops=True):
-    # pre_synapses_at_time = pre_synapses.query("@timestamp in interval")
-    # post_synapses_at_time = post_synapses.query("@timestamp in interval")
-    pre_synapses_at_time = pre_synapses[
-        pd.IntervalIndex(pre_synapses.interval).contains(timestamp)
-    ]
-    post_synapses_at_time = post_synapses[
-        pd.IntervalIndex(post_synapses.interval).contains(timestamp)
-    ]
-
-    pre_synapses_at_time = pre_synapses_at_time.set_index("synapse_id")
-    post_synapses_at_time = post_synapses_at_time.set_index("synapse_id")
-    synapselist = pre_synapses_at_time.join(
-        post_synapses_at_time, how="inner", lsuffix="_pre", rsuffix="_post"
-    )
-    synapselist["source"] = synapselist["pre_root_id"]
-    synapselist["target"] = synapselist["post_root_id"]
-    if remove_loops:
-        synapselist = synapselist.query("source != target")
-    return synapselist
-
-
-synapselist = synapselist_at_time(pd.to_datetime("2021-07-01 00:00:00", utc=True))
-
-# %%
-
-synapselist
-# %%
 
 timestamp = pd.to_datetime("2021-07-01 00:00:00", utc=True)
 
-# convert this timestamp to a utc timestamp
-# timestamp = timestamp.tz_localize("UTC")
-
-# synapse_table = client.materialize.query_table(
-#     "synapses_pni_2",
-#     filter_in_dict={"pre_pt_root_id": root_options, "post_pt_root_id": root_options},
-#     timestamp=timestamp,
+# # %%
+# nuc_table = client.materialize.query_table(
+#     "nucleus_detection_v0", filter_in_dict={"pt_root_id": root_options}
 # )
-# synapse_table.query("pre_pt_root_id != post_pt_root_id")
 
 # %%
-nuc_table = client.materialize.query_table(
-    "nucleus_detection_v0", filter_in_dict={"pt_root_id": root_options}
-)
-
+timestamps = pd.date_range("2021-07-01", "2024-01-01", freq="M", tz="UTC")
 
 # %%
+import numpy as np
 
 object_table = pd.DataFrame()
 object_table["working_root_id"] = root_options
 
 # take my list of root IDs
 # make sure I have the latest root ID for each, using `get_latest_roots`
-is_current_mask = np.isin(root_options, nuc_table.pt_root_id.unique())
+is_current_mask = client.chunkedgraph.is_latest_roots(root_options)
 outdated_roots = root_options[~is_current_mask]
 root_map = dict(zip(root_options[is_current_mask], root_options[is_current_mask]))
 for outdated_root in outdated_roots:
     latest_roots = client.chunkedgraph.get_latest_roots(outdated_root)
-    for latest_root in latest_roots:
-        root_map[outdated_root] = latest_root
+    sub_nucs = client.materialize.query_table(
+        "nucleus_detection_v0", filter_in_dict={"pt_root_id": latest_roots}
+    )
+    if len(sub_nucs) == 1:
+        root_map[outdated_root] = sub_nucs.iloc[0]["pt_root_id"]
+    else:
+        print(f"Multiple nuc roots for {outdated_root}")
+
 updated_root_options = np.array([root_map[root] for root in root_options])
 object_table["current_root_id"] = updated_root_options
 
@@ -207,22 +76,96 @@ current_nucs = client.materialize.query_table(
 ).set_index("pt_root_id")["id"]
 object_table["target_id"] = object_table["current_root_id"].map(current_nucs)
 
-# for those nucleus IDs, get previous root IDs
-past_nucs = client.materialize.query_table(
-    "nucleus_detection_v0",
-    filter_in_dict={"id": object_table["target_id"].to_list()},
-    # select_columns=["id", "pt_root_id"],
-    timestamp=timestamp,
-).set_index("id")["pt_root_id"]
-object_table["past_root_id"] = object_table["target_id"].map(past_nucs)
 
-# for those past root IDs, get the synapses
-client_synapse_table = client.materialize.synapse_query(
-    pre_ids=past_nucs,
-    post_ids=past_nucs,
-    timestamp=timestamp,
-    remove_autapses=True,
-).set_index("id")
+# for timestamp in timestamps:
+def query_for_timestamp(timestamp, timestamp_id, object_table):
+    object_table = object_table.copy()
+    # for those nucleus IDs, get previous root IDs
+    past_nucs = client.materialize.query_table(
+        "nucleus_detection_v0",
+        filter_in_dict={"id": object_table["target_id"].to_list()},
+        # select_columns=["id", "pt_root_id"],
+        timestamp=timestamp,
+    ).set_index("id")["pt_root_id"]
+    object_table["past_root_id"] = object_table["target_id"].map(past_nucs)
+
+    # for those past root IDs, get the synapses
+    client_synapse_table = client.materialize.synapse_query(
+        pre_ids=past_nucs,
+        post_ids=past_nucs,
+        timestamp=timestamp,
+        remove_autapses=True,
+    ).set_index("id")
+    client_synapse_table["timestamp"] = timestamp
+    client_synapse_table["pre_target_id"] = client_synapse_table["pre_pt_root_id"].map(
+        object_table.set_index("past_root_id")["target_id"]
+    )
+    client_synapse_table["post_target_id"] = client_synapse_table[
+        "post_pt_root_id"
+    ].map(object_table.set_index("past_root_id")["target_id"])
+    client_synapse_table["pre_working_root_id"] = client_synapse_table[
+        "pre_pt_root_id"
+    ].map(object_table.set_index("past_root_id")["working_root_id"])
+    client_synapse_table["post_working_root_id"] = client_synapse_table[
+        "post_pt_root_id"
+    ].map(object_table.set_index("past_root_id")["working_root_id"])
+    return client_synapse_table
+
+
+# parallelize using joblib
+
+from joblib import Parallel, delayed
+
+synapse_tables_by_time = Parallel(n_jobs=8, verbose=10)(
+    delayed(query_for_timestamp)(timestamp, timestamp_id, object_table)
+    for timestamp_id, timestamp in enumerate(timestamps)
+)
+# synapse_tables_by_time = dict(zip(timestamps, synapse_tables_by_time))
+
+# %%
+for table in synapse_tables_by_time:
+    table.attrs = {}
+# %%
+
+from networkframe import NetworkFrame
+
+nodes = object_table.copy().set_index("target_id")
+edges = pd.concat(synapse_tables_by_time, axis=0)
+edges["source"] = edges["pre_target_id"]
+edges["target"] = edges["post_target_id"]
+mega_nf = NetworkFrame(nodes, edges)
+
+# %%
+import matplotlib.pyplot as plt
+
+# %%
+import seaborn as sns
+from graspologic.plot import heatmap
+
+# TODO figure out why everything looks the same in this plot; I would expect to see
+# many more differences over time for these adjacency matrices
+
+sns.set_context("talk")
+fig, axs = plt.subplots(3, 5, figsize=(5 * 5, 5 * 3), constrained_layout=True)
+for i in range(0, 30, 2):
+    month_nf = mega_nf.query_edges(f"timestamp== @timestamps[{i}]", local_dict=locals())
+    adj = month_nf.to_sparse_adjacency(weight_col=None)
+    print(adj.sum())
+    adj = adj.todense()[:20, :20]
+    ax = axs.flat[i // 2]
+    heatmap(
+        adj,
+        ax=ax,
+        # xticklabels=False,
+        # yticklabels=False,
+        # square=True,
+        cbar=False,
+        cmap="RdBu_r",
+        center=0,
+        transform="simple-all",
+    )
+    ax.set_title(timestamps[i].strftime("%Y-%m"))
+
 
 # %%
 client_synapse_table.index.difference(synapselist.index)
