@@ -12,14 +12,14 @@ from networkframe import NetworkFrame
 
 client = cc.CAVEclient("minnie65_phase3_v1")
 
-query_neurons = client.materialize.query_table("connectivity_groups_v507")
+query_neurons = client.materialize.query_table("connectivity_groups_v795")
 
 root_options = query_neurons["pt_root_id"].values
 
 # %%
 
 # timestamp = pd.to_datetime("2021-07-01 00:00:00", utc=True)
-timestamps = pd.date_range("2021-07-01", "2024-01-01", freq="M", tz="UTC")
+timestamps = pd.date_range("2022-07-01", "2024-01-01", freq="M", tz="UTC")
 
 # %%
 
@@ -52,7 +52,46 @@ current_nucs = client.materialize.query_table(
 ).set_index("pt_root_id")["id"]
 object_table["target_id"] = object_table["current_root_id"].map(current_nucs)
 
+# %%
+timestamp = pd.to_datetime("2021-07-01 00:00:00", utc=True)
 
+nucs = client.materialize.query_table(
+    "nucleus_detection_v0",
+    filter_in_dict={"id": object_table["target_id"].to_list()},
+).set_index("id")
+object_table["pt_supervoxel_id"] = object_table["target_id"].map(
+    nucs["pt_supervoxel_id"]
+)
+object_table["timestamp_root_from_chunkedgraph"] = client.chunkedgraph.get_roots(
+    object_table["pt_supervoxel_id"], timestamp=timestamp
+)
+
+past_nucs = client.materialize.query_table(
+    "nucleus_detection_v0",
+    filter_in_dict={"id": object_table["target_id"].to_list()},
+    # select_columns=["id", "pt_root_id"],
+    timestamp=timestamp,
+).set_index("id")["pt_root_id"]
+object_table["timestamp_root_from_table"] = object_table["target_id"].map(past_nucs)
+
+# %%
+import caveclient as cc
+from nglui.statebuilder import make_neuron_neuroglancer_link
+
+make_neuron_neuroglancer_link(
+    client, 864691135941359220, show_inputs=True, show_outputs=True, timestamp=timestamp
+)
+
+# %%
+root = 864691135941359220
+changelog = client.chunkedgraph.get_tabular_change_log(root)[root]
+
+from pkg.edits import get_detailed_change_log
+
+detailed_changelog = get_detailed_change_log(root, client)
+
+
+# %%
 # for timestamp in timestamps:
 def query_for_timestamp(timestamp, timestamp_id, object_table):
     object_table = object_table.copy()
@@ -64,6 +103,14 @@ def query_for_timestamp(timestamp, timestamp_id, object_table):
         timestamp=timestamp,
     ).set_index("id")["pt_root_id"]
     object_table["past_root_id"] = object_table["target_id"].map(past_nucs)
+
+    object_table["past_root_id_from_chunkedgraph"] = client.chunkedgraph.get_roots(
+        object_table["pt_supervoxel_id"], timestamp=timestamp
+    )
+
+    assert (
+        object_table["past_root_id"] == object_table["past_root_id_from_chunkedgraph"]
+    ).all()
 
     # for those past root IDs, get the synapses
     client_synapse_table = client.materialize.synapse_query(
