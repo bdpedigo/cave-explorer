@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from cloudfiles import CloudFiles
+from graspologic.embed import ClassicalMDS
 from graspologic.utils import pass_to_ranks
 from joblib import Parallel, delayed
 from networkframe import NetworkFrame
@@ -232,35 +233,53 @@ synapselist = synapselist_at_time(pd.to_datetime("2021-07-01 00:00:00", utc=True
 
 # nodes = pd.DataFrame()
 # nodes.index = root_options
-timestamps = pd.date_range("2020-07-01", "2024-01-01", freq="M", tz="UTC")
+timestamps = pd.date_range("2020-07-01", "2024-03-01", freq="M", tz="UTC")
 
 used_nodes = nodes.query("working_root_id in @root_options")
 nfs_by_time = {}
 for timestamp in timestamps:
     synapselist = synapselist_at_time(timestamp)
-    nf = NetworkFrame(used_nodes.set_index("working_root_id"), synapselist)
+    nf = NetworkFrame(
+        used_nodes.set_index("working_root_id").copy(), synapselist.copy()
+    )
     nfs_by_time[timestamp] = nf
 
 # %%
-final_nf = nf
 
-ordering = {"PeriTC": 0, "DistTC": 1, "SparTC": 2, "InhTC": 3}
+
+all_edits["timestamp"] = pd.to_datetime(all_edits["time"], utc=True)
+for timestamp in timestamps:
+    applied_edits = all_edits.query("timestamp <= @timestamp")
+    n_edits_per_neuron = applied_edits.groupby("root_id").size()
+    nf = nfs_by_time[timestamp]
+    nf.nodes["n_edits"] = nf.nodes.index.map(n_edits_per_neuron)
+
+# %%
+final_nf = nfs_by_time[timestamps[-1]]
+
+ordering = {"PTC": 0, "DTC": 1, "STC": 2, "ITC": 3}
 final_nf.nodes["mtype_order"] = final_nf.nodes["mtype"].map(ordering)
 final_nf.nodes = final_nf.nodes.sort_values(["mtype_order", "ctype", "nuc_depth"])
 
 # %%
+from giskard.plot import MatrixGrid
 
-fig, axs = plt.subplots(3, 5, figsize=(15, 9), constrained_layout=True)
-for i, (timestamp, nf) in enumerate(nfs_by_time.items()):
-    if i > 14:
-        break
+# nf = nfs_by_time[timestamps[4]]
+
+MAX_EDITS = final_nf.nodes["n_edits"].max()
+
+
+def plot_adjacency(nf, ax):
+    nf = nf.deepcopy()
+    mg = MatrixGrid(row_ticks=False, col_ticks=False, ax=ax)
+
     nf.nodes = nf.nodes.loc[final_nf.nodes.index]
+    nf.nodes["position"] = np.arange(nf.nodes.shape[0]) + 0.5
     adj = nf.to_sparse_adjacency(weight_col=None).todense()
     adj = pass_to_ranks(adj)
-    ax = axs.flatten()[i]
     sns.heatmap(
         adj,
-        ax=ax,
+        ax=mg.ax,
         square=True,
         cbar=False,
         cmap="RdBu_r",
@@ -268,15 +287,62 @@ for i, (timestamp, nf) in enumerate(nfs_by_time.items()):
         xticklabels=False,
         yticklabels=False,
     )
-    ax.set_title(timestamp.strftime("%Y-%m"))
+    ax_left = mg.append_axes("left", size="10%", pad=0.05)
+    ax_top = mg.append_axes("top", size="10%", pad=0.05)
+    ax_left.barh(nf.nodes["position"], nf.nodes["n_edits"], color="black")
+    ax_left.invert_xaxis()
+    ax_left.spines[["left", "top", "bottom"]].set_visible(False)
+    ax_left.set_xticks([])
+    ax_left.set_xlim(MAX_EDITS, 0)
+    # ax_left.set_xlabel("# edits")
+    # ax_left.set_xticks([0, 100, 200, 300])
+    # ax_left.set_xticklabels([0, 100, 200, 300], rotation=45)
+
+    ax_top.bar(nf.nodes["position"], nf.nodes["n_edits"], color="black")
+    ax_top.spines[["top", "right", "left"]].set_visible(False)
+    # ax_top.set_ylabel("# edits")
+    # ax_top.set_yticks([0, 100, 200, 300])
+    ax_top.set_yticks([])
+    ax_top.set_ylim(0, MAX_EDITS)
+
+    return mg
+    # mg.ax.set_xlabel("Neuron")
+
+
+# %%
+
+fig, axs = plt.subplots(3, 5, figsize=(15, 9))
+for i, timestamp in enumerate(timestamps[:15]):
+    nf = nfs_by_time[timestamp]
+    ax = axs.flatten()[i]
+    mg = plot_adjacency(nf, ax)
+    mg.set_title(timestamp.strftime("%Y-%m"))
+
+plt.tight_layout()
+
+plt.savefig("induced_subgraph.png", dpi=400)
+
+#%%
+last_nf = nfs_by_time[timestamps[0]]
+fig, axs = plt.subplots(3, 5, figsize=(15, 9))
+for i, timestamp in enumerate(timestamps[1:15]):
+    nf = nfs_by_time[timestamp]
+    ax = axs.flatten()[i]
+    mg = plot_adjacency(nf, ax)
+    mg.set_title(timestamp.strftime("%Y-%m"))
 
 # %%
 diffs_by_time = pd.DataFrame(index=timestamps, columns=timestamps, dtype=float)
 for i, timestamp1 in enumerate(timestamps):
-    adj1 = nfs_by_time[timestamp1].to_sparse_adjacency(weight_col=None)
+    nf1 = nfs_by_time[timestamp1]
+    nf1.nodes = nf1.nodes.loc[final_nf.nodes.index]
+    adj1 = nf1.to_sparse_adjacency(weight_col=None)
     adj1 = adj1.todense()
     for j, timestamp2 in enumerate(timestamps):
-        adj2 = nfs_by_time[timestamp2].to_sparse_adjacency(weight_col=None)
+        nf2 = nfs_by_time[timestamp2]
+        nf2.nodes = nf2.nodes.loc[final_nf.nodes.index]
+        assert (nf1.nodes.index == nf2.nodes.index).all()
+        adj2 = nf2.to_sparse_adjacency(weight_col=None)
         adj2 = adj2.todense()
         diff = np.linalg.norm(adj1 - adj2, ord="fro")
         diffs_by_time.loc[timestamps[i], timestamps[j]] = diff
@@ -291,17 +357,45 @@ sns.heatmap(
     diffs_by_time, cmap="RdBu_r", center=0, square=True, ax=ax, cbar_kws={"shrink": 0.5}
 )
 labels = diffs_by_time.columns.strftime("%Y-%m")
-ax.set_yticklabels(labels, rotation=0)
+tick_locs = np.arange(0, len(labels)) + 0.5
+ax.set_yticks(tick_locs)
+ax.set_yticklabels(labels, rotation=0, fontsize=10)
 ax.set_xticklabels([])
 ax.set_xticks([])
+ax.set_title("Network dissimilarity (Frobenius norm)")
 
 # %%
-from graspologic.embed import ClassicalMDS
 
 cmds = ClassicalMDS(n_components=2, dissimilarity="precomputed")
 embedding = cmds.fit_transform(diffs_by_time.values)
 
-fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-ax.scatter(embedding[:, 0], embedding[:, 1])
-for i, timestamp in enumerate(timestamps):
-    ax.text(embedding[i, 0], embedding[i, 1], timestamp.strftime("%Y-%m"))
+embedding_df = pd.DataFrame(
+    embedding, index=diffs_by_time.index, columns=["MDS1", "MDS2"]
+)
+embedding_df["timestamp"] = timestamps
+
+with sns.plotting_context("paper", font_scale=1.5):
+    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+    sns.scatterplot(
+        data=embedding_df, x="MDS1", y="MDS2", hue="timestamp", ax=ax, legend=False
+    )
+
+    # connect with lines in time
+    for i in range(embedding_df.shape[0] - 1):
+        x1, y1 = embedding_df.iloc[i, :2]
+        x2, y2 = embedding_df.iloc[i + 1, :2]
+        ax.plot([x1, x2], [y1, y2], color="black", alpha=0.5, zorder=-1, linewidth=1)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    # timestamps on every 5th point
+    for i, timestamp in enumerate(embedding_df["timestamp"]):
+        if i % 5 == 0:
+            ax.text(
+                embedding_df.iloc[i, 0],
+                embedding_df.iloc[i, 1],
+                timestamp.strftime("%Y-%m"),
+                fontsize=8,
+            )
+# %%
