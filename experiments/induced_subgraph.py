@@ -13,6 +13,7 @@ from graspologic.utils import pass_to_ranks
 from joblib import Parallel, delayed
 from networkframe import NetworkFrame
 
+from pkg.io import write_variable
 from pkg.neuronframe import load_neuronframe
 from pkg.plot import savefig
 from pkg.sequence import create_time_ordered_sequence
@@ -23,6 +24,7 @@ client = cc.CAVEclient("minnie65_phase3_v1")
 query_neurons = client.materialize.query_table("connectivity_groups_v795")
 
 root_options = query_neurons["pt_root_id"].values
+
 
 # %%
 
@@ -262,6 +264,9 @@ ordering = {"PTC": 0, "DTC": 1, "STC": 2, "ITC": 3}
 final_nf.nodes["mtype_order"] = final_nf.nodes["mtype"].map(ordering)
 final_nf.nodes = final_nf.nodes.sort_values(["mtype_order", "ctype", "nuc_depth"])
 
+n_nodes = final_nf.nodes.shape[0]
+write_variable(n_nodes, "induced_subgraph/n_nodes")
+
 # %%
 from giskard.plot import MatrixGrid
 
@@ -318,19 +323,11 @@ for i, timestamp in enumerate(timestamps[:15]):
     ax = axs.flatten()[i]
     mg = plot_adjacency(nf, ax)
     mg.set_title(timestamp.strftime("%Y-%m"))
+    mg.left_axs[0].spines["right"].set_visible(True)
 
 plt.tight_layout()
 
-plt.savefig("induced_subgraph.png", dpi=400)
-
-# %%
-last_nf = nfs_by_time[timestamps[0]]
-fig, axs = plt.subplots(3, 5, figsize=(15, 9))
-for i, timestamp in enumerate(timestamps[1:15]):
-    nf = nfs_by_time[timestamp]
-    ax = axs.flatten()[i]
-    mg = plot_adjacency(nf, ax)
-    mg.set_title(timestamp.strftime("%Y-%m"))
+savefig("adjacency_by_time", fig, folder="induced_subgraph", doc_save=True)
 
 # %%
 diffs_by_time = pd.DataFrame(index=timestamps, columns=timestamps, dtype=float)
@@ -364,6 +361,8 @@ ax.set_yticklabels(labels, rotation=0, fontsize=10)
 ax.set_xticklabels([])
 ax.set_xticks([])
 ax.set_title("Network dissimilarity (Frobenius norm)")
+
+savefig("network_dissimilarity", fig, folder="induced_subgraph", doc_save=True)
 
 # %%
 
