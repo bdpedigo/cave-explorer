@@ -13,7 +13,7 @@ from scipy.spatial.distance import cdist
 from sklearn.metrics import pairwise_distances
 from tqdm.auto import tqdm
 
-from pkg.constants import OUT_PATH
+from pkg.constants import OUT_PATH, COLUMN_MTYPES_TABLE
 from pkg.neuronframe import NeuronFrame, load_neuronframe
 from pkg.plot import savefig
 from pkg.sequence import create_merge_and_clean_sequence, create_time_ordered_sequence
@@ -400,7 +400,7 @@ meta_diff_df
 
 # %%
 ctype_hues = load_casey_palette()
-column_mtypes = client.materialize.query_table("allen_column_mtypes_v2")
+column_mtypes = client.materialize.query_table(COLUMN_MTYPES_TABLE)
 column_mtypes = column_mtypes.set_index("pt_root_id")["cell_type"]
 column_mtypes
 

@@ -12,3 +12,5 @@ DATA_PATH = Path(__file__).parent.parent.parent.parent / "data"
 DOC_FIG_PATH = Path(__file__).parent.parent.parent.parent / "docs" / "result_images"
 
 VAR_PATH = Path(__file__).parent.parent.parent.parent / "docs" / "_variables.yml"
+
+COLUMN_MTYPES_TABLE = "allen_column_mtypes_v2"
