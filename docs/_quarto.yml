@@ -42,3 +42,8 @@ format:
 
 execute:
   freeze: auto
+
+filters: 
+  - lightbox
+
+lightbox: auto

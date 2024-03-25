@@ -2,9 +2,6 @@
 title: Network-wise statistics
 bibliography: references.bib
 toc: true
-filters: 
-    - lightbox
-lightbox: auto
 # cap-location: margin
 ---
 
