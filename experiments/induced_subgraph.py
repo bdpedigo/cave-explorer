@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from cloudfiles import CloudFiles
+from giskard.plot import MatrixGrid
 from graspologic.embed import ClassicalMDS
 from graspologic.utils import pass_to_ranks
 from joblib import Parallel, delayed
@@ -15,10 +16,13 @@ from networkframe import NetworkFrame
 
 from pkg.io import write_variable
 from pkg.neuronframe import load_neuronframe
-from pkg.plot import savefig
+from pkg.plot import savefig, set_context
 from pkg.sequence import create_time_ordered_sequence
 
 # %%
+
+set_context("paper", font_scale=1.5)
+
 client = cc.CAVEclient("minnie65_phase3_v1")
 
 query_neurons = client.materialize.query_table("connectivity_groups_v795")
@@ -268,7 +272,6 @@ n_nodes = final_nf.nodes.shape[0]
 write_variable(n_nodes, "induced_subgraph/n_nodes")
 
 # %%
-from giskard.plot import MatrixGrid
 
 # nf = nfs_by_time[timestamps[4]]
 
@@ -374,58 +377,35 @@ embedding_df = pd.DataFrame(
 )
 embedding_df["timestamp"] = timestamps
 
-with sns.plotting_context("paper", font_scale=1.5):
-    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-    sns.scatterplot(
-        data=embedding_df, x="MDS1", y="MDS2", hue="timestamp", ax=ax, legend=False
-    )
-
-    # connect with lines in time
-    for i in range(embedding_df.shape[0] - 1):
-        x1, y1 = embedding_df.iloc[i, :2]
-        x2, y2 = embedding_df.iloc[i + 1, :2]
-        ax.plot([x1, x2], [y1, y2], color="black", alpha=0.5, zorder=-1, linewidth=1)
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.set_xticks([])
-    ax.set_yticks([])
-
-    # timestamps on every 5th point
-    for i, timestamp in enumerate(embedding_df["timestamp"]):
-        if i % 5 == 0:
-            ax.text(
-                embedding_df.iloc[i, 0],
-                embedding_df.iloc[i, 1],
-                timestamp.strftime("%Y-%m"),
-                fontsize=8,
-            )
-# %%
-
-cumulative_edits = (
-    pd.cut(all_edits["timestamp"], bins=timestamps).value_counts().sort_index().cumsum()
+fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+sns.scatterplot(
+    data=embedding_df, x="MDS1", y="MDS2", hue="timestamp", ax=ax, legend=False
 )
 
-fig, ax = plt.subplots(1, 1, figsize=(5, 4))
+# connect with lines in time
+for i in range(embedding_df.shape[0] - 1):
+    x1, y1 = embedding_df.iloc[i, :2]
+    x2, y2 = embedding_df.iloc[i + 1, :2]
+    ax.plot([x1, x2], [y1, y2], color="black", alpha=0.5, zorder=-1, linewidth=1)
+ax.spines[["top", "right"]].set_visible(False)
+ax.set_xticks([])
+ax.set_yticks([])
 
-sns.lineplot(x=cumulative_edits.index.categories.right, y=cumulative_edits, ax=ax)
+# timestamps on every 5th point
+for i, timestamp in enumerate(embedding_df["timestamp"]):
+    if i % 5 == 0:
+        ax.text(
+            embedding_df.iloc[i, 0],
+            embedding_df.iloc[i, 1],
+            timestamp.strftime("%Y-%m"),
+            fontsize=8,
+        )
+
 
 # %%
-
-# index = diffs_by_time.index
-
 iloc_index = np.arange(0, len(timestamps))
 
 month_diffs = diffs_by_time.values[iloc_index[:-1], iloc_index[1:]]
-
-# diffs_by_time.values
-
-fig, ax = plt.subplots(1, 1, figsize=(5, 4))
-sns.lineplot(x=cumulative_edits, y=month_diffs, ax=ax)
-
-# %%
-
-from pkg.plot import set_context
-
-set_context("paper", font_scale=1.5)
 
 fig, axs = plt.subplots(1, 2, figsize=(8, 4), sharex=True, constrained_layout=True)
 
@@ -444,17 +424,3 @@ ax.set_ylabel("Network dissimilarity (F-norm)")
 ax.set_xlabel("Time")
 
 savefig("n-edits-net-dissimilarity", fig, folder="induced_subgraph", doc_save=True)
-
-# %%
-cumulative_edits.index.categories.right
-# %%
-# def density(nf):
-#     # account for possible cumulative_edits.indexmultigraph-ness
-#     n_edges = nf.edges.groupby(["source", "target"]).ngroups
-#     n_nodes = nf.nodes.shape[0]
-#     n_possible_edges = n_nodes * n_nodes
-
-
-# for i, timestamp in enumerate(timestamps):
-#     nf = nfs_by_time[timestamp]
-#     out = nf.groupby_nodes("mtype", axis="both").apply(density)
