@@ -13,4 +13,7 @@ DOC_FIG_PATH = Path(__file__).parent.parent.parent.parent / "docs" / "result_ima
 
 VAR_PATH = Path(__file__).parent.parent.parent.parent / "docs" / "_variables.yml"
 
+# TODO add more of these table names and write them to the quarto yaml
 COLUMN_MTYPES_TABLE = "allen_column_mtypes_v2"
+MTYPES_TABLE = "aibs_metamodel_mtypes_v661_v2"
+NUCLEUS_TABLE = "nucleus_detection_v0"

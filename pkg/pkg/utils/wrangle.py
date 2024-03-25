@@ -3,13 +3,11 @@ from time import sleep
 
 import numpy as np
 import pandas as pd
-
-# import pcg_skel
 from caveclient import CAVEclient
 from requests import HTTPError
 from sklearn.metrics import pairwise_distances_argmin
 
-from pkg.constants import DATA_PATH
+from pkg.constants import DATA_PATH, MTYPES_TABLE, NUCLEUS_TABLE
 
 
 def get_positions(
@@ -204,7 +202,7 @@ def stringize_dict_keys(dictionary):
 
 def get_nucleus_level2_id(root_id: int, client: CAVEclient):
     nuc = client.materialize.query_table(
-        "nucleus_detection_v0",
+        NUCLEUS_TABLE,
         filter_equal_dict={"pt_root_id": root_id},
         select_columns=["pt_supervoxel_id", "pt_root_id", "pt_position"],
     ).set_index("pt_root_id")
@@ -217,7 +215,7 @@ def get_nucleus_level2_id(root_id: int, client: CAVEclient):
 
 def get_nucleus_point_nm(root_id: int, client: CAVEclient, method="table"):
     nuc = client.materialize.query_table(
-        "nucleus_detection_v0",
+        NUCLEUS_TABLE,
         filter_equal_dict={"pt_root_id": root_id},
         select_columns=["pt_supervoxel_id", "pt_root_id", "pt_position"],
     ).set_index("pt_root_id")
@@ -255,9 +253,7 @@ def load_casey_palette():
 
 
 def load_mtypes(client: CAVEclient):
-    mtypes = client.materialize.query_table(
-        "aibs_metamodel_mtypes_v661_v2", desired_resolution=[1, 1, 1]
-    )
+    mtypes = client.materialize.query_table(MTYPES_TABLE, desired_resolution=[1, 1, 1])
     root_id_counts = mtypes["pt_root_id"].value_counts()
     root_id_singles = root_id_counts[root_id_counts == 1].index
     mtypes = mtypes.query("pt_root_id in @root_id_singles")

@@ -87,10 +87,8 @@ For the categorization of target neurons, I am using `aibs_metamodel_mtypes_v661
 
 Imagine space is discretized into bins of an arbitrary size/shape, for instace, concentric cylinders centered on the soma of a neuron. This metric captures the probability that cell $i$ targets a downstream neuron whose soma lives within a given bin, $l$. 
 
-## Other
+## Tables used
 
-::: {.callout-note}
-
-For categorization of inhibitory neuron into broad morphological type, I am using `allen_column_mtypes_v2`
-
-:::
+- `{{< var COLUMN_MTYPES_TABLE >}}`: used to indicate the morphological types for the neurons of interest that I am examining in this work. 
+- `{{< var MTYPES_TABLE >}}`: used to indicate the morphological types for the rest of the neurons in the dataset.
+- `{{< var NUCLEUS_TABLE >}}`: used to indicate the location of the nucleus for all neurons in the dataset. This also anchors each neuron to a target ID indicating the identity of the neuron by its soma, since the segmentation is dynamic.
