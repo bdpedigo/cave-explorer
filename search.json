@@ -62,11 +62,11 @@
     ]
   },
   {
-    "objectID": "methods.html#other",
-    "href": "methods.html#other",
+    "objectID": "methods.html#tables-used",
+    "href": "methods.html#tables-used",
     "title": "Methods",
-    "section": "Other",
-    "text": "Other\n\n\n\n\n\n\nNote\n\n\n\nFor categorization of inhibitory neuron into broad morphological type, I am using allen_column_mtypes_v2",
+    "section": "Tables used",
+    "text": "Tables used\n\nallen_column_mtypes_v2: used to indicate the morphological types for the neurons of interest that I am examining in this work.\naibs_metamodel_mtypes_v661_v2: used to indicate the morphological types for the rest of the neurons in the dataset.\nnucleus_detection_v0: used to indicate the location of the nucleus for all neurons in the dataset. This also anchors each neuron to a target ID indicating the identity of the neuron by its soma, since the segmentation is dynamic.",
     "crumbs": [
       "Methods"
     ]

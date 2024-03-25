@@ -225,7 +225,7 @@ window.Quarto = {
   <li><a href="#proportion-of-inputsoutputs-onto-classes" id="toc-proportion-of-inputsoutputs-onto-classes" class="nav-link" data-scroll-target="#proportion-of-inputsoutputs-onto-classes">Proportion of inputs/outputs onto classes</a></li>
   <li><a href="#connectivity-probability-by-distance" id="toc-connectivity-probability-by-distance" class="nav-link" data-scroll-target="#connectivity-probability-by-distance">Connectivity probability by distance</a></li>
   </ul></li>
-  <li><a href="#other" id="toc-other" class="nav-link" data-scroll-target="#other">Other</a></li>
+  <li><a href="#tables-used" id="toc-tables-used" class="nav-link" data-scroll-target="#tables-used">Tables used</a></li>
   </ul>
 <div class="toc-actions"><ul><li><a href="https://github.com/bdpedigo/skedits/edit/main/methods.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/bdpedigo/skedits/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
     </div>
@@ -334,21 +334,13 @@ Note
 <p>Imagine space is discretized into bins of an arbitrary size/shape, for instace, concentric cylinders centered on the soma of a neuron. This metric captures the probability that cell <span class="math inline">\(i\)</span> targets a downstream neuron whose soma lives within a given bin, <span class="math inline">\(l\)</span>.</p>
 </section>
 </section>
-<section id="other" class="level2">
-<h2 class="anchored" data-anchor-id="other">Other</h2>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p>For categorization of inhibitory neuron into broad morphological type, I am using <code>allen_column_mtypes_v2</code></p>
-</div>
-</div>
+<section id="tables-used" class="level2">
+<h2 class="anchored" data-anchor-id="tables-used">Tables used</h2>
+<ul>
+<li><code>allen_column_mtypes_v2</code>: used to indicate the morphological types for the neurons of interest that I am examining in this work.</li>
+<li><code>aibs_metamodel_mtypes_v661_v2</code>: used to indicate the morphological types for the rest of the neurons in the dataset.</li>
+<li><code>nucleus_detection_v0</code>: used to indicate the location of the nucleus for all neurons in the dataset. This also anchors each neuron to a target ID indicating the identity of the neuron by its soma, since the segmentation is dynamic.</li>
+</ul>
 
 
 </section>
