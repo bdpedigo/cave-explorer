@@ -1,27 +1,22 @@
 # %%
 
 import pickle
-import time
 
 import caveclient as cc
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from cloudfiles import CloudFiles
 from scipy.spatial.distance import cdist
-from sklearn.metrics import pairwise_distances
-from tqdm.auto import tqdm
 
-from pkg.constants import OUT_PATH, COLUMN_MTYPES_TABLE
-from pkg.neuronframe import NeuronFrame, load_neuronframe
+from pkg.constants import COLUMN_MTYPES_TABLE, OUT_PATH
 from pkg.plot import savefig
-from pkg.sequence import create_merge_and_clean_sequence, create_time_ordered_sequence
 from pkg.utils import load_casey_palette, load_mtypes
-
 
 # %%
 
+client = cc.CAVEclient("minnie65_phase3_v1")
+mtypes = load_mtypes(client)
 
 # TODO whether to implement this as a table of tables, one massive table...
 # nothing really feels satisfying here
@@ -32,6 +27,11 @@ from pkg.utils import load_casey_palette, load_mtypes
 # will make it easier to join with the time-ordered dataframes which use "operation_id",
 # or do things like take "bouts" for computing metrics which are not tied to a specific
 # operation_id
+
+with open(OUT_PATH / "sequence_metrics" / "all_infos.pkl", "rb") as f:
+    all_infos = pickle.load(f)
+with open(OUT_PATH / "sequence_metrics" / "meta_features_df.pkl", "rb") as f:
+    meta_features_df = pickle.load(f)
 
 
 # %%
@@ -295,5 +295,3 @@ for root_id in root_ids:
         fig,
         folder="sequence_metrics",
     )
-
-# %%

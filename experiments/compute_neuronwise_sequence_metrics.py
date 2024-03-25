@@ -4,20 +4,16 @@ import pickle
 import time
 
 import caveclient as cc
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
 from cloudfiles import CloudFiles
-from scipy.spatial.distance import cdist
 from sklearn.metrics import pairwise_distances
 from tqdm.auto import tqdm
 
-from pkg.constants import OUT_PATH, COLUMN_MTYPES_TABLE
+from pkg.constants import OUT_PATH
 from pkg.neuronframe import NeuronFrame, load_neuronframe
-from pkg.plot import savefig
 from pkg.sequence import create_merge_and_clean_sequence, create_time_ordered_sequence
-from pkg.utils import load_casey_palette, load_mtypes
+from pkg.utils import load_mtypes
 
 # %%
 cloud_bucket = "allen-minnie-phase3"
@@ -192,113 +188,103 @@ sequence_time = 0
 
 recompute = True
 save = True
-if recompute:
-    root_ids = files_finished["root_id"].unique()[:]
-    all_infos = []
-    all_sequence_features = {}
-    pbar = tqdm(total=len(root_ids), desc="Computing target stats...")
-    for root_id, rows in files_finished.query("root_id.isin(@root_ids)").groupby(
-        "root_id"
+
+root_ids = files_finished["root_id"].unique()[:]
+all_infos = []
+all_sequence_features = {}
+pbar = tqdm(total=len(root_ids), desc="Computing target stats...")
+for root_id, rows in files_finished.query("root_id.isin(@root_ids)").groupby("root_id"):
+    currtime = time.time()
+    neuron = load_neuronframe(root_id, client)
+    load_neuron_time += time.time() - currtime
+
+    currtime = time.time()
+    annotate_pre_synapses(neuron, mtypes)
+    annotate_mtypes(neuron, mtypes)
+    annotate_time += time.time() - currtime
+
+    for keys, sub_rows in rows.groupby(
+        ["scheme", "order_by", "random_seed"], dropna=False
     ):
-        currtime = time.time()
-        neuron = load_neuronframe(root_id, client)
-        load_neuron_time += time.time() - currtime
+        scheme, order_by, random_seed = keys
 
         currtime = time.time()
-        annotate_pre_synapses(neuron, mtypes)
-        annotate_mtypes(neuron, mtypes)
-        annotate_time += time.time() - currtime
-
-        for keys, sub_rows in rows.groupby(
-            ["scheme", "order_by", "random_seed"], dropna=False
-        ):
-            scheme, order_by, random_seed = keys
-
-            currtime = time.time()
-            if scheme == "clean-and-merge":
-                sequence = create_merge_and_clean_sequence(
-                    neuron, root_id, order_by=order_by, random_seed=random_seed
-                )
-                sequence = sequence.select_by_bout("has_merge", keep="last")
-            elif scheme == "historical":
-                sequence = create_time_ordered_sequence(neuron, root_id)
-            else:
-                raise ValueError(f"Scheme {scheme} not recognized.")
-            load_sequence_time += time.time() - currtime
-
-            sequence_key = (root_id, scheme, order_by, random_seed)
-
-            currtime = time.time()
-            sequence_feature_dfs = {}
-            counts_by_mtype = sequence.apply_to_synapses_by_sample(
-                compute_target_counts, which="pre", by="post_mtype"
+        if scheme == "clean-and-merge":
+            sequence = create_merge_and_clean_sequence(
+                neuron, root_id, order_by=order_by, random_seed=random_seed
             )
-            counts_by_mtype = apply_metadata(counts_by_mtype, sequence_key)
-            sequence_feature_dfs["counts_by_mtype"] = counts_by_mtype
-            counts_time += time.time() - currtime
+            sequence = sequence.select_by_bout("has_merge", keep="last")
+        elif scheme == "historical":
+            sequence = create_time_ordered_sequence(neuron, root_id)
+        else:
+            raise ValueError(f"Scheme {scheme} not recognized.")
+        load_sequence_time += time.time() - currtime
 
-            currtime = time.time()
-            props_by_mtype = sequence.apply_to_synapses_by_sample(
-                compute_target_proportions, which="pre", by="post_mtype"
-            )
-            props_by_mtype = apply_metadata(props_by_mtype, sequence_key)
-            sequence_feature_dfs["props_by_mtype"] = props_by_mtype
-            props_time += time.time() - currtime
+        sequence_key = (root_id, scheme, order_by, random_seed)
 
-            currtime = time.time()
-            spatial_props = sequence.apply_to_synapses_by_sample(
-                compute_spatial_target_proportions, which="pre", mtypes=mtypes
-            )
-            spatial_props = apply_metadata(spatial_props, sequence_key)
-            sequence_feature_dfs["spatial_props"] = spatial_props
-            spatial_props_time += time.time() - currtime
+        currtime = time.time()
+        sequence_feature_dfs = {}
+        counts_by_mtype = sequence.apply_to_synapses_by_sample(
+            compute_target_counts, which="pre", by="post_mtype"
+        )
+        counts_by_mtype = apply_metadata(counts_by_mtype, sequence_key)
+        sequence_feature_dfs["counts_by_mtype"] = counts_by_mtype
+        counts_time += time.time() - currtime
 
-            currtime = time.time()
-            spatial_props_by_mtype = sequence.apply_to_synapses_by_sample(
-                compute_spatial_target_proportions,
-                which="pre",
-                mtypes=mtypes,
-                by="post_mtype",
-            )
-            spatial_props_by_mtype = apply_metadata(
-                spatial_props_by_mtype, sequence_key
-            )
-            sequence_feature_dfs["spatial_props_by_mtype"] = spatial_props_by_mtype
-            spatial_props_by_mtype_time += time.time() - currtime
+        currtime = time.time()
+        props_by_mtype = sequence.apply_to_synapses_by_sample(
+            compute_target_proportions, which="pre", by="post_mtype"
+        )
+        props_by_mtype = apply_metadata(props_by_mtype, sequence_key)
+        sequence_feature_dfs["props_by_mtype"] = props_by_mtype
+        props_time += time.time() - currtime
 
-            all_sequence_features[sequence_key] = sequence_feature_dfs
+        currtime = time.time()
+        spatial_props = sequence.apply_to_synapses_by_sample(
+            compute_spatial_target_proportions, which="pre", mtypes=mtypes
+        )
+        spatial_props = apply_metadata(spatial_props, sequence_key)
+        sequence_feature_dfs["spatial_props"] = spatial_props
+        spatial_props_time += time.time() - currtime
 
-            currtime = time.time()
-            info = sequence.sequence_info
-            info["root_id"] = root_id
-            info["scheme"] = scheme
-            info["order_by"] = order_by
-            info["random_seed"] = random_seed
-            all_infos.append(
-                info.drop(["pre_synapses", "post_synapses", "applied_edits"], axis=1)
-            )
-            sequence_time += time.time() - currtime
+        currtime = time.time()
+        spatial_props_by_mtype = sequence.apply_to_synapses_by_sample(
+            compute_spatial_target_proportions,
+            which="pre",
+            mtypes=mtypes,
+            by="post_mtype",
+        )
+        spatial_props_by_mtype = apply_metadata(spatial_props_by_mtype, sequence_key)
+        sequence_feature_dfs["spatial_props_by_mtype"] = spatial_props_by_mtype
+        spatial_props_by_mtype_time += time.time() - currtime
 
-        pbar.update(1)
+        all_sequence_features[sequence_key] = sequence_feature_dfs
 
-    pbar.close()
+        currtime = time.time()
+        info = sequence.sequence_info
+        info["root_id"] = root_id
+        info["scheme"] = scheme
+        info["order_by"] = order_by
+        info["random_seed"] = random_seed
+        all_infos.append(
+            info.drop(["pre_synapses", "post_synapses", "applied_edits"], axis=1)
+        )
+        sequence_time += time.time() - currtime
 
-    all_infos = pd.concat(all_infos)
+    pbar.update(1)
 
-    meta_features_df = pd.DataFrame(all_sequence_features).T
-    meta_features_df.index.names = ["root_id", "scheme", "order_by", "random_seed"]
+pbar.close()
 
-    if save:
-        with open(OUT_PATH / "sequence_metrics" / "all_infos.pkl", "wb") as f:
-            pickle.dump(all_infos, f)
-        with open(OUT_PATH / "sequence_metrics" / "meta_features_df.pkl", "wb") as f:
-            pickle.dump(meta_features_df, f)
+all_infos = pd.concat(all_infos)
 
-else:
-    with open(OUT_PATH / "sequence_metrics" / "all_infos.pkl", "rb") as f:
-        all_infos = pickle.load(f)
-    with open(OUT_PATH / "sequence_metrics" / "meta_features_df.pkl", "rb") as f:
-        meta_features_df = pickle.load(f)
+meta_features_df = pd.DataFrame(all_sequence_features).T
+meta_features_df.index.names = ["root_id", "scheme", "order_by", "random_seed"]
+
+if save:
+    with open(OUT_PATH / "sequence_metrics" / "all_infos.pkl", "wb") as f:
+        pickle.dump(all_infos, f)
+    with open(OUT_PATH / "sequence_metrics" / "meta_features_df.pkl", "wb") as f:
+        pickle.dump(meta_features_df, f)
 
 total_time = time.time() - total_time
 

@@ -79,7 +79,7 @@ This metric could also be flipped in the definition above to consider the inputs
 
 ::: {.callout-note}
 
-For the categorization of target neurons, I am using `aibs_metamodel_mtypes_v661_v2`.
+For the categorization of target neurons, I am using `{{< var MTYPES_TABLE >}}`.
 
 :::
 
