@@ -72,6 +72,39 @@
     ]
   },
   {
+    "objectID": "neuronwise.html",
+    "href": "neuronwise.html",
+    "title": "Neuron-wise statistics",
+    "section": "",
+    "text": "TODO: show a gallery of example cells, ordering over time\nTODO: introduce the notion of taking the distance from the final\nTODO: show some kind of summary statistics: - Lineplots, one for each neuron - Some kind of vertical histogram - just not sure what the normalization here should be\n\n\n\nTODO: show a gallery of example cells, ordering with one of the artificial schemes\nTODO: distance from final for the same neurons\nTODO: summary statistic plot for all neurons",
+    "crumbs": [
+      "Results",
+      "Neuron-wise statistics"
+    ]
+  },
+  {
+    "objectID": "neuronwise.html#proportion-of-outouts-metric",
+    "href": "neuronwise.html#proportion-of-outouts-metric",
+    "title": "Neuron-wise statistics",
+    "section": "",
+    "text": "TODO: show a gallery of example cells, ordering over time\nTODO: introduce the notion of taking the distance from the final\nTODO: show some kind of summary statistics: - Lineplots, one for each neuron - Some kind of vertical histogram - just not sure what the normalization here should be\n\n\n\nTODO: show a gallery of example cells, ordering with one of the artificial schemes\nTODO: distance from final for the same neurons\nTODO: summary statistic plot for all neurons",
+    "crumbs": [
+      "Results",
+      "Neuron-wise statistics"
+    ]
+  },
+  {
+    "objectID": "neuronwise.html#outputs-by-distance-metric",
+    "href": "neuronwise.html#outputs-by-distance-metric",
+    "title": "Neuron-wise statistics",
+    "section": "Outputs by distance metric",
+    "text": "Outputs by distance metric\nTODO: same treatment as the above",
+    "crumbs": [
+      "Results",
+      "Neuron-wise statistics"
+    ]
+  },
+  {
     "objectID": "test.html",
     "href": "test.html",
     "title": "test",
