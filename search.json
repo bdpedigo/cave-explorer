@@ -14,7 +14,18 @@
     "href": "networkwise.html",
     "title": "Network-wise statistics",
     "section": "",
-    "text": "Statistics computed on the entire network - here, an induced subgraph of inhibitory neurons on ~150 nodes.\n\n\n\nHigh-level summary of changes in the network over time. Left: the number of edits in a given month over the course of proofreading. Edits are summed over the neurons in the induced subgraph. Right: The network change measures as the Frobenius norm of the difference between the adjacency matrices at two timepoints, i.e. the Euclidean norm on the difference in all edge weights.",
+    "text": "Statistics computed on the entire network - here, an induced subgraph of inhibitory neurons on 163 nodes.",
+    "crumbs": [
+      "Results",
+      "Network-wise statistics"
+    ]
+  },
+  {
+    "objectID": "networkwise.html#historical-ordering",
+    "href": "networkwise.html#historical-ordering",
+    "title": "Network-wise statistics",
+    "section": "Historical ordering",
+    "text": "Historical ordering\n\n\n\nAdjacency matrices for the induced subgraph shown at the end of each month for the first 15 months of proofreading. Marginals of each adjacency matrix show the number of edits for a given neuron. Adjacency matrices are sorted by morphological type, then connectivity type, then soma depth.\n\n\nNetwork dissimilarity: for the simplest notion of the difference in network structure over time, I define a network dissimilarity as:\n\\[\\|A^{(t_1)} - A^{(t_2)}\\|_F\\]\nwhere \\(\\| \\cdot \\|_F\\) is the Frobenius norm, i.e. treating the matrices as vectors and taking the Euclidean norm. Intuitively, this metric just measures the magnitude of edge weight changes.\n\n\n\nHeatmap showing network dissimilarity for the induced subgraph, measured between all pairs of networks at different time points.\n\n\n\n\n\nHigh-level summary of changes in the network over time. Left: the number of edits in a given month over the course of proofreading. Edits are summed over the neurons in the induced subgraph. Right: The network change measures as the Frobenius norm of the difference between the adjacency matrices at two timepoints, i.e. the Euclidean norm on the difference in all edge weights.\n\n\n\n\n\nAdjacency matrices for the induced subgraph shown at the end of each month for the first 15 months of proofreading. Marginals of each adjacency matrix show the number of edits for a given neuron. Adjacency matrices are sorted by morphological type, then connectivity type, then soma depth.\nHeatmap showing network dissimilarity for the induced subgraph, measured between all pairs of networks at different time points.\nHigh-level summary of changes in the network over time. Left: the number of edits in a given month over the course of proofreading. Edits are summed over the neurons in the induced subgraph. Right: The network change measures as the Frobenius norm of the difference between the adjacency matrices at two timepoints, i.e. the Euclidean norm on the difference in all edge weights.",
     "crumbs": [
       "Results",
       "Network-wise statistics"
