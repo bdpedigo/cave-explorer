@@ -1,0 +1,8 @@
+---
+title: Neuron-wise statistics
+bibliography: references.bib
+toc: true
+# cap-location: margin
+---
+
+## This is some work

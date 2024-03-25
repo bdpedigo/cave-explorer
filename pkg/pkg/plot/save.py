@@ -3,7 +3,7 @@ from typing import Optional
 
 import matplotlib.pyplot as plt
 
-from ..paths import FIG_PATH
+from ..paths import DOC_FIG_PATH, FIG_PATH
 
 
 def savefig(
@@ -13,6 +13,7 @@ def savefig(
     format: str = "png",
     dpi: int = 300,
     bbox_inches="tight",
+    doc_save: bool = False,
     **kwargs,
 ) -> None:
     if folder is not None:
@@ -25,3 +26,13 @@ def savefig(
     fig.savefig(
         path / savename, format=format, dpi=dpi, bbox_inches=bbox_inches, **kwargs
     )
+    if doc_save:
+        savefig(
+            name,
+            fig,
+            folder=DOC_FIG_PATH,
+            format=format,
+            dpi=dpi,
+            bbox_inches=bbox_inches,
+            **kwargs,
+        )

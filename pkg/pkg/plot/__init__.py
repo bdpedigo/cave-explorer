@@ -3,6 +3,7 @@ from .pyvista import animate_neuron_edit_sequence, set_up_camera
 from .save import savefig
 from .tree import hierarchy_pos, radial_hierarchy_pos, treeplot
 from .utils import clean_axis, rotate_set_labels
+from .context import set_context
 
 __all__ = [
     "networkplot",
@@ -14,4 +15,5 @@ __all__ = [
     "rotate_set_labels",
     "animate_neuron_edit_sequence",
     "set_up_camera",
+    "set_context",
 ]

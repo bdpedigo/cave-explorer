@@ -1,0 +1,10 @@
+---
+title: Network-wise statistics
+bibliography: references.bib
+toc: true
+# cap-location: margin
+---
+
+Statistics computed on the entire network - here, an induced subgraph of inhibitory neurons on ~150 nodes.
+
+![High-level summary of changes in the network over time. Left: the number of edits in a given month over the course of proofreading. Edits are summed over the neurons in the induced subgraph. Right: The network change measures as the Frobenius norm of the difference between the adjacency matrices at two timepoints, i.e. the Euclidean norm on the difference in all edge weights.](result_images/induced_subgraph/n-edits-net-dissimilarity.png)

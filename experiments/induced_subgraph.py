@@ -14,6 +14,7 @@ from joblib import Parallel, delayed
 from networkframe import NetworkFrame
 
 from pkg.neuronframe import load_neuronframe
+from pkg.plot import savefig
 from pkg.sequence import create_time_ordered_sequence
 
 # %%
@@ -322,7 +323,7 @@ plt.tight_layout()
 
 plt.savefig("induced_subgraph.png", dpi=400)
 
-#%%
+# %%
 last_nf = nfs_by_time[timestamps[0]]
 fig, axs = plt.subplots(3, 5, figsize=(15, 9))
 for i, timestamp in enumerate(timestamps[1:15]):
@@ -399,3 +400,62 @@ with sns.plotting_context("paper", font_scale=1.5):
                 fontsize=8,
             )
 # %%
+
+cumulative_edits = (
+    pd.cut(all_edits["timestamp"], bins=timestamps).value_counts().sort_index().cumsum()
+)
+
+fig, ax = plt.subplots(1, 1, figsize=(5, 4))
+
+sns.lineplot(x=cumulative_edits.index.categories.right, y=cumulative_edits, ax=ax)
+
+# %%
+
+# index = diffs_by_time.index
+
+iloc_index = np.arange(0, len(timestamps))
+
+month_diffs = diffs_by_time.values[iloc_index[:-1], iloc_index[1:]]
+
+# diffs_by_time.values
+
+fig, ax = plt.subplots(1, 1, figsize=(5, 4))
+sns.lineplot(x=cumulative_edits, y=month_diffs, ax=ax)
+
+# %%
+
+from pkg.plot import set_context
+
+set_context("paper", font_scale=1.5)
+
+fig, axs = plt.subplots(1, 2, figsize=(8, 4), sharex=True, constrained_layout=True)
+
+n_edits = pd.cut(all_edits["timestamp"], bins=timestamps).value_counts().sort_index()
+
+ax = axs[0]
+sns.lineplot(x=n_edits.index.categories.right, y=n_edits, ax=ax)
+ax.get_xaxis().set_tick_params(rotation=45)
+ax.set_ylabel("# edits")
+ax.set_xlabel("Time")
+
+ax = axs[1]
+sns.scatterplot(y=month_diffs, x=diffs_by_time.index[1:], ax=ax)
+ax.get_xaxis().set_tick_params(rotation=45)
+ax.set_ylabel("Network dissimilarity (F-norm)")
+ax.set_xlabel("Time")
+
+savefig("n-edits-net-dissimilarity", fig, folder="induced_subgraph", doc_save=True)
+
+# %%
+cumulative_edits.index.categories.right
+# %%
+# def density(nf):
+#     # account for possible cumulative_edits.indexmultigraph-ness
+#     n_edges = nf.edges.groupby(["source", "target"]).ngroups
+#     n_nodes = nf.nodes.shape[0]
+#     n_possible_edges = n_nodes * n_nodes
+
+
+# for i, timestamp in enumerate(timestamps):
+#     nf = nfs_by_time[timestamp]
+#     out = nf.groupby_nodes("mtype", axis="both").apply(density)

@@ -19,6 +19,10 @@ website:
       - index.qmd
       - introduction.qmd
       - methods.qmd
+      - section: Results
+        contents:
+          - neuronwise.qmd
+          - networkwise.qmd
   comments:
     hypothesis:
       theme: clean
