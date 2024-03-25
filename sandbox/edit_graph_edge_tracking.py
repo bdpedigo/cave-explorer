@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from nglui.statebuilder import make_neuron_neuroglancer_link
-from pkg.paths import FIG_PATH
+from pkg.constants import FIG_PATH
 from pkg.plot import networkplot
 from pkg.utils import get_level2_nodes_edges, get_skeleton_nodes_edges
 from tqdm.auto import tqdm

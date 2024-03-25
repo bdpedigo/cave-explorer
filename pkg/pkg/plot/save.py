@@ -3,7 +3,7 @@ from typing import Optional
 
 import matplotlib.pyplot as plt
 
-from ..paths import FIG_PATH, DOC_FIG_PATH
+from ..constants import DOC_FIG_PATH, FIG_PATH
 
 
 def savefig(

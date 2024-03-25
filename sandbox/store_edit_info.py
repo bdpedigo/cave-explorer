@@ -12,6 +12,7 @@ from cloudfiles import CloudFiles
 from networkframe import NetworkFrame
 from tqdm.auto import tqdm
 
+from pkg.constants import OUT_PATH
 from pkg.edits import (
     NetworkDelta,
     find_supervoxel_component,
@@ -19,7 +20,6 @@ from pkg.edits import (
     get_network_edits,
     get_network_metaedits,
 )
-from pkg.paths import OUT_PATH
 from pkg.utils import get_level2_nodes_edges
 
 # %%

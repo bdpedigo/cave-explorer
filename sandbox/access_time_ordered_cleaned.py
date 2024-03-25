@@ -15,9 +15,9 @@ import seaborn as sns
 from scipy.spatial.distance import cdist
 from tqdm.auto import tqdm
 
+from pkg.constants import FIG_PATH, OUT_PATH
 from pkg.edits import count_synapses_by_sample
 from pkg.neuronframe import load_neuronframe, verify_neuron_matches_final
-from pkg.paths import FIG_PATH, OUT_PATH
 from pkg.plot import savefig
 from pkg.utils import find_closest_point, load_casey_palette, load_mtypes
 

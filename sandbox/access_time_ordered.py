@@ -13,9 +13,9 @@ import pandas as pd
 import seaborn as sns
 from tqdm.auto import tqdm
 
+from pkg.constants import OUT_PATH
 from pkg.edits import count_synapses_by_sample
 from pkg.neuronframe import load_neuronframe
-from pkg.paths import OUT_PATH
 from pkg.plot import savefig
 from pkg.utils import find_closest_point, load_casey_palette, load_mtypes
 

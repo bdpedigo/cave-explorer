@@ -5,13 +5,13 @@ from caveclient import CAVEclient
 from cloudfiles import CloudFiles
 from networkframe import NetworkFrame
 
+from ..constants import OUT_PATH
 from ..edits import (
     NetworkDelta,
     get_initial_network,
     get_network_edits,
     get_network_metaedits,
 )
-from ..paths import OUT_PATH
 from .changes import get_supervoxel_level2_map
 
 

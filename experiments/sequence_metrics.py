@@ -13,8 +13,8 @@ from scipy.spatial.distance import cdist
 from sklearn.metrics import pairwise_distances
 from tqdm.auto import tqdm
 
+from pkg.constants import OUT_PATH
 from pkg.neuronframe import NeuronFrame, load_neuronframe
-from pkg.paths import OUT_PATH
 from pkg.plot import savefig
 from pkg.sequence import create_merge_and_clean_sequence, create_time_ordered_sequence
 from pkg.utils import load_casey_palette, load_mtypes

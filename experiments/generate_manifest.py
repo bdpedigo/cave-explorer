@@ -3,8 +3,8 @@
 import pandas as pd
 from cloudfiles import CloudFiles
 
+from pkg.constants import OUT_PATH
 from pkg.io import write_variable
-from pkg.paths import OUT_PATH
 
 cloud_bucket = "allen-minnie-phase3"
 folder = "edit_sequences"

@@ -8,7 +8,7 @@ os.environ["SKEDITS_RECOMPUTE"] = "False"
 
 import pandas as pd
 
-from pkg.paths import OUT_PATH
+from pkg.constants import OUT_PATH
 
 # %%
 path = OUT_PATH / "access_time_ordered"

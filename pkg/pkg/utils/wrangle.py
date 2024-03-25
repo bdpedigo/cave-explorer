@@ -9,7 +9,7 @@ from caveclient import CAVEclient
 from requests import HTTPError
 from sklearn.metrics import pairwise_distances_argmin
 
-from pkg.paths import DATA_PATH
+from pkg.constants import DATA_PATH
 
 
 def get_positions(

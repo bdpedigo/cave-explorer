@@ -8,7 +8,7 @@ from typing import Callable, Literal, Optional, Union
 import numpy as np
 from cloudfiles import CloudFiles
 
-from pkg.paths import OUT_PATH
+from pkg.constants import OUT_PATH
 
 
 def get_cloudfiles(

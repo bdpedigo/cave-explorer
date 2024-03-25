@@ -14,11 +14,11 @@ import seaborn as sns
 from scipy.spatial.distance import cdist
 from tqdm.auto import tqdm
 
+from pkg.constants import FIG_PATH, OUT_PATH
 from pkg.neuronframe import (
     NeuronFrameSequence,
     load_neuronframe,
 )
-from pkg.paths import FIG_PATH, OUT_PATH
 from pkg.plot import animate_neuron_edit_sequence, savefig
 from pkg.utils import load_casey_palette, load_mtypes
 

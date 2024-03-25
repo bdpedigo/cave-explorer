@@ -8,9 +8,15 @@ import caveclient as cc
 import navis
 import numpy as np
 import pandas as pd
+import pcg_skel.skel_utils as sk_utils
 import plotly.graph_objs as go
 from cloudfiles import CloudFiles
 from meshparty import skeletonize, trimesh_io
+from pcg_skel.chunk_tools import build_spatial_graph
+from plotly.subplots import make_subplots
+from tqdm.auto import tqdm
+
+from pkg.constants import FIG_PATH, OUT_PATH
 from pkg.edits import (
     NetworkDelta,
     find_supervoxel_component,
@@ -18,12 +24,6 @@ from pkg.edits import (
     get_network_edits,
     get_network_metaedits,
 )
-from pkg.paths import OUT_PATH, FIG_PATH
-from plotly.subplots import make_subplots
-from tqdm.auto import tqdm
-
-import pcg_skel.skel_utils as sk_utils
-from pcg_skel.chunk_tools import build_spatial_graph
 
 # %%
 recompute = False
@@ -308,8 +308,8 @@ feature_df = pd.DataFrame(feature_df)
 feature_df
 
 # %%
-import seaborn as sns
 import matplotlib.pyplot as plt
+import seaborn as sns
 import seaborn.objects as so
 
 

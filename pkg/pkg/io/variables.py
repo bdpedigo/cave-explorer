@@ -1,6 +1,6 @@
 import yaml
 
-from pkg.paths import VAR_PATH
+from pkg.constants import VAR_PATH
 
 
 def get_variables():

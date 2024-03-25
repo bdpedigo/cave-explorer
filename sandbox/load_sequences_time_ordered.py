@@ -16,8 +16,8 @@ from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from tqdm.auto import tqdm
 
+from pkg.constants import OUT_PATH
 from pkg.neuronframe import NeuronFrameSequence, load_neuronframe
-from pkg.paths import OUT_PATH
 from pkg.plot import savefig
 from pkg.utils import load_casey_palette, load_mtypes
 

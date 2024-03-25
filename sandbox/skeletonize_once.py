@@ -16,13 +16,13 @@ from networkframe import NetworkFrame
 from pcg_skel.chunk_tools import build_spatial_graph
 from sklearn.neighbors import NearestNeighbors
 
+from pkg.constants import OUT_PATH
 from pkg.edits import (
     NetworkDelta,
     get_initial_network,
     get_network_edits,
     get_network_metaedits,
 )
-from pkg.paths import OUT_PATH
 from pkg.plot import networkplot
 from pkg.utils import get_positions
 

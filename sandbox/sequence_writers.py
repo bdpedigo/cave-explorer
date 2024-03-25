@@ -14,11 +14,11 @@ import pyvista as pv
 import seaborn as sns
 from scipy.spatial.distance import cdist
 
+from pkg.constants import FIG_PATH, OUT_PATH
 from pkg.neuronframe import (
     NeuronFrameSequence,
     load_neuronframe,
 )
-from pkg.paths import FIG_PATH, OUT_PATH
 from pkg.plot import animate_neuron_edit_sequence, savefig
 from pkg.sequence import create_merge_and_clean_sequence, create_time_ordered_sequence
 from pkg.utils import load_casey_palette, load_mtypes
