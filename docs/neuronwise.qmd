@@ -5,4 +5,27 @@ toc: true
 # cap-location: margin
 ---
 
-## This is some work
+## Proportion of outouts metric
+
+### Historical ordering
+
+TODO: show a gallery of example cells, ordering over time 
+
+TODO: introduce the notion of taking the distance from the final
+
+TODO: show some kind of summary statistics: 
+    - Lineplots, one for each neuron
+    - Some kind of vertical histogram - just not sure what the normalization here should be
+
+### Artificial ordering
+
+TODO: show a gallery of example cells, ordering with one of the artificial schemes
+
+TODO: distance from final for the same neurons
+
+TODO: summary statistic plot for all neurons
+
+## Outputs by distance metric
+
+TODO: same treatment as the above
+

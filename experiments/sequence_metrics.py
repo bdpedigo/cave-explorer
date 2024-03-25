@@ -1,10 +1,4 @@
 # %%
-import os
-
-os.environ["SKEDITS_USE_CLOUD"] = "True"
-os.environ["SKEDITS_RECOMPUTE"] = "False"
-os.environ["LAZYCLOUD_RECOMPUTE"] = "False"
-os.environ["LAZYCLOUD_USE_CLOUD"] = "True"
 
 import pickle
 import time
