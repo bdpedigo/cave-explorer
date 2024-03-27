@@ -4,14 +4,13 @@ import pickle
 
 import caveclient as cc
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import seaborn as sns
 from scipy.spatial.distance import cdist
 
 from pkg.constants import COLUMN_MTYPES_TABLE, OUT_PATH
 from pkg.plot import savefig
-from pkg.utils import load_casey_palette, load_mtypes
+from pkg.utils import load_casey_palette, load_manifest, load_mtypes
 
 # %%
 
@@ -33,31 +32,32 @@ with open(OUT_PATH / "sequence_metrics" / "all_infos.pkl", "rb") as f:
 with open(OUT_PATH / "sequence_metrics" / "meta_features_df.pkl", "rb") as f:
     meta_features_df = pickle.load(f)
 
+manifest = load_manifest()
 
-# %%
-sub_df = pd.concat(
-    meta_features_df.query("root_id == @root_id & scheme == 'historical'")[
-        "spatial_props"
-    ].values
-)
-cols = sub_df.columns
-mids = [
-    interval.mid for interval in sub_df.columns.get_level_values("radial_to_nuc_bin")
-]
+# # %%
+# sub_df = pd.concat(
+#     meta_features_df.query("root_id == @root_id & scheme == 'historical'")[
+#         "spatial_props"
+#     ].values
+# )
+# cols = sub_df.columns
+# mids = [
+#     interval.mid for interval in sub_df.columns.get_level_values("radial_to_nuc_bin")
+# ]
 
-fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-colors = sns.color_palette("coolwarm_r", n_colors=sub_df.shape[0])
+# fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+# colors = sns.color_palette("coolwarm_r", n_colors=sub_df.shape[0])
 
-for i, (operation_id, row) in enumerate(sub_df.iterrows()):
-    sns.lineplot(
-        y=row.values,
-        x=mids,
-        ax=ax,
-        alpha=0.5,
-        linewidth=0.5,
-        color=colors[i],
-        legend=False,
-    )
+# for i, (operation_id, row) in enumerate(sub_df.iterrows()):
+#     sns.lineplot(
+#         y=row.values,
+#         x=mids,
+#         ax=ax,
+#         alpha=0.5,
+#         linewidth=0.5,
+#         color=colors[i],
+#         legend=False,
+#     )
 
 
 # %%
@@ -107,11 +107,15 @@ meta_diff_df
 # %%
 ctype_hues = load_casey_palette()
 column_mtypes = client.materialize.query_table(COLUMN_MTYPES_TABLE)
-column_mtypes = column_mtypes.set_index("pt_root_id")["cell_type"]
-column_mtypes
+
+# TODO need to redo this mapping via targets
+column_mtypes = column_mtypes.set_index("target_id")["cell_type"]
 
 root_ids = meta_diff_df.index.get_level_values("root_id").to_series()
-root_mtypes = root_ids.map(column_mtypes)
+
+root_mtypes = root_ids.map(manifest["target_id"]).map(column_mtypes)
+
+# %%
 root_id_ctype_hues = root_mtypes.map(ctype_hues)
 root_id_ctype_hues.index = root_id_ctype_hues.index.astype(str)
 
@@ -202,19 +206,30 @@ for i, feature in enumerate(
 
 
 savefig(
-    f"diffs-from-final-by-scheme-distance={distance}", fig, folder="sequence_metrics"
+    f"diffs-from-final-by-scheme-distance={distance}",
+    fig,
+    folder="sequence_output_metrics",
 )
 
 # %%
 
+root_ids = manifest.query("is_sample").index
 
-root_ids = np.random.choice(meta_diff_df.index.get_level_values("root_id").unique(), 20)
+# %%
+
+distance = "euclidean"
+distance_name_map = {
+    "euclidean": "Distance to final\n(euclidean)",
+    "cityblock": "Distance to final\n(manhattan)",
+    "jensenshannon": "Distance to final\n(Jensen-Shannon)",
+    "cosine": "Distance to final\n(cosine)",
+}
 for root_id in root_ids:
     fig, axs = plt.subplots(
-        4, 3, figsize=(16, 12), constrained_layout=True, sharey="row", sharex=False
+        3, 3, figsize=(16, 12), constrained_layout=True, sharey="row", sharex=False
     )
     for i, feature in enumerate(
-        ["counts_by_mtype", "props_by_mtype", "spatial_props", "spatial_props_by_mtype"]
+        ["props_by_mtype", "spatial_props", "spatial_props_by_mtype"]
     ):
         for j, scheme in enumerate(
             ["historical", "clean-and-merge-time", "clean-and-merge-random"]
@@ -288,10 +303,11 @@ for root_id in root_ids:
                     va="center",
                     rotation=0,
                 )
-                ax.set_ylabel(distance.capitalize())
+                ax.set_ylabel(distance_name_map[distance])
 
     savefig(
         f"diffs-from-final-by-scheme-distance={distance}-root_id={root_id}",
         fig,
-        folder="sequence_metrics",
+        folder="sequence_output_metrics",
+        doc_save=True,
     )

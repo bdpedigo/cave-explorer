@@ -7,7 +7,7 @@ from caveclient import CAVEclient
 from requests import HTTPError
 from sklearn.metrics import pairwise_distances_argmin
 
-from pkg.constants import DATA_PATH, MTYPES_TABLE, NUCLEUS_TABLE
+from pkg.constants import DATA_PATH, MTYPES_TABLE, NUCLEUS_TABLE, OUT_PATH
 
 
 def get_positions(
@@ -259,3 +259,9 @@ def load_mtypes(client: CAVEclient):
     mtypes = mtypes.query("pt_root_id in @root_id_singles")
     mtypes.set_index("pt_root_id", inplace=True)
     return mtypes
+
+
+def load_manifest():
+    path = OUT_PATH / "manifest" / "neuron_manifest.csv"
+    manifest = pd.read_csv(path, index_col=0)
+    return manifest

@@ -1,19 +1,18 @@
 # %%
 
 import pickle
-import time
 
 import caveclient as cc
 import numpy as np
 import pandas as pd
 from cloudfiles import CloudFiles
+from joblib import Parallel, delayed
 from sklearn.metrics import pairwise_distances
-from tqdm.auto import tqdm
 
 from pkg.constants import OUT_PATH
 from pkg.neuronframe import NeuronFrame, load_neuronframe
 from pkg.sequence import create_merge_and_clean_sequence, create_time_ordered_sequence
-from pkg.utils import load_mtypes
+from pkg.utils import load_manifest, load_mtypes
 
 # %%
 cloud_bucket = "allen-minnie-phase3"
@@ -30,7 +29,6 @@ files["root_id"] = files["file"].str.split("=").str[1].str.split("-").str[0].ast
 files["order_by"] = files["file"].str.split("=").str[2].str.split("-").str[0]
 files["random_seed"] = files["file"].str.split("=").str[3].str.split("-").str[0]
 
-
 file_counts = files.groupby("root_id").size()
 has_all = file_counts[file_counts == 12].index
 
@@ -39,12 +37,11 @@ files.loc[files["order_by"].notna(), "scheme"] = "clean-and-merge"
 
 files_finished = files.query("root_id in @has_all")
 
-# TODO rip out the above and replace with call to manifest
-
+manifest = load_manifest()
 # %%
 
 
-BINS = np.linspace(0, 1_000_000, 31)
+SPATIAL_BINS = np.linspace(0, 1_000_000, 31)
 
 
 def annotate_pre_synapses(neuron: NeuronFrame, mtypes: pd.DataFrame) -> None:
@@ -88,7 +85,7 @@ def annotate_pre_synapses(neuron: NeuronFrame, mtypes: pd.DataFrame) -> None:
     neuron.pre_synapses = neuron.pre_synapses.join(distance_df)
 
     neuron.pre_synapses["radial_to_nuc_bin"] = pd.cut(
-        neuron.pre_synapses["radial"], BINS
+        neuron.pre_synapses["radial"], SPATIAL_BINS
     )
 
     return None
@@ -111,7 +108,7 @@ def annotate_mtypes(neuron: NeuronFrame, mtypes: pd.DataFrame):
     )
     mtypes["radial_to_nuc"] = distance_to_nuc
 
-    mtypes["radial_to_nuc_bin"] = pd.cut(mtypes["radial_to_nuc"], BINS)
+    mtypes["radial_to_nuc_bin"] = pd.cut(mtypes["radial_to_nuc"], SPATIAL_BINS)
 
     return None
 
@@ -162,53 +159,30 @@ def apply_metadata(df, key):
 client = cc.CAVEclient("minnie65_phase3_v1")
 mtypes = load_mtypes(client)
 
-if False:
-    root_id = 864691134886015738
-    neuron = load_neuronframe(root_id, client)
-    annotate_pre_synapses(neuron, mtypes)
-    annotate_mtypes(neuron, mtypes)
-    order_by = "time"
-    random_seed = None
-    sequence = create_merge_and_clean_sequence(
-        neuron, root_id, order_by=order_by, random_seed=random_seed
-    )
-
 # %%
-
-total_time = time.time()
-
-load_neuron_time = 0
-annotate_time = 0
-load_sequence_time = 0
-counts_time = 0
-props_time = 0
-spatial_props_time = 0
-spatial_props_by_mtype_time = 0
-sequence_time = 0
 
 recompute = True
 save = True
 
-root_ids = files_finished["root_id"].unique()[:]
+root_ids = manifest.index
 all_infos = []
 all_sequence_features = {}
-pbar = tqdm(total=len(root_ids), desc="Computing target stats...")
-for root_id, rows in files_finished.query("root_id.isin(@root_ids)").groupby("root_id"):
-    currtime = time.time()
-    neuron = load_neuronframe(root_id, client)
-    load_neuron_time += time.time() - currtime
 
-    currtime = time.time()
+
+def process_for_neuron(root_id, rows):
+    neuron_infos = []
+    neuron_sequence_features = {}
+
+    neuron = load_neuronframe(root_id, client)
+
     annotate_pre_synapses(neuron, mtypes)
     annotate_mtypes(neuron, mtypes)
-    annotate_time += time.time() - currtime
 
     for keys, sub_rows in rows.groupby(
         ["scheme", "order_by", "random_seed"], dropna=False
     ):
         scheme, order_by, random_seed = keys
 
-        currtime = time.time()
         if scheme == "clean-and-merge":
             sequence = create_merge_and_clean_sequence(
                 neuron, root_id, order_by=order_by, random_seed=random_seed
@@ -218,36 +192,28 @@ for root_id, rows in files_finished.query("root_id.isin(@root_ids)").groupby("ro
             sequence = create_time_ordered_sequence(neuron, root_id)
         else:
             raise ValueError(f"Scheme {scheme} not recognized.")
-        load_sequence_time += time.time() - currtime
 
         sequence_key = (root_id, scheme, order_by, random_seed)
 
-        currtime = time.time()
         sequence_feature_dfs = {}
         counts_by_mtype = sequence.apply_to_synapses_by_sample(
             compute_target_counts, which="pre", by="post_mtype"
         )
         counts_by_mtype = apply_metadata(counts_by_mtype, sequence_key)
         sequence_feature_dfs["counts_by_mtype"] = counts_by_mtype
-        counts_time += time.time() - currtime
 
-        currtime = time.time()
         props_by_mtype = sequence.apply_to_synapses_by_sample(
             compute_target_proportions, which="pre", by="post_mtype"
         )
         props_by_mtype = apply_metadata(props_by_mtype, sequence_key)
         sequence_feature_dfs["props_by_mtype"] = props_by_mtype
-        props_time += time.time() - currtime
 
-        currtime = time.time()
         spatial_props = sequence.apply_to_synapses_by_sample(
             compute_spatial_target_proportions, which="pre", mtypes=mtypes
         )
         spatial_props = apply_metadata(spatial_props, sequence_key)
         sequence_feature_dfs["spatial_props"] = spatial_props
-        spatial_props_time += time.time() - currtime
 
-        currtime = time.time()
         spatial_props_by_mtype = sequence.apply_to_synapses_by_sample(
             compute_spatial_target_proportions,
             which="pre",
@@ -256,46 +222,52 @@ for root_id, rows in files_finished.query("root_id.isin(@root_ids)").groupby("ro
         )
         spatial_props_by_mtype = apply_metadata(spatial_props_by_mtype, sequence_key)
         sequence_feature_dfs["spatial_props_by_mtype"] = spatial_props_by_mtype
-        spatial_props_by_mtype_time += time.time() - currtime
 
-        all_sequence_features[sequence_key] = sequence_feature_dfs
+        neuron_sequence_features[sequence_key] = sequence_feature_dfs
 
-        currtime = time.time()
         info = sequence.sequence_info
         info["root_id"] = root_id
         info["scheme"] = scheme
         info["order_by"] = order_by
         info["random_seed"] = random_seed
-        all_infos.append(
+        neuron_infos.append(
             info.drop(["pre_synapses", "post_synapses", "applied_edits"], axis=1)
         )
-        sequence_time += time.time() - currtime
 
-    pbar.update(1)
+    return neuron_sequence_features, neuron_infos
 
-pbar.close()
 
-all_infos = pd.concat(all_infos)
+# %%
+
+inputs = [
+    (root_id, rows)
+    for root_id, rows in files_finished.query("root_id.isin(@root_ids)").groupby(
+        "root_id"
+    )
+]
+
+
+results = Parallel(n_jobs=8, verbose=10)(
+    delayed(process_for_neuron)(*input) for input in inputs
+)
+
+all_sequence_features = {}
+all_infos = []
+for result in results:
+    neuron_sequence_features, neuron_infos = result
+    all_sequence_features.update(neuron_sequence_features)
+    all_infos.extend(neuron_infos)
+
+
+# %%
+
+all_infos_df = pd.concat(all_infos)
 
 meta_features_df = pd.DataFrame(all_sequence_features).T
 meta_features_df.index.names = ["root_id", "scheme", "order_by", "random_seed"]
 
 if save:
     with open(OUT_PATH / "sequence_metrics" / "all_infos.pkl", "wb") as f:
-        pickle.dump(all_infos, f)
+        pickle.dump(all_infos_df, f)
     with open(OUT_PATH / "sequence_metrics" / "meta_features_df.pkl", "wb") as f:
         pickle.dump(meta_features_df, f)
-
-total_time = time.time() - total_time
-
-print(f"Total time: {total_time:.2f} seconds")
-print(f"Load neuron proportion: {load_neuron_time / total_time:.2f}")
-print(f"Annotate proportion: {annotate_time / total_time:.2f}")
-print(f"Load sequence proportion: {load_sequence_time / total_time:.2f}")
-print(f"Counts proportion: {counts_time / total_time:.2f}")
-print(f"Props proportion: {props_time / total_time:.2f}")
-print(f"Spatial props proportion: {spatial_props_time / total_time:.2f}")
-print(
-    f"Spatial props by mtype proportion: {spatial_props_by_mtype_time / total_time:.2f}"
-)
-print(f"Sequence proportion: {sequence_time / total_time:.2f}")

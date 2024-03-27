@@ -8,6 +8,7 @@ from .wrangle import (
     get_skeleton_nodes_edges,
     integerize_dict_keys,
     load_casey_palette,
+    load_manifest,
     load_mtypes,
     pt_to_xyz,
     stringize_dict_keys,
@@ -26,4 +27,5 @@ __all__ = [
     "find_closest_point",
     "load_casey_palette",
     "load_mtypes",
+    "load_manifest",
 ]
