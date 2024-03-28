@@ -11,7 +11,51 @@ filters:
 
 ### Historical ordering
 
-TODO: show a gallery of example cells, ordering over time 
+
+::: {#historical-ordering-props_by_mtype layout-ncol=4}
+
+![864691135082840567](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-root_id=864691135082840567.png){group="historical-ordering-props_by_mtype"}
+
+![864691135132887456](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-root_id=864691135132887456.png){group="historical-ordering-props_by_mtype"}
+
+![864691135135922201](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-root_id=864691135135922201.png){group="historical-ordering-props_by_mtype"}
+
+![864691135213953920](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-root_id=864691135213953920.png){group="historical-ordering-props_by_mtype"}
+
+![864691135292201142](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-root_id=864691135292201142.png){group="historical-ordering-props_by_mtype"}
+
+![864691135359413848](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-root_id=864691135359413848.png){group="historical-ordering-props_by_mtype"}
+
+![864691135502190941](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-root_id=864691135502190941.png){group="historical-ordering-props_by_mtype"}
+
+![864691135503003997](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-root_id=864691135503003997.png){group="historical-ordering-props_by_mtype"}
+
+![864691135518510218](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-root_id=864691135518510218.png){group="historical-ordering-props_by_mtype"}
+
+![864691135561619681](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-root_id=864691135561619681.png){group="historical-ordering-props_by_mtype"}
+
+![864691135564974423](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-root_id=864691135564974423.png){group="historical-ordering-props_by_mtype"}
+
+![864691135586352764](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-root_id=864691135586352764.png){group="historical-ordering-props_by_mtype"}
+
+![864691135660772080](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-root_id=864691135660772080.png){group="historical-ordering-props_by_mtype"}
+
+![864691135697284250](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-root_id=864691135697284250.png){group="historical-ordering-props_by_mtype"}
+
+![864691135808473885](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-root_id=864691135808473885.png){group="historical-ordering-props_by_mtype"}
+
+![864691135919630768](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-root_id=864691135919630768.png){group="historical-ordering-props_by_mtype"}
+
+![864691135995786154](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-root_id=864691135995786154.png){group="historical-ordering-props_by_mtype"}
+
+![864691136066728600](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-root_id=864691136066728600.png){group="historical-ordering-props_by_mtype"}
+
+![864691136618908301](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-root_id=864691136618908301.png){group="historical-ordering-props_by_mtype"}
+
+![864691136903387826](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-root_id=864691136903387826.png){group="historical-ordering-props_by_mtype"}
+
+:::
+
 
 TODO: introduce the notion of taking the distance from the final
 
@@ -37,7 +81,7 @@ TODO: same treatment as the above
 
 ### Neuron gallery 
 
-::: {#neuronwise-summary-gallery layout-ncol=5}
+::: {#neuronwise-summary-gallery layout-ncol=4}
 
 ![864691135082840567](result_images/sequence_output_metrics/diffs-from-final-by-scheme-distance=euclidean-root_id=864691135082840567.png){group="summary-gallery"}
 

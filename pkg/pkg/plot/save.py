@@ -15,6 +15,8 @@ def savefig(
     bbox_inches="tight",
     doc_save: bool = False,
     fig_path=None,
+    caption="",
+    group=None,
     **kwargs,
 ) -> None:
     if fig_path is None:
@@ -41,3 +43,8 @@ def savefig(
             doc_save=False,
             **kwargs,
         )
+        markdown_out = f"![{caption}](result_images/{folder}/{name}.{format})"
+        if group is not None:
+            markdown_out += "{" + f'group="{group}"' + "}"
+        print(markdown_out)
+        print()

@@ -9,10 +9,12 @@ import seaborn as sns
 from scipy.spatial.distance import cdist
 
 from pkg.constants import COLUMN_MTYPES_TABLE, OUT_PATH
-from pkg.plot import savefig
+from pkg.plot import savefig, set_context
 from pkg.utils import load_casey_palette, load_manifest, load_mtypes
 
 # %%
+
+set_context()
 
 client = cc.CAVEclient("minnie65_phase3_v1")
 mtypes = load_mtypes(client)
@@ -124,7 +126,6 @@ root_id_ctype_hues.index = root_id_ctype_hues.index.astype(str)
 # TODO make it so that the X-axes align? i think this just means getting rid of some
 # unconsequential edits from the log in the historical
 
-sns.set_context("paper", font_scale=2)
 
 fig, axs = plt.subplots(
     3, 3, figsize=(16, 12), constrained_layout=True, sharey="row", sharex=False
@@ -216,6 +217,39 @@ savefig(
 root_ids = manifest.query("is_sample").index
 
 # %%
+# plotting the historical ordering for example cells
+
+feature = "props_by_mtype"
+scheme = "historical"
+for root_id in root_ids:
+    historical_df: pd.DataFrame
+    historical_df = meta_features_df.loc[idx[root_id, scheme, :, :]][feature].iloc[0]
+    fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+    historical_df_long = historical_df.melt(
+        ignore_index=False, value_name="probability"
+    ).reset_index()
+    sns.lineplot(
+        data=historical_df_long,
+        x="order",
+        y="probability",
+        hue="post_mtype",
+        ax=ax,
+        legend=False,
+        palette=ctype_hues,
+    )
+    ax.set(ylabel="Proportion of outputs", xlabel="Operation")
+    savefig(
+        f"{scheme}-ordering-{feature}-root_id={root_id}",
+        fig,
+        folder="sequence_output_metrics",
+        doc_save=True,
+        group=f"{scheme}-ordering-{feature}",
+        caption=root_id,
+    )
+
+# %%
+
+# plotting everything in a 3x3
 
 distance = "euclidean"
 distance_name_map = {
