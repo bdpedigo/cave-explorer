@@ -101,6 +101,10 @@ root_id_ctype_hues = root_mtypes.map(ctype_hues)
 root_id_ctype_hues.index = root_id_ctype_hues.index.astype(str)
 
 # %%
+XLABEL = "# operations"
+
+# %%
+
 
 # TODO make it so that the X-axes align? i think this just means getting rid of some
 # unconsequential edits from the log in the historical
@@ -169,7 +173,7 @@ for i, feature in enumerate(
         if i == 0:
             ax.set_title(scheme_map[scheme])
         if i == 2:
-            ax.set_xlabel("# operations")
+            ax.set_xlabel(XLABEL)
         else:
             ax.set_xlabel("")
         if j == 0:
@@ -216,7 +220,7 @@ for root_id in example_root_ids:
         legend=False,
         palette=ctype_hues,
     )
-    ax.set(ylabel="Proportion of outputs", xlabel="Operation")
+    ax.set(ylabel="Proportion of outputs", xlabel=XLABEL)
     savefig(
         f"{scheme}-ordering-{feature}-root_id={root_id}",
         fig,
@@ -246,8 +250,10 @@ for root_id in example_root_ids:
             y=metric,
             ax=ax,
             label=metric,
+            color=distance_palette[metric],
+            linewidth=2,
         )
-        ax.set(ylabel="Distance to final", xlabel="Operation")
+        ax.set(ylabel="Distance to final", xlabel=XLABEL)
         ax.legend
 
     savefig(
@@ -296,7 +302,7 @@ sns.lineplot(
     color="red",
     zorder=2,
 )
-ax.set(ylabel="Distance to final", xlabel="Operation")
+ax.set(ylabel="Distance to final", xlabel=XLABEL)
 
 savefig(
     f"historical-ordering-props_by_mtype-distance={distance}-summary",
@@ -372,7 +378,7 @@ for root_id in example_root_ids:
         alpha=1,
         zorder=2,
     )
-    ax.set(ylabel="Proportion of outputs", xlabel="Operations")
+    ax.set(ylabel="Proportion of outputs", xlabel=XLABEL)
     savefig(
         f"{scheme}-ordering-{feature}-root_id={root_id}",
         fig,
@@ -383,7 +389,6 @@ for root_id in example_root_ids:
     )
 
 # %%
-
 
 
 for root_id in example_root_ids:
@@ -430,8 +435,18 @@ for root_id in example_root_ids:
         legend=False,
         zorder=2,
     )
-    ax.set(ylabel="Distance to final", xlabel="Operation")
+    ax.set(ylabel="Distance to final", xlabel=XLABEL)
 
+    savefig(
+        f"{scheme}-ordering-{feature}-distance-root_id={root_id}",
+        fig,
+        folder="sequence_output_metrics",
+        doc_save=True,
+        group=f"{scheme}-ordering-{feature}-distance",
+        caption=root_id,
+    )
+
+    
 
 # %%
 
@@ -510,7 +525,7 @@ for root_id in example_root_ids:
             if i == 0:
                 ax.set_title(scheme_map[scheme])
             if i == 2:
-                ax.set_xlabel("# operations")
+                ax.set_xlabel(XLABEL)
             else:
                 ax.set_xlabel("")
             if j == 0:
