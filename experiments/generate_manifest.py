@@ -40,6 +40,8 @@ files_finished.to_csv(
 
 # %%
 roots = files_finished["root_id"].unique()[:]
+n_finished = len(roots)
+write_variable(n_finished, "manifest-n_finished")
 neuron_manifest = pd.DataFrame(index=roots)
 neuron_manifest.index.name = "working_root_id"
 

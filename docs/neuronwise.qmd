@@ -11,8 +11,9 @@ filters:
 
 ### Historical ordering
 
+#### Features over proofreading
 
-::: {#historical-ordering-props_by_mtype layout-ncol=4}
+:::{#fig-historical-ordering-props_by_mtype layout-ncol=4}
 
 ![864691135082840567](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-root_id=864691135082840567.png){group="historical-ordering-props_by_mtype"}
 
@@ -54,18 +55,122 @@ filters:
 
 ![864691136903387826](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-root_id=864691136903387826.png){group="historical-ordering-props_by_mtype"}
 
+Proportion of outputs shown for {{< var manifest-n_samples >}} example neurons. This
+feature measures the proportion of a neuron's outputs which go onto various different 
+classes of downstream neuron. Colors denote different broad cell type classes (from table `{{< var MTYPES_TABLE >}}`). 
 :::
 
+#### Feature distances from final
 
-TODO: introduce the notion of taking the distance from the final
+To simplify things, we can consider these features in terms of how similar they are to 
+that feature computed at the end of proofreading. 
 
-TODO: show some kind of summary statistics: 
-    - Lineplots, one for each neuron
-    - Some kind of vertical histogram - just not sure what the normalization here should be
+:::{.callout-note title="Math"}
+Let $x_i$ be the feature
+for a given neuron at time index $i$, and let $x_{final}$ be defined similarly for the 
+final state of the neuron after every proofreading edit has been applied. Now, we can 
+compute 
 
-### Artificial ordering
+$$d_i = d(x_i, x_{final})$$
 
-TODO: show a gallery of example cells, ordering with one of the artificial schemes
+where $d(., .)$ is some suitable distance function/metric, for instance, euclidean distance,
+Jensen-Shannon divergence, etc. 
+:::
+
+:::{#fig-historical-ordering-props_by_mtype-distance layout-ncol="4"}
+
+![864691135082840567](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-distance-root_id=864691135082840567.png){group="historical-ordering-props_by_mtype-distance"}
+
+![864691135132887456](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-distance-root_id=864691135132887456.png){group="historical-ordering-props_by_mtype-distance"}
+
+![864691135135922201](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-distance-root_id=864691135135922201.png){group="historical-ordering-props_by_mtype-distance"}
+
+![864691135213953920](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-distance-root_id=864691135213953920.png){group="historical-ordering-props_by_mtype-distance"}
+
+![864691135292201142](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-distance-root_id=864691135292201142.png){group="historical-ordering-props_by_mtype-distance"}
+
+![864691135359413848](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-distance-root_id=864691135359413848.png){group="historical-ordering-props_by_mtype-distance"}
+
+![864691135502190941](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-distance-root_id=864691135502190941.png){group="historical-ordering-props_by_mtype-distance"}
+
+![864691135503003997](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-distance-root_id=864691135503003997.png){group="historical-ordering-props_by_mtype-distance"}
+
+![864691135518510218](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-distance-root_id=864691135518510218.png){group="historical-ordering-props_by_mtype-distance"}
+
+![864691135561619681](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-distance-root_id=864691135561619681.png){group="historical-ordering-props_by_mtype-distance"}
+
+![864691135564974423](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-distance-root_id=864691135564974423.png){group="historical-ordering-props_by_mtype-distance"}
+
+![864691135586352764](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-distance-root_id=864691135586352764.png){group="historical-ordering-props_by_mtype-distance"}
+
+![864691135660772080](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-distance-root_id=864691135660772080.png){group="historical-ordering-props_by_mtype-distance"}
+
+![864691135697284250](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-distance-root_id=864691135697284250.png){group="historical-ordering-props_by_mtype-distance"}
+
+![864691135808473885](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-distance-root_id=864691135808473885.png){group="historical-ordering-props_by_mtype-distance"}
+
+![864691135919630768](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-distance-root_id=864691135919630768.png){group="historical-ordering-props_by_mtype-distance"}
+
+![864691135995786154](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-distance-root_id=864691135995786154.png){group="historical-ordering-props_by_mtype-distance"}
+
+![864691136066728600](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-distance-root_id=864691136066728600.png){group="historical-ordering-props_by_mtype-distance"}
+
+![864691136618908301](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-distance-root_id=864691136618908301.png){group="historical-ordering-props_by_mtype-distance"}
+
+![864691136903387826](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-distance-root_id=864691136903387826.png){group="historical-ordering-props_by_mtype-distance"}
+
+Distance from final neuron state over time in the historical ordering for the proportion of inputs metric. 
+:::
+
+![Euclidean distance from final neuron state plotted for all {{< var manifest-n_finished >}} neurons. Red line shows the mean +/i 95% bootstrapped confience intervals.](result_images/sequence_output_metrics/historical-ordering-props_by_mtype-distance=euclidean-summary.png){#fig-historical-ordering-props_by_mtype-distance-euclidean-summary}
+
+TODO: Some kind of vertical histogram - just not sure what the normalization here should be
+
+### Clean-and-merge ordering
+
+::: {#fig-clean-and-merge-ordering-props_by_mtype layout-ncol="4"}
+
+![864691135082840567](result_images/sequence_output_metrics/clean-and-merge-ordering-props_by_mtype-root_id=864691135082840567.png){group="clean-and-merge-ordering-props_by_mtype"}
+
+![864691135132887456](result_images/sequence_output_metrics/clean-and-merge-ordering-props_by_mtype-root_id=864691135132887456.png){group="clean-and-merge-ordering-props_by_mtype"}
+
+![864691135135922201](result_images/sequence_output_metrics/clean-and-merge-ordering-props_by_mtype-root_id=864691135135922201.png){group="clean-and-merge-ordering-props_by_mtype"}
+
+![864691135213953920](result_images/sequence_output_metrics/clean-and-merge-ordering-props_by_mtype-root_id=864691135213953920.png){group="clean-and-merge-ordering-props_by_mtype"}
+
+![864691135292201142](result_images/sequence_output_metrics/clean-and-merge-ordering-props_by_mtype-root_id=864691135292201142.png){group="clean-and-merge-ordering-props_by_mtype"}
+
+![864691135359413848](result_images/sequence_output_metrics/clean-and-merge-ordering-props_by_mtype-root_id=864691135359413848.png){group="clean-and-merge-ordering-props_by_mtype"}
+
+![864691135502190941](result_images/sequence_output_metrics/clean-and-merge-ordering-props_by_mtype-root_id=864691135502190941.png){group="clean-and-merge-ordering-props_by_mtype"}
+
+![864691135503003997](result_images/sequence_output_metrics/clean-and-merge-ordering-props_by_mtype-root_id=864691135503003997.png){group="clean-and-merge-ordering-props_by_mtype"}
+
+![864691135518510218](result_images/sequence_output_metrics/clean-and-merge-ordering-props_by_mtype-root_id=864691135518510218.png){group="clean-and-merge-ordering-props_by_mtype"}
+
+![864691135561619681](result_images/sequence_output_metrics/clean-and-merge-ordering-props_by_mtype-root_id=864691135561619681.png){group="clean-and-merge-ordering-props_by_mtype"}
+
+![864691135564974423](result_images/sequence_output_metrics/clean-and-merge-ordering-props_by_mtype-root_id=864691135564974423.png){group="clean-and-merge-ordering-props_by_mtype"}
+
+![864691135586352764](result_images/sequence_output_metrics/clean-and-merge-ordering-props_by_mtype-root_id=864691135586352764.png){group="clean-and-merge-ordering-props_by_mtype"}
+
+![864691135660772080](result_images/sequence_output_metrics/clean-and-merge-ordering-props_by_mtype-root_id=864691135660772080.png){group="clean-and-merge-ordering-props_by_mtype"}
+
+![864691135697284250](result_images/sequence_output_metrics/clean-and-merge-ordering-props_by_mtype-root_id=864691135697284250.png){group="clean-and-merge-ordering-props_by_mtype"}
+
+![864691135808473885](result_images/sequence_output_metrics/clean-and-merge-ordering-props_by_mtype-root_id=864691135808473885.png){group="clean-and-merge-ordering-props_by_mtype"}
+
+![864691135919630768](result_images/sequence_output_metrics/clean-and-merge-ordering-props_by_mtype-root_id=864691135919630768.png){group="clean-and-merge-ordering-props_by_mtype"}
+
+![864691135995786154](result_images/sequence_output_metrics/clean-and-merge-ordering-props_by_mtype-root_id=864691135995786154.png){group="clean-and-merge-ordering-props_by_mtype"}
+
+![864691136066728600](result_images/sequence_output_metrics/clean-and-merge-ordering-props_by_mtype-root_id=864691136066728600.png){group="clean-and-merge-ordering-props_by_mtype"}
+
+![864691136618908301](result_images/sequence_output_metrics/clean-and-merge-ordering-props_by_mtype-root_id=864691136618908301.png){group="clean-and-merge-ordering-props_by_mtype"}
+
+![864691136903387826](result_images/sequence_output_metrics/clean-and-merge-ordering-props_by_mtype-root_id=864691136903387826.png){group="clean-and-merge-ordering-props_by_mtype"}
+
+:::
 
 TODO: distance from final for the same neurons
 
@@ -81,7 +186,7 @@ TODO: same treatment as the above
 
 ### Neuron gallery 
 
-::: {#neuronwise-summary-gallery layout-ncol=4}
+::: {#fig-neuronwise-summary-gallery layout-ncol=4}
 
 ![864691135082840567](result_images/sequence_output_metrics/diffs-from-final-by-scheme-distance=euclidean-root_id=864691135082840567.png){group="summary-gallery"}
 
