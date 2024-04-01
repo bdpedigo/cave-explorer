@@ -240,7 +240,7 @@ synapselist = synapselist_at_time(pd.to_datetime("2021-07-01 00:00:00", utc=True
 
 # nodes = pd.DataFrame()
 # nodes.index = root_options
-timestamps = pd.date_range("2020-07-01", "2024-03-01", freq="M", tz="UTC")
+timestamps = pd.date_range("2020-04-01", "2024-03-01", freq="M", tz="UTC")
 
 used_nodes = nodes.query("working_root_id in @root_options")
 nfs_by_time = {}
@@ -260,6 +260,10 @@ for timestamp in timestamps:
     n_edits_per_neuron = applied_edits.groupby("root_id").size()
     nf = nfs_by_time[timestamp]
     nf.nodes["n_edits"] = nf.nodes.index.map(n_edits_per_neuron)
+
+# %%
+timebins = pd.cut(all_edits["timestamp"], bins=timestamps, right=True)
+n_edits_by_time = timebins.value_counts().sort_index().cumsum()
 
 # %%
 final_nf = nfs_by_time[timestamps[-1]]
@@ -424,3 +428,72 @@ ax.set_ylabel("Network dissimilarity (F-norm)")
 ax.set_xlabel("Time")
 
 savefig("n-edits-net-dissimilarity", fig, folder="induced_subgraph", doc_save=True)
+
+# %%
+
+synapse_counts_by_time = {}
+for timestamp in timestamps:
+    nf: NetworkFrame = nfs_by_time[timestamp]
+    groupby = nf.groupby_nodes("mtype")
+    synapse_counts = groupby.apply_edges("size")
+    synapse_counts_by_time[timestamp] = synapse_counts
+    synapse_counts.name = timestamp
+
+    node_counts = nf.nodes.groupby("mtype").size()
+    possible_edges = node_counts.values[:, None] * node_counts.values[None, :]
+    possible_edges = pd.DataFrame(
+        possible_edges, index=node_counts.index, columns=node_counts.index
+    )
+# %%
+synapse_counts_by_time = pd.concat(synapse_counts_by_time, axis=1)
+
+# %%
+synapse_counts_by_time_long = synapse_counts_by_time.melt(
+    ignore_index=False, var_name="timestamp", value_name="n_synapses"
+).reset_index()
+synapse_counts_by_time_long["connection"] = list(
+    zip(
+        synapse_counts_by_time_long["source_mtype"],
+        synapse_counts_by_time_long["target_mtype"],
+    )
+)
+synapse_counts_by_time_long["cumulative_n_operations"] = (
+    synapse_counts_by_time_long["timestamp"].map(n_edits_by_time).fillna(0).astype(int)
+)
+# %%
+fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+sns.lineplot(
+    data=synapse_counts_by_time_long,
+    x="timestamp",
+    y="n_synapses",
+    hue="connection",
+    legend=False,
+    ax=ax,
+)
+# rotate x labels
+ax.get_xaxis().set_tick_params(rotation=45)
+ax.set(ylabel="# synapses (groupwise)", xlabel="Time")
+
+fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+sns.lineplot(
+    data=synapse_counts_by_time_long,
+    x="cumulative_n_operations",
+    y="n_synapses",
+    hue="connection",
+    legend=False,
+    ax=ax,
+)
+# rotate x labels
+ax.get_xaxis().set_tick_params(rotation=45)
+ax.set(ylabel="# synapses (groupwise)", xlabel="# operations")
+
+
+# %%
+from sklearn.model_selection import StratifiedShuffleSplit
+
+sss = StratifiedShuffleSplit(n_splits=10, test_size=0.5, random_state=88)
+
+nodes = final_nf.nodes
+for sub_ilocs, _ in sss.split(nodes.index, nodes["mtype"]):
+    subnodes = nodes.iloc[sub_ilocs]
+    subnodes.groupby("mtype").size()
