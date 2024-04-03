@@ -364,14 +364,19 @@ stats_by_strategy.index.set_names(
 synapse_group_counts_by_strategy = []
 for key, nf in nfs_by_strategy.items():
     groupby = nf.groupby_nodes("mtype")
+    node_counts = nf.nodes.groupby("mtype").size()
     synapse_counts = groupby.apply_edges("size")
-    synapse_counts.name = "n_synapses"
-    synapse_counts = synapse_counts.to_frame()
+    avg_synapses_per_type = synapse_counts.unstack() / node_counts
+    avg_synapses_per_type = avg_synapses_per_type.stack().rename("avg_synapses")
+
+    # synapse_counts.name = "n_synapses"
+    synapse_counts = avg_synapses_per_type.to_frame()
     synapse_counts["p_neurons"] = key[0]
     synapse_counts["p_neuron_effort"] = key[1]
     synapse_counts["split"] = key[2]
     # synapse_counts.name = key
     synapse_group_counts_by_strategy.append(synapse_counts)
+    # synapse_group_counts_by_strategy.append(synapse_counts)
 
 synapse_group_counts_by_strategy = pd.concat(synapse_group_counts_by_strategy)
 synapse_group_counts_by_strategy
@@ -401,36 +406,51 @@ synapse_group_counts_by_strategy["strategy"] = list(
         synapse_group_counts_by_strategy["p_neuron_effort"],
     )
 )
-# %%
-synapse_group_counts_by_strategy["p_synapses"] = (
-    synapse_group_counts_by_strategy["n_synapses"]
-    / synapse_group_counts_by_strategy["p_neurons"]
-)
+# # %%
+# synapse_group_counts_by_strategy["p_synapses"] = (
+#     synapse_group_counts_by_strategy["n_synapses"]
+#     / synapse_group_counts_by_strategy["p_neurons"]
+# )
 
 # %%
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 fig, axs = plt.subplots(
-    4, 4, figsize=(10, 10), sharex=True, sharey=False, constrained_layout=True
+    4, 4, figsize=(12, 10), sharex=True, sharey=False, constrained_layout=True
 )
-axs = pd.DataFrame(
-    axs,
-    index=synapse_group_counts_by_strategy["source_mtype"].unique(),
-    columns=synapse_group_counts_by_strategy["target_mtype"].unique(),
-)
+row_index = pd.Index(synapse_group_counts_by_strategy["source_mtype"].unique())
+col_index = pd.Index(synapse_group_counts_by_strategy["target_mtype"].unique())
+
 for source_mtype, sub_df in synapse_group_counts_by_strategy.groupby("source_mtype"):
     for target_mtype, sub_sub_df in sub_df.groupby("target_mtype"):
-        ax = axs.loc[source_mtype, target_mtype]
+        i = row_index.get_loc(source_mtype)
+        j = col_index.get_loc(target_mtype)
+        ax = axs[i, j]
+        if i == 0 and j == 3:
+            show_legend = True
+        else:
+            show_legend = False
         sns.scatterplot(
             data=sub_sub_df,
             x="n_select_edits",
-            y="p_synapses",
-            hue="strategy",
+            y="avg_synapses",
+            style="p_neurons",
+            hue="p_neuron_effort",
+            palette="tab10",
             ax=ax,
-            legend=False,
+            legend=show_legend,
+            s=20,
         )
+        if show_legend:
+            sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
 
+        ax.set(title=f"{source_mtype}" + r"$\rightarrow$" + f"{target_mtype}")
+
+# for i in range(4):
+#     axs[i, 4].axis("off")
+#     # i += 1
+# plt.tight_layout()
 # Need to generalize this better for arbitrary metrics on the subgraph, or something like that
 # redo this but using the average number of synapses from a group k neuron to a groul l neuron
 # as the metric of interest

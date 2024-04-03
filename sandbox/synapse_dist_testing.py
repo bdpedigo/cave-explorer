@@ -7,9 +7,16 @@ import numpy as np
 import pandas as pd
 import pcg_skel
 from networkframe import NetworkFrame
+from nglui.statebuilder import (
+    AnnotationLayerConfig,
+    ChainedStateBuilder,
+    PointMapper,
+    StateBuilder,
+)
 from nglui.statebuilder.helpers import (
     make_neuron_neuroglancer_link,
     make_pre_post_statebuilder,
+    package_state,
 )
 from scipy.sparse.csgraph import dijkstra
 from scipy.stats.contingency import chi2_contingency
@@ -27,8 +34,49 @@ proofreading_df = client.materialize.query_table("proofreading_status_public_rel
 
 # %%
 
-root_id = proofreading_df.query("valid_id != pt_root_id")["pt_root_id"].iloc[0]
-make_neuron_neuroglancer_link(client, root_id, show_outputs=True)
+i = 6  # index of neuron to examine
+root_id = int(proofreading_df.query("valid_id != pt_root_id")["valid_id"].iloc[i])
+current_root_id = int(
+    proofreading_df.query("valid_id != pt_root_id")["pt_root_id"].iloc[i]
+)
+# %%
+
+# find the time when the root_id was created
+root_lineage = client.chunkedgraph.get_lineage_graph(root_id)
+
+for node in root_lineage["nodes"]:
+    if root_id == node["id"]:
+        operation_id = node["operation_id"]
+        break
+
+details = client.chunkedgraph.get_operation_details([operation_id])
+timestamp = details[str(operation_id)]["timestamp"]
+timestamp = pd.to_datetime(timestamp, utc=True)
+
+# %%
+current_root_lineage = client.chunkedgraph.get_lineage_graph(current_root_id)
+
+# %%
+# find the operations that have happened since the current root was created
+
+operations_current = pd.DataFrame(current_root_lineage["nodes"]).dropna()
+operations_old = pd.DataFrame(root_lineage["nodes"]).dropna()
+
+new_operations = np.setdiff1d(
+    operations_current["operation_id"], operations_old["operation_id"]
+).astype(int)
+
+# %%
+operation_details = pd.DataFrame(
+    client.chunkedgraph.get_operation_details(new_operations)
+).T
+if "added_edges" in operation_details.columns:
+    operation_details["is_merge"] = operation_details["added_edges"].notna()
+elif "removed_edges" in operation_details.columns:
+    operation_details["is_merge"] = ~operation_details["removed_edges"].notna()
+
+
+# %%
 
 
 def make_neuron_neuroglancer_state(
@@ -156,14 +204,20 @@ def make_neuron_neuroglancer_state(
     return sbs, dataframes
 
 
-sbs, dfs = make_neuron_neuroglancer_state(client, root_id, show_outputs=True)
-
-from nglui.statebuilder import ChainedStateBuilder
-from nglui.statebuilder.helpers import package_state
+sbs, dfs = make_neuron_neuroglancer_state(
+    client,
+    current_root_id,
+    show_outputs=True,  # timestamp=timestamp
+)
+# dfs[0].loc[1, "root_id"] = current_root_id
+# dfs[0]["root_id"] = dfs[0]["root_id"].astype(int)
 
 sb = ChainedStateBuilder(sbs)
 
 package_state(dfs, sb, client, return_as="html")
+
+# %%
+# make_neuron_neuroglancer_link(client, [root_id, current_root_id])
 
 # %%
 neuron = pcg_skel.coord_space_meshwork(
@@ -171,12 +225,8 @@ neuron = pcg_skel.coord_space_meshwork(
     client=client,
     synapses="all",
     synapse_table=client.materialize.synapse_table,
+    timestamp=timestamp,
 )
-
-# %%
-# TODO zoom in on the edits that are causing this difference
-# see if i can find an actual mistake
-
 
 # %%
 skeleton_edges = neuron.skeleton.edges
@@ -203,6 +253,7 @@ weighted_adj = skeleton_nf.to_sparse_adjacency(weight_col="distance")
 
 # %%
 
+# find the nodes w/in x nanometers of each node upstream or downstream
 distance_max_nm = 50_000
 downstream_path_dists = dijkstra(weighted_adj, directed=True, limit=distance_max_nm)
 in_downstream = ~np.isinf(downstream_path_dists)
@@ -318,25 +369,43 @@ test_results = pd.DataFrame(test_results).set_index("skeleton_node")
 test_results = test_results.join(skeleton_nf.nodes)
 test_results
 
-# %%
 
 # %%
+sbs, dfs = make_neuron_neuroglancer_state(client, current_root_id, show_outputs=False)
 
-from nglui.statebuilder import AnnotationLayerConfig, PointMapper, StateBuilder
+
+# %%
 
 plot_results = test_results.query("pvalue < 0.05").rename(
     columns={"x": "_x", "y": "_y", "z": "_z"}
 )
-mapper = PointMapper(point_column="", split_positions=True)
+if not plot_results.empty:
+    mapper = PointMapper(point_column="", split_positions=True)
+    line_layer = AnnotationLayerConfig(
+        name="sig_points",
+        data_resolution=[1, 1, 1],
+        mapping_rules=mapper,
+    )
+    line_state = StateBuilder([line_layer], client=client)
+    sbs.append(line_state)
+    dfs.append(plot_results)
+
+    # sb = ChainedStateBuilder(sbs)
+    # out = package_state(dfs, sb, client, return_as="html")
+
+
+seg_res = client.chunkedgraph.base_resolution
+mapper = PointMapper(point_column="sink_coords", split_positions=False)
 line_layer = AnnotationLayerConfig(
-    name="sig_points",
-    data_resolution=[1, 1, 1],
+    name="operations_points",
+    data_resolution=seg_res,
     mapping_rules=mapper,
+    color="blue",
 )
 line_state = StateBuilder([line_layer], client=client)
 sbs.append(line_state)
-dfs.append(plot_results)
+dfs.append(operation_details)
 
-# %%
 sb = ChainedStateBuilder(sbs)
-package_state(dfs, sb, client, return_as="html")
+out = package_state(dfs, sb, client, return_as="html")
+out

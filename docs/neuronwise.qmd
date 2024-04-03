@@ -215,7 +215,8 @@ TODO: Some kind of vertical histogram - just not sure what the normalization her
 
 :::
 
-TODO: summary statistic plot for all neurons
+
+![](result_images/sequence_output_metrics/clean-and-merge-ordering-props_by_mtype-distance=euclidean-summary.png)
 
 ## Outputs by distance metric
 

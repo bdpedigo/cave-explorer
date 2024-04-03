@@ -432,10 +432,11 @@ for root_id in example_root_ids:
         linewidth=2,
         alpha=1,
         palette=distance_palette,
-        legend=False,
+        legend=True,
         zorder=2,
     )
     ax.set(ylabel="Distance to final", xlabel=XLABEL)
+    sns.move_legend(ax, "upper right", title="Distance type")
 
     savefig(
         f"{scheme}-ordering-{feature}-distance-root_id={root_id}",
@@ -446,6 +447,64 @@ for root_id in example_root_ids:
         caption=root_id,
     )
 
+# %%
+
+# look at a summary plot showing distance from final ('euclidean') for all cells in
+# historical ordering, all on the same axes
+
+distance = "euclidean"
+feature = "props_by_mtype"
+fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+diff_df = pd.concat(
+    meta_diff_df.loc[idx[:, "clean-and-merge", :, :], feature].to_list()
+)
+cumulative_n_operations = diff_df.droplevel(["metaoperation_id"]).index.map(
+    info["cumulative_n_operations"]
+)
+cumulative_n_operations = cumulative_n_operations.to_series()
+cumulative_n_operations.index = diff_df.index
+diff_df_long = diff_df.melt(
+    ignore_index=False, value_name="distance", var_name="distance_type"
+).reset_index(drop=False)
+diff_df_long["cumulative_n_operations"] = diff_df_long.set_index(
+    ["root_id", "scheme", "order_by", "random_seed", "metaoperation_id", "order"]
+).index.map(cumulative_n_operations)
+diff_df_long["sequence"] = list(
+    zip(
+        diff_df_long["root_id"],
+        diff_df_long["random_seed"],
+    )
+)
+sns.lineplot(
+    data=diff_df_long.query("distance_type == @distance").query('order_by == "random"'),
+    x="cumulative_n_operations",
+    y="distance",
+    units="sequence",
+    estimator=None,
+    ax=ax,
+    legend=False,
+    alpha=0.2,
+    linewidth=0.2,
+    color="black",
+    zorder=-1,
+)
+sns.lineplot(
+    data=diff_df_long.query("distance_type == @distance").query('order_by == "random"'),
+    x="cumulative_n_operations",
+    y="distance",
+    ax=ax,
+    legend=False,
+    color="red",
+    zorder=2,
+)
+ax.set(ylabel="Distance to final", xlabel=XLABEL)
+
+savefig(
+    f"clean-and-merge-ordering-props_by_mtype-distance={distance}-summary",
+    fig,
+    folder="sequence_output_metrics",
+    doc_save=True,
+)
 
 
 
