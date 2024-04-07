@@ -208,9 +208,11 @@ for root_id in example_root_ids:
     historical_df: pd.DataFrame
     historical_df = meta_features_df.loc[idx[root_id, scheme, :, :]][feature].iloc[0]
     fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-    historical_df_long = historical_df.melt(
-        ignore_index=False, value_name="probability"
-    ).reset_index()
+    historical_df_long = (
+        historical_df.melt(ignore_index=False, value_name="probability")
+        .reset_index()
+        .fillna(0)
+    )
     sns.lineplot(
         data=historical_df_long,
         x="order",
@@ -229,6 +231,10 @@ for root_id in example_root_ids:
         group=f"{scheme}-ordering-{feature}",
         caption=root_id,
     )
+
+
+# %%
+
 
 # %%
 
@@ -505,7 +511,6 @@ savefig(
     folder="sequence_output_metrics",
     doc_save=True,
 )
-
 
 
 # %%

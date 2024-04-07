@@ -49,6 +49,9 @@ def load_mw(directory, filename):
 
 neuron = load_mw(skel_path, filename)
 neuron.reset_mask()
+#%%
+cf = CloudFiles(skel_path)
+binary = cf.get([filename])
 
 # %%
 nodes = neuron.anno.lvl2_ids.df.copy()

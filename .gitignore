@@ -168,3 +168,7 @@ docs/_site/
 edits.gif
 summary.csv
 summary_old.csv
+test_loader.pt
+train_loader.pt
+full_y_df.csv
+full_X_df.csv
