@@ -44,11 +44,11 @@ extended_df = proofreading_df.query(
 # %%
 from pkg.features import L2FeatureExtractor
 
-feature_extractor = L2FeatureExtractor(client, verbose=2)
-
 root_id = extended_df["valid_id"].iloc[0]
+root_ids = extended_df["valid_id"].iloc[:8]
 
-node_features = feature_extractor.get_features(root_id)
+feature_extractor = L2FeatureExtractor(client, verbose=2, n_jobs=8)
+node_features = feature_extractor.get_features(root_ids)
 
 node_features.head()
 

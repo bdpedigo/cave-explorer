@@ -88,45 +88,57 @@ class L2FeatureExtractor:
         self.drop_self_in_neighborhood = drop_self_in_neighborhood
 
     def print(self, msg, level=0):
-        if self.verbose >= level:
+        if self.verbose >= level and self.n_jobs == 1:
             print(msg)
 
-    def get_features(self, object_ids, neighborhood_hops=5):
+    def get_features(self, object_ids, neighborhood_hops=5, bounds=None):
         if isinstance(object_ids, (int, np.integer)):
             object_ids = [object_ids]
 
-        missing_object_ids = []
-        data_by_object = []
-        for object_id in object_ids:
-            self.print(f"Extracting features for object {object_id}", level=2)
-            object_node_data = self._extract_node_features(object_id)
-            if object_node_data is None:
-                missing_object_ids.append(object_id)
-                continue
+        if self.n_jobs == 1:
+            data_by_object = []
+            for object_id in object_ids:
+                object_node_data = self._extract_for_object(
+                    object_id, neighborhood_hops, bounds
+                )
+                data_by_object.append(object_node_data)
+        else:
+            import joblib
 
-            self.print(f"Extracting level 2 graph for object {object_id}", level=2)
-            object_edges = self._extract_edges(object_id)
-            object_nf = NetworkFrame(object_node_data, object_edges)
-
-            self.print(
-                f"Extracting neighborhood features for object {object_id}", level=2
+            data_by_object = joblib.Parallel(n_jobs=self.n_jobs, verbose=self.verbose)(
+                joblib.delayed(self._extract_for_object)(object_id, neighborhood_hops)
+                for object_id in object_ids
             )
-            object_neighborhood_features = self._compute_neighborhood_features(
-                object_nf, k=neighborhood_hops
-            )
-
-            object_node_data = object_node_data.join(object_neighborhood_features)
-
-            object_node_data["object_id"] = object_id
-            data_by_object.append(object_node_data)
 
         node_data = pd.concat(data_by_object)
         node_data.reset_index(inplace=True)
         node_data.set_index(["object_id", "l2_id"], inplace=True)
         return node_data
 
-    def _extract_node_features(self, object_id):
-        l2_ids = self.client.chunkedgraph.get_leaves(object_id, stop_layer=2)
+    def _extract_for_object(self, object_id, neighborhood_hops, bounds):
+        self.print(f"Extracting features for object {object_id}", level=2)
+        object_node_data = self._extract_node_features(object_id, bounds)
+        if object_node_data is None:
+            return None
+
+        self.print(f"Extracting level 2 graph for object {object_id}", level=2)
+        object_edges = self._extract_edges(object_id, bounds)
+        object_nf = NetworkFrame(object_node_data, object_edges)
+
+        self.print(f"Extracting neighborhood features for object {object_id}", level=2)
+        object_neighborhood_features = self._compute_neighborhood_features(
+            object_nf, k=neighborhood_hops
+        )
+
+        object_node_data = object_node_data.join(object_neighborhood_features)
+
+        object_node_data["object_id"] = object_id
+        return object_node_data
+
+    def _extract_node_features(self, object_id, bounds):
+        l2_ids = self.client.chunkedgraph.get_leaves(
+            object_id, stop_layer=2, bounds=bounds
+        )
         try:
             node_data = pd.DataFrame(
                 self.client.l2cache.get_l2data(l2_ids, attributes=FEATURES)
@@ -144,8 +156,8 @@ class L2FeatureExtractor:
             else:
                 raise e
 
-    def _extract_edges(self, object_id):
-        edges = self.client.chunkedgraph.level2_chunk_graph(object_id)
+    def _extract_edges(self, object_id, bounds):
+        edges = self.client.chunkedgraph.level2_chunk_graph(object_id, bounds=bounds)
         edges = pd.DataFrame(edges, columns=["source", "target"])
         return edges
 
