@@ -1,5 +1,4 @@
 # %%
-import io
 import time
 
 import caveclient as cc
@@ -8,15 +7,10 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from cloudfiles import CloudFiles
-from meshparty import meshwork
-from meshparty.meshwork import Meshwork
-from networkframe import NetworkFrame
-from requests import HTTPError
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report
 from sklearn.model_selection import KFold
-from sklearn.preprocessing import QuantileTransformer
 from tqdm.auto import tqdm
 
 from pkg.plot import set_context
@@ -31,197 +25,32 @@ proofreading_df = client.materialize.query_table(
     "proofreading_status_public_release", materialization_version=661
 )
 
-# %%
 nucs = client.materialize.query_table(
     "nucleus_detection_v0", materialization_version=661
 )
 unique_roots = proofreading_df["pt_root_id"].unique()
 nucs = nucs.query("pt_root_id.isin(@unique_roots)")
 
-# %%
 proofreading_df["target_id"] = (
     proofreading_df["pt_root_id"]
     .map(nucs.set_index("pt_root_id")["id"])
     .astype("Int64")
 )
-# %%
+
 extended_df = proofreading_df.query(
     "status_axon == 'extended' & status_dendrite == 'extended'"
 )
 
 # %%
+from pkg.features import L2FeatureExtractor
 
+feature_extractor = L2FeatureExtractor(client, verbose=2)
 
-def load_mw(directory, filename):
-    # REF: stolen from https://github.com/AllenInstitute/skeleton_plot/blob/main/skeleton_plot/skel_io.py
-    # filename = f"{root_id}_{nuc_id}/{root_id}_{nuc_id}.h5"
-    '''
-    """loads a meshwork file from .h5 into meshparty.meshwork object
+root_id = extended_df["valid_id"].iloc[0]
 
-    Args:
-        directory (str): directory location of meshwork .h5 file. in cloudpath format as seen in https://github.com/seung-lab/cloud-files
-        filename (str): full .h5 filename
+node_features = feature_extractor.get_features(root_id)
 
-    Returns:
-        meshwork (meshparty.meshwork): meshwork object containing .h5 data
-    """'''
-
-    if "://" not in directory:
-        directory = "file://" + directory
-
-    cf = CloudFiles(directory)
-    binary = cf.get([filename])
-
-    with io.BytesIO(cf.get(binary[0]["path"])) as f:
-        f.seek(0)
-        mw = meshwork.load_meshwork(f)
-
-    return mw
-
-
-def label_compartment(row):
-    if row["is_soma"]:
-        return "soma"
-    elif row["is_axon"]:
-        return "axon"
-    elif row["is_dendrite"]:
-        return "dendrite"
-    else:
-        return "unknown"
-
-
-def unwrap_pca(pca):
-    if np.isnan(pca).all():
-        return np.full(9, np.nan)
-    return np.abs(np.array(pca).ravel())
-
-
-def rewrap_pca(pca):
-    # take the vector and transform back into 3x3 matrix
-    if np.isnan(pca).all():
-        return np.full((3, 3), np.nan)
-    return np.abs(np.array(pca).reshape(3, 3))
-
-
-def unwrap_pca_val(pca):
-    if np.isnan(pca).all():
-        return np.full(3, np.nan)
-
-    return np.array(pca).ravel()
-
-
-def process_node_data(node_data):
-    scalar_features = node_data[
-        ["area_nm2", "max_dt_nm", "mean_dt_nm", "size_nm3"]
-    ].astype(float)
-
-    pca_unwrapped = np.stack(node_data["pca"].apply(unwrap_pca).values)
-    pca_unwrapped = pd.DataFrame(
-        pca_unwrapped,
-        columns=[f"pca_unwrapped_{i}" for i in range(9)],
-        index=node_data.index,
-    )
-
-    pca_val_unwrapped = np.stack(node_data["pca_val"].apply(unwrap_pca_val).values)
-    pca_val_unwrapped = pd.DataFrame(
-        pca_val_unwrapped,
-        columns=[f"pca_val_unwrapped_{i}" for i in range(3)],
-        index=node_data.index,
-    )
-
-    rep_coord_unwrapped = np.stack(node_data["rep_coord_nm"].values)
-    rep_coord_unwrapped = pd.DataFrame(
-        rep_coord_unwrapped,
-        columns=["rep_coord_x", "rep_coord_y", "rep_coord_z"],
-        index=node_data.index,
-    )
-
-    clean_node_data = pd.concat(
-        [scalar_features, pca_unwrapped, pca_val_unwrapped, rep_coord_unwrapped], axis=1
-    )
-
-    return clean_node_data
-
-
-def extract_featurized_networkframe(neuron: Meshwork, root_id: int):
-    nodes = neuron.anno.lvl2_ids.df.copy()
-    nodes.set_index("mesh_ind_filt", inplace=True)
-
-    nodes["is_basal_dendrite"] = False
-    nodes.loc[
-        neuron.anno.basal_mesh_labels["mesh_index_filt"], "is_basal_dendrite"
-    ] = True
-
-    nodes["is_apical_dendrite"] = False
-    nodes.loc[
-        neuron.anno.apical_mesh_labels["mesh_index_filt"], "is_apical_dendrite"
-    ] = True
-
-    nodes["is_axon"] = False
-    nodes.loc[neuron.anno.is_axon_class["mesh_index_filt"], "is_axon"] = True
-
-    nodes["is_soma"] = False
-    nodes.loc[neuron.root_region, "is_soma"] = True
-
-    nodes["n_labels"] = nodes[
-        ["is_basal_dendrite", "is_apical_dendrite", "is_axon", "is_soma"]
-    ].sum(axis=1)
-
-    nodes["is_dendrite"] = nodes["is_basal_dendrite"] | nodes["is_apical_dendrite"]
-
-    nodes["compartment"] = nodes.apply(label_compartment, axis=1)
-
-    nodes.drop(
-        [
-            "is_basal_dendrite",
-            "is_apical_dendrite",
-            "is_axon",
-            "is_soma",
-            "is_dendrite",
-            "mesh_ind",
-            "n_labels",
-        ],
-        axis=1,
-        inplace=True,
-    )
-
-    nodes = nodes.reset_index(drop=True).set_index("lvl2_id")
-
-    features = [
-        "area_nm2",
-        "max_dt_nm",
-        "mean_dt_nm",
-        "pca",
-        "pca_val",
-        "rep_coord_nm",
-        "size_nm3",
-    ]
-    try:
-        node_data = pd.DataFrame(
-            client.l2cache.get_l2data(nodes.index.to_list(), attributes=features)
-        ).T
-    except HTTPError:
-        print(f"Error loading node data for {root_id}")
-
-    node_data.index = node_data.index.astype(int)
-    node_data.index.name = "node_id"
-
-    clean_node_data = process_node_data(node_data)
-
-    nodes = nodes.join(clean_node_data)
-    nodes["root_id"] = root_id
-
-    l2_pre_syn_counts = neuron.anno["pre_syn"]["pre_pt_level2_id"].value_counts()
-    nodes["pre_syn_count"] = nodes.index.map(l2_pre_syn_counts).fillna(0)
-
-    l2_post_syn_counts = neuron.anno["post_syn"]["post_pt_level2_id"].value_counts()
-    nodes["post_syn_count"] = nodes.index.map(l2_post_syn_counts).fillna(0)
-
-    edges = client.chunkedgraph.level2_chunk_graph(root_id)
-    edges = pd.DataFrame(edges, columns=["source", "target"])
-    nf = NetworkFrame(nodes, edges)
-    return nf
-
+node_features.head()
 
 # %%
 
@@ -381,7 +210,6 @@ n_splits = 5
 fig, axs = plt.subplots(
     n_splits, 1, figsize=(5, 12), constrained_layout=True, sharex=True
 )
-classification_results = []
 
 kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
 coeffs = {}
@@ -425,21 +253,11 @@ for fold, (train_neuron_ilocs, test_neuron_ilocs) in enumerate(kf.split(neuron_i
     test_y_pred = lda.predict(test_X_df)
 
     print(f"Fold {fold}")
-    train_report = classification_report(train_y_df, train_y_pred, output_dict=True)
-    test_report = classification_report(test_y_df, test_y_pred, output_dict=True)
-
-    train_row = train_report["weighted avg"]
-    test_row = test_report["weighted avg"]
-    train_row["data"] = "train"
-    test_row["data"] = "test"
-    train_row["fold"] = fold
-    test_row["fold"] = fold
-    train_row["accuracy"] = train_report["accuracy"]
-    test_row["accuracy"] = test_report["accuracy"]
-    classification_results.append(train_row)
-    classification_results.append(test_row)
-    print("Train accuracy:", train_report["accuracy"])
-    print("Test accuracy:", test_report["accuracy"])
+    print("Train")
+    print(classification_report(train_y_df, train_y_pred))
+    print("Test")
+    print(classification_report(test_y_df, test_y_pred))
+    print()
 
     plot_train_df = pd.DataFrame(train_X_lda, columns=["lda"])
     plot_train_df["compartment"] = train_y_df.values
@@ -486,21 +304,6 @@ for fold, (train_neuron_ilocs, test_neuron_ilocs) in enumerate(kf.split(neuron_i
     else:
         ax.get_legend().remove()
 
-#%%
-classification_df = pd.DataFrame(classification_results)
-classification_df = classification_df.drop(columns=["support", "fold"])
-classification_df_long = classification_df.melt(
-    id_vars="data", var_name="metric", value_name="score"
-).reset_index(drop=True)
-
-# %%
-
-fig, ax = plt.subplots(1, 1, figsize=(5, 4))
-
-sns.stripplot(data=classification_df_long, x="metric", hue="data", y="score", ax=ax)
-sns.move_legend(ax, "upper right", title="Data", bbox_to_anchor=(1.3, 1))
-
-
 # %%
 coeff_df = pd.DataFrame(coeffs)
 coeff_df.index.name = "feature"
@@ -541,9 +344,7 @@ ax.set(title="Neighbor features")
 
 drop_syn_features = True
 drop_rep_coord_features = True
-drop_pca_vec_features = True
 
-kf = KFold(n_splits=n_splits, shuffle=True)
 importances = {}
 classification_results = []
 for fold, (train_neuron_ilocs, test_neuron_ilocs) in enumerate(kf.split(neuron_index)):
@@ -656,7 +457,6 @@ sns.histplot(
     x=ratio, hue=train_y_df.values, stat="density", kde=True, common_norm=False
 )
 
-#%%
 ratio = (
     train_X_df["pca_val_unwrapped_0_neighbor_agg"]
     / train_X_df["pca_val_unwrapped_1_neighbor_agg"]
@@ -670,4 +470,3 @@ sns.histplot(
     common_norm=False,
     element="step",
 )
-ax.set_xlabel(r'$\sigma_1 / \sigma_2$')
