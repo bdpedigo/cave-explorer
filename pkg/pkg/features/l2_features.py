@@ -40,6 +40,10 @@ def _unwrap_pca_val(pca):
 
 
 def process_node_data(node_data):
+    if node_data.empty:
+        return None
+    if node_data.isnull().all().all():
+        return None
     if not np.isin(
         ["area_nm2", "max_dt_nm", "mean_dt_nm", "size_nm3"], node_data.columns
     ).all():
@@ -192,10 +196,11 @@ class L2AggregateWrangler(BaseWrangler):
 
         self.print(f"Extracting level 2 graph for object {object_id}", level=2)
         object_edges = self._extract_edges(object_id, bounds)
-        object_nf = NetworkFrame(object_node_data, object_edges)
 
         self.print(f"Extracting neighborhood features for object {object_id}", level=2)
-        object_neighborhood_features = self._compute_neighborhood_features(object_nf)
+        object_neighborhood_features = self._compute_neighborhood_features(
+            object_node_data, object_edges
+        )
 
         object_node_data = object_node_data.join(object_neighborhood_features)
 
@@ -212,17 +217,11 @@ class L2AggregateWrangler(BaseWrangler):
             ).T
             node_data.index = node_data.index.astype(int)
             node_data.index.name = "l2_id"
-            if node_data.empty:
-                return None
-            if node_data.isnull().all().all():
-                return None
             node_data = process_node_data(node_data)
             return node_data
-
         except HTTPError as e:
             if self.continue_on_error:
-                if self.verbose:
-                    print(f"Error fetching data for object {object_id}: {e}")
+                self.print(f"Error fetching data for object {object_id}: {e}", level=2)
                 return None
             else:
                 raise e
@@ -232,7 +231,10 @@ class L2AggregateWrangler(BaseWrangler):
         edges = pd.DataFrame(edges, columns=["source", "target"])
         return edges
 
-    def _compute_neighborhood_features(self, nf: NetworkFrame):
+    def _compute_neighborhood_features(
+        self, object_node_data: pd.DataFrame, object_edges: pd.DataFrame
+    ):
+        nf = NetworkFrame(object_node_data, object_edges)
         k = self.neighborhood_hops
         distance = None
         if distance is not None:
@@ -241,7 +243,6 @@ class L2AggregateWrangler(BaseWrangler):
             )
         else:
             assert k is not None
-            # hard-coded as undirected for now
             neighborhoods = nf.k_hop_decomposition(k=k, directed=False)
 
         rows = []
