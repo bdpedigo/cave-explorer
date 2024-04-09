@@ -1,7 +1,10 @@
+from typing import Optional, Union
+
 import numpy as np
 import pandas as pd
 from caveclient import CAVEclient
 from networkframe import NetworkFrame
+from numpy.typing import ArrayLike
 from requests.exceptions import HTTPError
 
 FEATURES = [
@@ -18,7 +21,7 @@ FEATURES = [
 def _unwrap_pca(pca):
     if np.isnan(pca).all():
         return np.full(9, np.nan)
-    return np.abs(np.array(pca).ravel())
+    return np.array(pca).ravel()
 
 
 def _unwrap_pca_val(pca):
@@ -36,34 +39,60 @@ def _unwrap_pca_val(pca):
 
 
 def process_node_data(node_data):
-    scalar_features = node_data[
-        ["area_nm2", "max_dt_nm", "mean_dt_nm", "size_nm3"]
-    ].astype(float)
+    if not np.isin(
+        ["area_nm2", "max_dt_nm", "mean_dt_nm", "size_nm3"], node_data.columns
+    ).all():
+        scalar_features = pd.DataFrame(
+            index=node_data.index,
+            columns=["area_nm2", "max_dt_nm", "mean_dt_nm", "size_nm3"],
+        )
+    else:
+        scalar_features = node_data[
+            ["area_nm2", "max_dt_nm", "mean_dt_nm", "size_nm3"]
+        ].astype(float)
 
-    pca_unwrapped = np.stack(node_data["pca"].apply(_unwrap_pca).values)
-    pca_unwrapped = pd.DataFrame(
-        pca_unwrapped,
-        columns=[f"pca_unwrapped_{i}" for i in range(9)],
-        index=node_data.index,
-    )
+    if "pca" in node_data.columns:
+        pca_unwrapped = np.stack(node_data["pca"].apply(_unwrap_pca).values)
+        pca_unwrapped = pd.DataFrame(
+            pca_unwrapped,
+            columns=[f"pca_unwrapped_{i}" for i in range(9)],
+            index=node_data.index,
+        )
+    else:
+        pca_unwrapped = pd.DataFrame(
+            index=node_data.index,
+            columns=[f"pca_unwrapped_{i}" for i in range(9)],
+        )
 
-    pca_val_unwrapped = np.stack(node_data["pca_val"].apply(_unwrap_pca_val).values)
-    pca_val_unwrapped = pd.DataFrame(
-        pca_val_unwrapped,
-        columns=[f"pca_val_unwrapped_{i}" for i in range(3)],
-        index=node_data.index,
-    )
-    pca_val_unwrapped["pca_ratio_01"] = (
-        pca_val_unwrapped["pca_val_unwrapped_0"]
-        / pca_val_unwrapped["pca_val_unwrapped_1"]
-    )
+    if "pca_val" not in node_data.columns:
+        pca_val_unwrapped = pd.DataFrame(
+            index=node_data.index,
+            columns=[f"pca_val_unwrapped_{i}" for i in range(3)] + ["pca_ratio_01"],
+        )
+    else:
+        pca_val_unwrapped = np.stack(node_data["pca_val"].apply(_unwrap_pca_val).values)
+        pca_val_unwrapped = pd.DataFrame(
+            pca_val_unwrapped,
+            columns=[f"pca_val_unwrapped_{i}" for i in range(3)],
+            index=node_data.index,
+        )
+        pca_val_unwrapped["pca_ratio_01"] = (
+            pca_val_unwrapped["pca_val_unwrapped_0"]
+            / pca_val_unwrapped["pca_val_unwrapped_1"]
+        )
 
-    rep_coord_unwrapped = np.stack(node_data["rep_coord_nm"].values)
-    rep_coord_unwrapped = pd.DataFrame(
-        rep_coord_unwrapped,
-        columns=["rep_coord_x", "rep_coord_y", "rep_coord_z"],
-        index=node_data.index,
-    )
+    if "rep_coord_nm" not in node_data.columns:
+        rep_coord_unwrapped = pd.DataFrame(
+            index=node_data.index,
+            columns=["rep_coord_x", "rep_coord_y", "rep_coord_z"],
+        )
+    else:
+        rep_coord_unwrapped = np.stack(node_data["rep_coord_nm"].values)
+        rep_coord_unwrapped = pd.DataFrame(
+            rep_coord_unwrapped,
+            columns=["rep_coord_x", "rep_coord_y", "rep_coord_z"],
+            index=node_data.index,
+        )
 
     clean_node_data = pd.concat(
         [scalar_features, pca_unwrapped, pca_val_unwrapped, rep_coord_unwrapped], axis=1
@@ -72,50 +101,81 @@ def process_node_data(node_data):
     return clean_node_data
 
 
-class L2FeatureExtractor:
+class BaseWrangler:
+    def __init__(
+        self,
+        client: CAVEclient,
+        n_jobs: int = 1,
+        continue_on_error: bool = True,
+        verbose: Union[int, bool] = False,
+    ):
+        self.client = client
+        self.n_jobs = n_jobs
+        self.continue_on_error = continue_on_error
+        self.verbose = verbose
+
+    def print(self, msg: str, level: int = 0) -> None:
+        if self.verbose >= level and self.n_jobs == 1:
+            print(msg)
+
+    def get_features(
+        self, object_ids: ArrayLike, bounds_by_object: Optional[ArrayLike] = None
+    ) -> pd.DataFrame:
+        if isinstance(object_ids, (int, np.integer)):
+            object_ids = [object_ids]
+
+        if self.n_jobs == 1:
+            data_by_object = []
+            for i, object_id in enumerate(object_ids):
+                if bounds_by_object is not None:
+                    bounds = bounds_by_object[i]
+                else:
+                    bounds = None
+                object_node_data = self._extract_for_object(object_id, bounds)
+                data_by_object.append(object_node_data)
+        else:
+            import joblib
+
+            data_by_object = joblib.Parallel(n_jobs=self.n_jobs, verbose=self.verbose)(
+                joblib.delayed(self._extract_for_object)(
+                    object_id,
+                    bounds_by_object[i] if bounds_by_object is not None else None,
+                )
+                for i, object_id in enumerate(object_ids)
+            )
+
+        data = self._combine_features(data_by_object)
+        return data
+
+
+class L2AggregateWrangler(BaseWrangler):
     def __init__(
         self,
         client: CAVEclient,
         n_jobs=1,
         continue_on_error=True,
         verbose=False,
+        neighborhood_hops=5,
         drop_self_in_neighborhood=True,
     ):
-        self.client = client
-        self.n_jobs = n_jobs
-        self.continue_on_error = continue_on_error
-        self.verbose = verbose
+        super().__init__(
+            client=client,
+            n_jobs=n_jobs,
+            continue_on_error=continue_on_error,
+            verbose=verbose,
+        )
+        self.neighborhood_hops = neighborhood_hops
         self.drop_self_in_neighborhood = drop_self_in_neighborhood
 
-    def print(self, msg, level=0):
-        if self.verbose >= level and self.n_jobs == 1:
-            print(msg)
-
-    def get_features(self, object_ids, neighborhood_hops=5, bounds=None):
-        if isinstance(object_ids, (int, np.integer)):
-            object_ids = [object_ids]
-
-        if self.n_jobs == 1:
-            data_by_object = []
-            for object_id in object_ids:
-                object_node_data = self._extract_for_object(
-                    object_id, neighborhood_hops, bounds
-                )
-                data_by_object.append(object_node_data)
-        else:
-            import joblib
-
-            data_by_object = joblib.Parallel(n_jobs=self.n_jobs, verbose=self.verbose)(
-                joblib.delayed(self._extract_for_object)(object_id, neighborhood_hops)
-                for object_id in object_ids
-            )
-
+    def _combine_features(self, data_by_object):
+        if all([x is None for x in data_by_object]):
+            raise NotImplementedError("need a fix for this case, pandas mad")
         node_data = pd.concat(data_by_object)
         node_data.reset_index(inplace=True)
         node_data.set_index(["object_id", "l2_id"], inplace=True)
         return node_data
 
-    def _extract_for_object(self, object_id, neighborhood_hops, bounds):
+    def _extract_for_object(self, object_id, bounds):
         self.print(f"Extracting features for object {object_id}", level=2)
         object_node_data = self._extract_node_features(object_id, bounds)
         if object_node_data is None:
@@ -126,9 +186,7 @@ class L2FeatureExtractor:
         object_nf = NetworkFrame(object_node_data, object_edges)
 
         self.print(f"Extracting neighborhood features for object {object_id}", level=2)
-        object_neighborhood_features = self._compute_neighborhood_features(
-            object_nf, k=neighborhood_hops
-        )
+        object_neighborhood_features = self._compute_neighborhood_features(object_nf)
 
         object_node_data = object_node_data.join(object_neighborhood_features)
 
@@ -145,6 +203,10 @@ class L2FeatureExtractor:
             ).T
             node_data.index = node_data.index.astype(int)
             node_data.index.name = "l2_id"
+            if node_data.empty:
+                return None
+            if node_data.isnull().all().all():
+                return None
             node_data = process_node_data(node_data)
             return node_data
 
@@ -161,7 +223,9 @@ class L2FeatureExtractor:
         edges = pd.DataFrame(edges, columns=["source", "target"])
         return edges
 
-    def _compute_neighborhood_features(self, nf: NetworkFrame, k=None, distance=None):
+    def _compute_neighborhood_features(self, nf: NetworkFrame):
+        k = self.neighborhood_hops
+        distance = None
         if distance is not None:
             raise NotImplementedError(
                 "Distance-based neighborhood features not yet implemented"
