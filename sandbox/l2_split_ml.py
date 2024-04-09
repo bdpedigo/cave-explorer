@@ -1,5 +1,7 @@
 # %%
 
+import pprint
+
 import caveclient as cc
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,9 +10,12 @@ import seaborn as sns
 from cloudfiles import CloudFiles
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.metrics import classification_report
+from sklearn.preprocessing import QuantileTransformer
 
-from pkg.features import L2AggregateFeatureExtractor
+from pkg.features import L2AggregateWrangler
 from pkg.plot import set_context
+
+set_context()
 
 client = cc.CAVEclient("minnie65_public_v661")
 
@@ -39,19 +44,8 @@ extended_df = proofreading_df.query(
 )
 
 # %%
-
-root_id = extended_df["valid_id"].iloc[0]
-root_ids = extended_df["valid_id"].iloc[:8]
-
-feature_extractor = L2AggregateFeatureExtractor(client, verbose=2, n_jobs=8)
-node_features = feature_extractor.get_features(root_ids)
-
-node_features.head()
-
-# %%
 bbox_4x4x40 = [np.array([343439, 120522, 18837]), np.array([344939, 122022, 18987])]
 bbox_4x4x40 = np.array(bbox_4x4x40)
-bbox_4x4x40
 voxel_resolution = np.array([4, 4, 40])
 
 # %%
@@ -77,6 +71,9 @@ label_df["z_voxels"] = label_df["point_voxels"].apply(lambda x: x.split(",")[2])
 label_df["x_nm"] = label_df["x_voxels"].astype(int) * voxel_resolution[0]
 label_df["y_nm"] = label_df["y_voxels"].astype(int) * voxel_resolution[1]
 label_df["z_nm"] = label_df["z_voxels"].astype(int) * voxel_resolution[2]
+
+# %%
+label_df["axon_label"] = label_df["tags"].str.contains("axon")
 
 # %%
 
@@ -108,10 +105,13 @@ for _, row in label_df.iterrows():
 
 # %%
 neighborhood_hops = 10
-feature_extractor = L2AggregateFeatureExtractor(client, verbose=2, n_jobs=8)
-node_features = feature_extractor.get_features(
-    label_df.index, neighborhood_hops=neighborhood_hops, bounds_by_object=bboxes
+feature_extractor = L2AggregateWrangler(
+    client,
+    verbose=2,
+    n_jobs=8,
+    neighborhood_hops=neighborhood_hops,
 )
+node_features = feature_extractor.get_features(label_df.index, bounds_by_object=bboxes)
 
 # %%
 node_features
@@ -169,8 +169,6 @@ if drop_scalar_features:
 
 
 # %%
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.preprocessing import QuantileTransformer
 
 X_preprocessed = select_X_df
 transform = True
@@ -188,50 +186,48 @@ else:
 X_preprocessed = X_preprocessed.dropna()
 
 # %%
+label_column = "axon_label"
+n_labels = label_df[label_column].nunique()
 
-n_labels = label_df["tags"].nunique()
-# %%
-lda = LinearDiscriminantAnalysis(n_components=2)
+lda = LinearDiscriminantAnalysis(n_components=1)
 
-node_labels = X_preprocessed.index.get_level_values("object_id").map(label_df["tags"])
+node_labels = X_preprocessed.index.get_level_values("object_id").map(
+    label_df[label_column]
+)
 
 # %%
 node_features_transformed = lda.fit_transform(X_preprocessed, node_labels)
 
-# %%
-
 
 # %%
-from pkg.plot import set_context
 
-set_context()
 
-n_dimensions = lda.n_components
-fig, axs = plt.subplots(
-    n_dimensions, n_dimensions, figsize=(12, 12), constrained_layout=True
-)
+# n_dimensions = lda.n_components
+# fig, axs = plt.subplots(
+#     n_dimensions, n_dimensions, figsize=(12, 12), constrained_layout=True
+# )
 
-for i in range(n_dimensions):
-    for j in range(n_dimensions):
-        ax = axs[i, j]
-        if i < j:
-            sns.scatterplot(
-                x=node_features_transformed[:, i],
-                y=node_features_transformed[:, j],
-                hue=node_labels,
-                ax=ax,
-                s=1,
-                alpha=0.5,
-            )
-            ax.set(xticks=[], yticks=[])
-            if i == 0 and j == 1:
-                sns.move_legend(
-                    ax, "upper right", title="Compartment", bbox_to_anchor=(0, 1)
-                )
-            else:
-                ax.get_legend().remove()
-        else:
-            ax.axis("off")
+# for i in range(n_dimensions):
+#     for j in range(n_dimensions):
+#         ax = axs[i, j]
+#         if i < j:
+#             sns.scatterplot(
+#                 x=node_features_transformed[:, i],
+#                 y=node_features_transformed[:, j],
+#                 hue=node_labels,
+#                 ax=ax,
+#                 s=1,
+#                 alpha=0.5,
+#             )
+#             ax.set(xticks=[], yticks=[])
+#             if i == 0 and j == 1:
+#                 sns.move_legend(
+#                     ax, "upper right", title="Compartment", bbox_to_anchor=(0, 1)
+#                 )
+#             else:
+#                 ax.get_legend().remove()
+#         else:
+#             ax.axis("off")
 
 # %%
 fig, ax = plt.subplots(1, 1, figsize=(10, 10))
@@ -273,19 +269,15 @@ max_predictions["proportion"] = (
 )
 
 # %%
-from sklearn.metrics import classification_report
 
 report = classification_report(
-    label_df["tags"].loc[max_predictions["object_id"]],
+    label_df[label_column].loc[max_predictions["object_id"]],
     max_predictions["compartment"],
     output_dict=True,
 )
 
-import pprint
 
 pprint.pprint(report)
-
-# %%
 
 
 # %%

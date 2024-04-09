@@ -1,6 +1,7 @@
 from abc import abstractmethod
 from typing import Optional, Union
 
+import joblib
 import numpy as np
 import pandas as pd
 from caveclient import CAVEclient
@@ -19,6 +20,8 @@ FEATURES = [
 ]
 
 
+# TODO make sure this is in the right ordering
+# TODO figure out if there's a good solution for sign flips
 def _unwrap_pca(pca):
     if np.isnan(pca).all():
         return np.full(9, np.nan)
@@ -124,8 +127,30 @@ class BaseWrangler:
             print(msg)
 
     def get_features(
-        self, object_ids: ArrayLike, bounds_by_object: Optional[ArrayLike] = None
+        self,
+        object_ids: ArrayLike,
+        bounds_by_object: Optional[ArrayLike] = None,
+        points_by_object: Optional[ArrayLike] = None,
     ) -> pd.DataFrame:
+        """Extract features for a list of objects.
+
+        Parameters
+        ----------
+        object_ids
+            Array-like of object ids to extract features for. These could be root IDs,
+            but can also be any other node ID from the CAVE chunkedgraph.
+        bounds_by_object
+            List of bounds to extract features for. If None, no bounds are used in the
+            extraction of features for the specified object ID. Some feature extractors
+            may not support bounds or may require them.
+
+        Returns
+        -------
+        :
+            DataFrame containing extracted features for the specified objects. The outer
+            index is the object ID; the inner index may be some other ID for children
+            of the object ID.
+        """
         if isinstance(object_ids, (int, np.integer)):
             object_ids = [object_ids]
 
@@ -139,8 +164,6 @@ class BaseWrangler:
                 object_node_data = self._extract_for_object(object_id, bounds)
                 data_by_object.append(object_node_data)
         else:
-            import joblib
-
             data_by_object = joblib.Parallel(n_jobs=self.n_jobs, verbose=self.verbose)(
                 joblib.delayed(self._extract_for_object)(
                     object_id,
@@ -171,6 +194,29 @@ class L2AggregateWrangler(BaseWrangler):
         neighborhood_hops=5,
         drop_self_in_neighborhood=True,
     ):
+        """
+        Feature extractor for level 2 nodes, using graph aggregation to average features
+        for neighboring nodes in the level 2 graph.
+
+        Parameters
+        ----------
+        client
+            CAVEclient instance.
+        n_jobs
+            Number of parallel jobs to use for feature extraction. Default is 1 for no
+            parallelization.
+        continue_on_error
+            If True, continue extracting features for other objects if an error occurs
+            for one object.
+        verbose
+            If True, print progress messages. Higher integer values will indicate more
+            verbosity.
+        neighborhood_hops
+            Number of hops to consider for neighborhood aggregation.
+        drop_self_in_neighborhood
+            If True, do not include the node itself in the neighborhood aggregation.
+            A separate vector of features is still computed for the node itself.
+        """
         super().__init__(
             client=client,
             n_jobs=n_jobs,
@@ -260,20 +306,3 @@ class L2AggregateWrangler(BaseWrangler):
         neighborhood_features.index = list(neighborhoods.keys())
         neighborhood_features.index.name = "l2_id"
         return neighborhood_features
-
-
-def _neighborhoods_to_features(neighborhoods):
-    rows = []
-    for node, neighborhood in neighborhoods.items():
-        self_features = (
-            neighborhood.nodes.loc[node].drop(["root_id", "compartment"]).to_frame().T
-        )
-        neighbor_features = neighborhood.nodes.drop(node).drop(
-            ["root_id", "compartment"], axis=1
-        )
-        agg_neighbor_features = neighbor_features.mean(skipna=True).to_frame().T
-        agg_neighbor_features.index = [node]
-        features = self_features.join(agg_neighbor_features, rsuffix="_neighbor_agg")
-        rows.append(features)
-
-    return pd.concat(rows)
