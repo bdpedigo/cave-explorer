@@ -1,3 +1,4 @@
+from abc import abstractmethod
 from typing import Optional, Union
 
 import numpy as np
@@ -146,6 +147,14 @@ class BaseWrangler:
 
         data = self._combine_features(data_by_object)
         return data
+
+    @abstractmethod
+    def _extract_for_object(self, object_id, bounds):
+        pass
+
+    @abstractmethod
+    def _combine_features(self, data_by_object):
+        pass
 
 
 class L2AggregateWrangler(BaseWrangler):

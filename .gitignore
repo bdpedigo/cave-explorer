@@ -172,3 +172,4 @@ test_loader.pt
 train_loader.pt
 full_y_df.csv
 full_X_df.csv
+data/bd_subvolume_segment_labels_240408.csv
