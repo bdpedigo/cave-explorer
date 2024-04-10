@@ -44,8 +44,6 @@ extended_df = proofreading_df.query(
 )
 
 # %%
-bbox_4x4x40 = [np.array([343439, 120522, 18837]), np.array([344939, 122022, 18987])]
-bbox_4x4x40 = np.array(bbox_4x4x40)
 voxel_resolution = np.array([4, 4, 40])
 
 # %%
