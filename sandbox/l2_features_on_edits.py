@@ -5,6 +5,7 @@ import pandas as pd
 from pkg.edits import get_detailed_change_log
 
 import caveclient as cc
+from troglobyte.features import L2AggregateWrangler
 
 client = cc.CAVEclient("minnie65_phase3_v1")
 
@@ -33,6 +34,17 @@ extended_df = proofreading_df.query(
 # %%
 root_id = extended_df["pt_root_id"].sample(n=1).values[0]
 # %%
+wrangler = L2AggregateWrangler(
+    client,
+    n_jobs=-1,
+    verbose=5,
+    neighborhood_hops=5,
+    aggregations=["mean", "std"],
+)
+X = wrangler.get_features([root_id])
+
+
+# %%
 
 change_log = get_detailed_change_log(root_id, client)
 
@@ -56,14 +68,14 @@ center_points_nm = list(
 )
 object_ids = splits["before_root_ids"].apply(lambda x: x[0])
 
-# %%
-from troglobyte.features import L2AggregateWrangler
 
+# %%
 wrangler = L2AggregateWrangler(
-    client, n_jobs=-1, verbose=5, neighborhood_hops=5, box_width=10_000
+    client,
+    n_jobs=-1,
+    verbose=5,
+    neighborhood_hops=5,
+    box_width=10_000,
+    aggregations=["mean", "std"],
 )
-
 X = wrangler.get_features(object_ids, center_points_nm)
-
-
-# %%
