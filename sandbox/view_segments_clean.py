@@ -180,15 +180,23 @@ neuron.apply_node_features("segment", inplace=True)
 
 # %%
 neuron.nodes["segment"].value_counts()
-# %%
-len(neuron.groupby_nodes("segment"))
 
 # %%
 neuron.groupby_nodes("segment").size_edges()
 
 # %%
-segment_nf = neuron.condense(by='segment', func='size')
+segment_nf = neuron.condense(by="segment", func="size")
 
+
+# %%
+by = "segment"
+groupby = neuron.groupby_nodes(by=by)
+
+edge_by = [f"source_{by}", f"target_{by}"]
+edges = groupby._frame.apply_node_features(by, inplace=False).edges
+out = edges.groupby(edge_by)
+
+# %%
 
 # # %%
 

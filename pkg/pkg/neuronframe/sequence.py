@@ -114,6 +114,8 @@ class NeuronFrameSequence:
             list, np.ndarray, pd.Index, pd.Series, int, np.integer, pd.DataFrame
         ],
         label: Optional[Hashable] = None,
+        warn_on_reuse: bool = False,
+        replace: bool = False,
     ) -> None:
         if label is None and isinstance(edits, (int, np.integer)):
             label = edits
@@ -130,12 +132,14 @@ class NeuronFrameSequence:
         # TODO add some logic for keeping track of the edit IDs activated at each step
         # perhaps keep track of "resolved" and "unresolved" versions of the neuron?
         is_used = edit_ids.isin(self.applied_edit_ids)
-        if is_used.any():
+        if is_used.any() and warn_on_reuse:
             print(
                 f"WARNING: Some edit IDs {list(edit_ids[is_used])} have already been applied."
             )
-
-        self.applied_edit_ids = self.applied_edit_ids.append(edit_ids)
+        if replace:
+            self.applied_edit_ids = edit_ids
+        else:
+            self.applied_edit_ids = self.applied_edit_ids.append(edit_ids).unique()
 
         unresolved_neuron = self.base_neuron.set_edits(
             self.applied_edit_ids, inplace=False, prefix=self.prefix
@@ -214,6 +218,7 @@ class NeuronFrameSequence:
         func: Callable,
         which: Literal["pre", "post"],
         output="series",
+        name: Optional[str] = None,
         **kwargs,
     ) -> pd.DataFrame:
         """
@@ -245,17 +250,27 @@ class NeuronFrameSequence:
             result = func(input, **kwargs)
             if output == "dataframe":
                 result[self.edit_label_name] = key
-            else:
+            elif output == "series":
                 result.name = key
+            elif output == "scalar":
+                pass
 
             results_by_sample.append(result)
 
         if output == "dataframe":
             results_df = pd.concat(results_by_sample, axis=0)
             return results_df
-        else:
+        elif output == "series":
             results_df = pd.concat(results_by_sample, axis=1).T
             results_df.index.name = self.edit_label_name
+            return results_df
+        else:
+            results_df = pd.Series(
+                results_by_sample, index=resolved_synapses.keys()
+            ).to_frame()
+            results_df.index.name = self.edit_label_name
+            if name is not None:
+                results_df.columns = [name]
             return results_df
 
     def synapse_groupby_count(
