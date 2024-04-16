@@ -45,6 +45,20 @@ root_id = manifest.index[0]
 nf = load_neuronframe(root_id, client)
 
 # %%
+import pyvista as pv
+
+from pkg.plot import set_up_camera
+
+pv.set_jupyter_backend("client")
+plotter = pv.Plotter()
+set_up_camera(plotter, nf)
+plotter.add_mesh(nf.to_skeleton_polydata(), color="black", line_width=0.1)
+plotter.show()
+
+# %%
+poly = nf.to_skeleton_polydata()
+
+# %%
 edited_nf = nf.set_edits(nf.metaedits.query("has_merge").index, prefix="meta")
 
 edited_nf.select_nucleus_component(inplace=True)
@@ -129,7 +143,7 @@ features_far = joined_features.loc[far_nodes]
 features_close = features_close.dropna()
 features_far = features_far.dropna()
 
-sub_features_far = features_far.sample(n=1 * len(close_nodes))
+sub_features_far = features_far.sample(n=1 * len(features_close))
 
 
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
