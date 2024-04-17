@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>Proofreading retrospective - Methods</title>
+<title>Proofreading retrospective - Edit importance</title>
 <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -39,6 +39,9 @@ ul.task-list li input[type="checkbox"] {
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="site_libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+<script src="site_libs/quarto-contrib/glightbox/glightbox.min.js"></script>
+<link href="site_libs/quarto-contrib/glightbox/glightbox.min.css" rel="stylesheet">
+<link href="site_libs/quarto-contrib/glightbox/lightbox.css" rel="stylesheet">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -80,43 +83,13 @@ ul.task-list li input[type="checkbox"] {
   });
 </script>
 
-  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
-
-<script type="text/javascript">
-const typesetMath = (el) => {
-  if (window.MathJax) {
-    // MathJax Typeset
-    window.MathJax.typeset([el]);
-  } else if (window.katex) {
-    // KaTeX Render
-    var mathElements = el.getElementsByClassName("math");
-    var macros = [];
-    for (var i = 0; i < mathElements.length; i++) {
-      var texText = mathElements[i].firstChild;
-      if (mathElements[i].tagName == "SPAN") {
-        window.katex.render(texText.data, mathElements[i], {
-          displayMode: mathElements[i].classList.contains('display'),
-          throwOnError: false,
-          macros: macros,
-          fleqn: false
-        });
-      }
-    }
-  }
-}
-window.Quarto = {
-  typesetMath
-};
-</script>
 
 <link rel="stylesheet" href="styles.css">
-<meta property="og:title" content="Proofreading retrospective - Methods">
-<meta property="og:description" content="">
+<meta property="og:title" content="Proofreading retrospective - Edit importance">
 <meta property="og:site_name" content="Proofreading retrospective">
 </head>
 
-<body class="nav-sidebar docked nav-fixed slimcontent">
+<body class="nav-sidebar docked nav-fixed">
 
 <div id="quarto-search-results"></div>
   <header id="quarto-header" class="headroom fixed-top">
@@ -152,7 +125,7 @@ window.Quarto = {
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./methods.html">Methods</a></li></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./neuronwise.html">Results</a></li><li class="breadcrumb-item"><a href="./importance.html">Edit importance</a></li></ol></nav>
         <a class="flex-grow-1" role="button" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -178,7 +151,7 @@ window.Quarto = {
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./methods.html" class="sidebar-item-text sidebar-link active">
+  <a href="./methods.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Methods</span></a>
   </div>
 </li>
@@ -199,7 +172,7 @@ window.Quarto = {
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./importance.html" class="sidebar-item-text sidebar-link">
+  <a href="./importance.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text">Edit importance</span></a>
   </div>
 </li>
@@ -221,26 +194,16 @@ window.Quarto = {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#sec-schemes" id="toc-sec-schemes" class="nav-link active" data-scroll-target="#sec-schemes">Schemes for applying edits to a neuron</a>
-  <ul class="collapse">
-  <li><a href="#historical" id="toc-historical" class="nav-link" data-scroll-target="#historical">Historical</a></li>
-  <li><a href="#clean-and-merge" id="toc-clean-and-merge" class="nav-link" data-scroll-target="#clean-and-merge">Clean-and-merge</a></li>
-  </ul></li>
-  <li><a href="#metrics-to-evaluate" id="toc-metrics-to-evaluate" class="nav-link" data-scroll-target="#metrics-to-evaluate">Metrics to evaluate</a>
-  <ul class="collapse">
-  <li><a href="#proportion-of-inputsoutputs-onto-classes" id="toc-proportion-of-inputsoutputs-onto-classes" class="nav-link" data-scroll-target="#proportion-of-inputsoutputs-onto-classes">Proportion of inputs/outputs onto classes</a></li>
-  <li><a href="#connectivity-probability-by-distance" id="toc-connectivity-probability-by-distance" class="nav-link" data-scroll-target="#connectivity-probability-by-distance">Connectivity probability by distance</a></li>
-  </ul></li>
-  <li><a href="#tables-used" id="toc-tables-used" class="nav-link" data-scroll-target="#tables-used">Tables used</a></li>
+  <li><a href="#edit-importance" id="toc-edit-importance" class="nav-link active" data-scroll-target="#edit-importance">Edit importance</a></li>
   </ul>
-<div class="toc-actions"><ul><li><a href="https://github.com/bdpedigo/skedits/edit/main/methods.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/bdpedigo/skedits/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+<div class="toc-actions"><ul><li><a href="https://github.com/bdpedigo/skedits/edit/main/importance.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/bdpedigo/skedits/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
     </div>
 <!-- main -->
-<main class="content page-columns page-full" id="quarto-document-content">
+<main class="content" id="quarto-document-content">
 
-<header id="title-block-header" class="quarto-title-block default">
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./neuronwise.html">Results</a></li><li class="breadcrumb-item"><a href="./importance.html">Edit importance</a></li></ol></nav>
 <div class="quarto-title">
-<h1 class="title">Methods</h1>
+<h1 class="title">Edit importance</h1>
 </div>
 
 
@@ -257,98 +220,221 @@ window.Quarto = {
 </header>
 
 
-<section id="sec-schemes" class="level2 page-columns page-full">
-<h2 class="anchored" data-anchor-id="sec-schemes">Schemes for applying edits to a neuron</h2>
-<p>Below, we detail the different schemes used for replaying edits onto a neuron.</p>
-<section id="historical" class="level3">
-<h3 class="anchored" data-anchor-id="historical">Historical</h3>
-<p>The simplest scheme is to simply apply the edits on the neuron in the same order in which those edits happened in reality. We denote this the <strong>historical</strong> ordering of edits.</p>
-<p><strong>Algorithm:</strong></p>
-<hr>
-<p>Input: a state of a neuron/segmentation</p>
-<ol type="1">
-<li>From all edits in the history of a given neuron, select the earliest which has not been applied</li>
-<li>Apply the edit</li>
-<li>Compute the new connected component for this neuron from the nucleus</li>
-<li>Compute metrics</li>
-<li>Record the number of operations applied (always 1 for this scheme)</li>
-<li>Recurse (go back to 1.)</li>
-</ol>
-<hr>
-</section>
-<section id="clean-and-merge" class="level3 page-columns page-full">
-<h3 class="anchored" data-anchor-id="clean-and-merge">Clean-and-merge</h3>
-<div class="page-columns page-full"><p>Often, proofreaders will follow what we’ll refer to as a “clean-and-merge” strategy. The idea is that one finds a segment which appears to be part of the current neuron, cleans up that segment by splitting off false-mergers, and then finally connects this (<em>clean</em>)  segment back to the neuron.</p><div class="no-row-height column-margin column-container"><span class="margin-aside"><em>Clean</em> means that all split edits have been applied to the segment</span></div></div>
-<p>Below, we describe how we implement our idealized version of this strategy when applying edits on a neuron. There are two subtle variants of this idea which differ in the order in which merges are applied to the neuron; see 2a. and 2b. in the algorithm below. We denote these strategies <strong>clean-and-merge (historical)</strong> and <strong>clean-and-merge (random)</strong>.</p>
-<p><strong>Algorithm:</strong></p>
-<hr>
-<p>Input: a clean state of a neuron/segmentation</p>
-<ol type="1">
-<li>Find all merge edits which are <em>available</em> </li>
-<li>Choose one of these available merges to apply
-<ol type="a">
-<li>Choose the merge which is earliest in history (historical strategy)</li>
-<li>Choose at among these at random (random strategy)</li>
-</ol></li>
-<li>Find the segment which would be added if this merge is applied</li>
-<li>For that segment, apply all available split edits</li>
-<li>Apply the merge to connect this new segment to the current connected component</li>
-<li>Compute the new connected component for this neuron from the nucleus</li>
-<li>Compute metrics</li>
-<li>Record the number of operations, equal to count of all operations needed for the clean (4.) and the merge (5.)</li>
-<li>Recurse (go back to 1.)</li>
-</ol>
-<div class="no-row-height column-margin column-container"><span class="margin-aside"><em>Available</em> means an edit which connects to the current connected component</span></div><hr>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Note
+<section id="edit-importance" class="level2">
+<h2 class="anchored" data-anchor-id="edit-importance">Edit importance</h2>
+<div id="fig-dropout_importance" class="quarto-layout-panel">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-dropout_importance-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><a href="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135082840567.png" class="lightbox" data-gallery="dropout_importance" data-glightbox="description: .lightbox-desc-1" title="864691135082840567"><img src="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135082840567.png" class="img-fluid figure-img"></a></p>
+<figcaption>864691135082840567</figcaption>
+</figure>
 </div>
 </div>
-<div class="callout-body-container callout-body">
-<p>I actually implement this as a merge-and-clean process since the recursion is a bit easier to implement; but I reorder the metrics/counts of edits appropriately to match the above process.</p>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><a href="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135132887456.png" class="lightbox" data-gallery="dropout_importance" data-glightbox="description: .lightbox-desc-2" title="864691135132887456"><img src="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135132887456.png" class="img-fluid figure-img"></a></p>
+<figcaption>864691135132887456</figcaption>
+</figure>
 </div>
 </div>
-</section>
-</section>
-<section id="metrics-to-evaluate" class="level2 page-columns page-full">
-<h2 class="anchored" data-anchor-id="metrics-to-evaluate">Metrics to evaluate</h2>
-<div class="page-columns page-full"><p>Here, we describe the metrics that we evaluate for each <em>neuron-state</em> .</p><div class="no-row-height column-margin column-container"><span class="margin-aside">A <em>neuron-state</em> is just a version of a particular neuron with a particular set of edits applied to it, according to one of the schemes described in <a href="#sec-schemes">the schemes section</a></span></div></div>
-<section id="proportion-of-inputsoutputs-onto-classes" class="level3">
-<h3 class="anchored" data-anchor-id="proportion-of-inputsoutputs-onto-classes">Proportion of inputs/outputs onto classes</h3>
-<p>Assume we have <span class="math inline">\(K\)</span>-classes of neuron (e.g.&nbsp;morphological types). This metric associates each neuron-state with a <span class="math inline">\(K\)</span>-length vector, <span class="math inline">\(x\)</span>, where <span class="math inline">\(x_k\)</span> is the proportion of that neuron-state’s output synapses which target a neuron in class <span class="math inline">\(k\)</span>.</p>
-<p>This metric could also be flipped in the definition above to consider the inputs to a cell.</p>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Note
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><a href="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135135922201.png" class="lightbox" data-gallery="dropout_importance" data-glightbox="description: .lightbox-desc-3" title="864691135135922201"><img src="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135135922201.png" class="img-fluid figure-img"></a></p>
+<figcaption>864691135135922201</figcaption>
+</figure>
 </div>
 </div>
-<div class="callout-body-container callout-body">
-<p>For the categorization of target neurons, I am using <code>aibs_metamodel_mtypes_v661_v2</code>.</p>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><a href="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135213953920.png" class="lightbox" data-gallery="dropout_importance" data-glightbox="description: .lightbox-desc-4" title="864691135213953920"><img src="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135213953920.png" class="img-fluid figure-img"></a></p>
+<figcaption>864691135213953920</figcaption>
+</figure>
 </div>
 </div>
-</section>
-<section id="connectivity-probability-by-distance" class="level3">
-<h3 class="anchored" data-anchor-id="connectivity-probability-by-distance">Connectivity probability by distance</h3>
-<p>Imagine space is discretized into bins of an arbitrary size/shape, for instace, concentric cylinders centered on the soma of a neuron. This metric captures the probability that cell <span class="math inline">\(i\)</span> targets a downstream neuron whose soma lives within a given bin, <span class="math inline">\(l\)</span>.</p>
-</section>
-</section>
-<section id="tables-used" class="level2">
-<h2 class="anchored" data-anchor-id="tables-used">Tables used</h2>
-<ul>
-<li><code>allen_column_mtypes_v2</code>: used to indicate the morphological types for the neurons of interest that I am examining in this work.</li>
-<li><code>aibs_metamodel_mtypes_v661_v2</code>: used to indicate the morphological types for the rest of the neurons in the dataset.</li>
-<li><code>nucleus_detection_v0</code>: used to indicate the location of the nucleus for all neurons in the dataset. This also anchors each neuron to a target ID indicating the identity of the neuron by its soma, since the segmentation is dynamic.</li>
-</ul>
+</div>
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><a href="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135292201142.png" class="lightbox" data-gallery="dropout_importance" data-glightbox="description: .lightbox-desc-5" title="864691135292201142"><img src="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135292201142.png" class="img-fluid figure-img"></a></p>
+<figcaption>864691135292201142</figcaption>
+</figure>
+</div>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><a href="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135359413848.png" class="lightbox" data-gallery="dropout_importance" data-glightbox="description: .lightbox-desc-6" title="864691135359413848"><img src="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135359413848.png" class="img-fluid figure-img"></a></p>
+<figcaption>864691135359413848</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><a href="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135502190941.png" class="lightbox" data-gallery="dropout_importance" data-glightbox="description: .lightbox-desc-7" title="864691135502190941"><img src="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135502190941.png" class="img-fluid figure-img"></a></p>
+<figcaption>864691135502190941</figcaption>
+</figure>
+</div>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><a href="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135503003997.png" class="lightbox" data-gallery="dropout_importance" data-glightbox="description: .lightbox-desc-8" title="864691135503003997"><img src="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135503003997.png" class="img-fluid figure-img"></a></p>
+<figcaption>864691135503003997</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><a href="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135518510218.png" class="lightbox" data-gallery="dropout_importance" data-glightbox="description: .lightbox-desc-9" title="864691135518510218"><img src="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135518510218.png" class="img-fluid figure-img"></a></p>
+<figcaption>864691135518510218</figcaption>
+</figure>
+</div>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><a href="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135561619681.png" class="lightbox" data-gallery="dropout_importance" data-glightbox="description: .lightbox-desc-10" title="864691135561619681"><img src="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135561619681.png" class="img-fluid figure-img"></a></p>
+<figcaption>864691135561619681</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><a href="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135564974423.png" class="lightbox" data-gallery="dropout_importance" data-glightbox="description: .lightbox-desc-11" title="864691135564974423"><img src="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135564974423.png" class="img-fluid figure-img"></a></p>
+<figcaption>864691135564974423</figcaption>
+</figure>
+</div>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><a href="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135586352764.png" class="lightbox" data-gallery="dropout_importance" data-glightbox="description: .lightbox-desc-12" title="864691135586352764"><img src="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135586352764.png" class="img-fluid figure-img"></a></p>
+<figcaption>864691135586352764</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><a href="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135660772080.png" class="lightbox" data-gallery="dropout_importance" data-glightbox="description: .lightbox-desc-13" title="864691135660772080"><img src="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135660772080.png" class="img-fluid figure-img"></a></p>
+<figcaption>864691135660772080</figcaption>
+</figure>
+</div>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><a href="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135697284250.png" class="lightbox" data-gallery="dropout_importance" data-glightbox="description: .lightbox-desc-14" title="864691135697284250"><img src="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135697284250.png" class="img-fluid figure-img"></a></p>
+<figcaption>864691135697284250</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><a href="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135808473885.png" class="lightbox" data-gallery="dropout_importance" data-glightbox="description: .lightbox-desc-15" title="864691135808473885"><img src="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135808473885.png" class="img-fluid figure-img"></a></p>
+<figcaption>864691135808473885</figcaption>
+</figure>
+</div>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><a href="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135919630768.png" class="lightbox" data-gallery="dropout_importance" data-glightbox="description: .lightbox-desc-16" title="864691135919630768"><img src="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135919630768.png" class="img-fluid figure-img"></a></p>
+<figcaption>864691135919630768</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><a href="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135995786154.png" class="lightbox" data-gallery="dropout_importance" data-glightbox="description: .lightbox-desc-17" title="864691135995786154"><img src="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691135995786154.png" class="img-fluid figure-img"></a></p>
+<figcaption>864691135995786154</figcaption>
+</figure>
+</div>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><a href="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691136066728600.png" class="lightbox" data-gallery="dropout_importance" data-glightbox="description: .lightbox-desc-18" title="864691136066728600"><img src="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691136066728600.png" class="img-fluid figure-img"></a></p>
+<figcaption>864691136066728600</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><a href="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691136618908301.png" class="lightbox" data-gallery="dropout_importance" data-glightbox="description: .lightbox-desc-19" title="864691136618908301"><img src="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691136618908301.png" class="img-fluid figure-img"></a></p>
+<figcaption>864691136618908301</figcaption>
+</figure>
+</div>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><a href="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691136903387826.png" class="lightbox" data-gallery="dropout_importance" data-glightbox="description: .lightbox-desc-20" title="864691136903387826"><img src="result_images/single_edit_dropout/edit_dropout_importance_root_id=864691136903387826.png" class="img-fluid figure-img"></a></p>
+<figcaption>864691136903387826</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig quarto-uncaptioned" id="fig-dropout_importance-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;1
+</figcaption>
+</figure>
+</div>
 
 
+<div class="hidden" aria-hidden="true">
+<span class="glightbox-desc lightbox-desc-1">864691135082840567</span>
+<span class="glightbox-desc lightbox-desc-2">864691135132887456</span>
+<span class="glightbox-desc lightbox-desc-3">864691135135922201</span>
+<span class="glightbox-desc lightbox-desc-4">864691135213953920</span>
+<span class="glightbox-desc lightbox-desc-5">864691135292201142</span>
+<span class="glightbox-desc lightbox-desc-6">864691135359413848</span>
+<span class="glightbox-desc lightbox-desc-7">864691135502190941</span>
+<span class="glightbox-desc lightbox-desc-8">864691135503003997</span>
+<span class="glightbox-desc lightbox-desc-9">864691135518510218</span>
+<span class="glightbox-desc lightbox-desc-10">864691135561619681</span>
+<span class="glightbox-desc lightbox-desc-11">864691135564974423</span>
+<span class="glightbox-desc lightbox-desc-12">864691135586352764</span>
+<span class="glightbox-desc lightbox-desc-13">864691135660772080</span>
+<span class="glightbox-desc lightbox-desc-14">864691135697284250</span>
+<span class="glightbox-desc lightbox-desc-15">864691135808473885</span>
+<span class="glightbox-desc lightbox-desc-16">864691135919630768</span>
+<span class="glightbox-desc lightbox-desc-17">864691135995786154</span>
+<span class="glightbox-desc lightbox-desc-18">864691136066728600</span>
+<span class="glightbox-desc lightbox-desc-19">864691136618908301</span>
+<span class="glightbox-desc lightbox-desc-20">864691136903387826</span>
+</div>
 </section>
 
 </main> <!-- /main -->
@@ -766,8 +852,33 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
 <input type="hidden" id="giscus-base-theme" value="light">
 <input type="hidden" id="giscus-alt-theme" value="dark">
 </div> <!-- /content -->
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/bdpedigo/skedits/edit/main/importance.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/bdpedigo/skedits/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer><script>var lightboxQuarto = GLightbox({"selector":".lightbox","openEffect":"zoom","closeEffect":"zoom","loop":false,"descPosition":"bottom"});
+window.onload = () => {
+  lightboxQuarto.on('slide_before_load', (data) => {
+    const { slideIndex, slideNode, slideConfig, player, trigger } = data;
+    const href = trigger.getAttribute('href');
+    if (href !== null) {
+      const imgEl = window.document.querySelector(`a[href="${href}"] img`);
+      if (imgEl !== null) {
+        const srcAttr = imgEl.getAttribute("src");
+        if (srcAttr && srcAttr.startsWith("data:")) {
+          slideConfig.href = srcAttr;
+        }
+      }
+    } 
+  });
+
+  lightboxQuarto.on('slide_after_load', (data) => {
+    const { slideIndex, slideNode, slideConfig, player, trigger } = data;
+    if (window.Quarto?.typesetMath) {
+      window.Quarto.typesetMath(slideNode);
+    }
+  });
+
+};
+          </script>
 
 
 
 
-<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/bdpedigo/skedits/edit/main/methods.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/bdpedigo/skedits/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>
+</body></html>
