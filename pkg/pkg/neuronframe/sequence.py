@@ -38,6 +38,7 @@ class NeuronFrameSequence:
         prefix="",
         edit_label_name=None,
         edits=None,
+        include_initial_state=True,
     ):
         self.base_neuron = base_neuron
         self.prefix = prefix
@@ -57,7 +58,8 @@ class NeuronFrameSequence:
                 edits["has_merge"] = edits["is_merge"]
                 edits["n_operations"] = np.ones(len(edits), dtype=int)
             self.edits = edits.copy()
-            self.apply_edits(self.applied_edit_ids, label=None)
+            if include_initial_state:
+                self.apply_edits(self.applied_edit_ids, label=None)
         else:
             self.edits = edits
 
@@ -115,6 +117,7 @@ class NeuronFrameSequence:
         ],
         label: Optional[Hashable] = None,
         warn_on_reuse: bool = False,
+        warn_on_missing: bool = True,
         replace: bool = False,
     ) -> None:
         if label is None and isinstance(edits, (int, np.integer)):
@@ -145,7 +148,9 @@ class NeuronFrameSequence:
             self.applied_edit_ids, inplace=False, prefix=self.prefix
         )
 
-        resolved_neuron = resolve_neuron(unresolved_neuron, self.base_neuron)
+        resolved_neuron = resolve_neuron(
+            unresolved_neuron, self.base_neuron, warn_on_missing=warn_on_missing
+        )
 
         self.unresolved_sequence[label] = unresolved_neuron
         self.resolved_sequence[label] = resolved_neuron
@@ -421,11 +426,12 @@ class NeuronFrameSequence:
     #     for
 
 
-def resolve_neuron(unresolved_neuron, base_neuron):
+def resolve_neuron(unresolved_neuron, base_neuron, warn_on_missing=True):
     if base_neuron.nucleus_id in unresolved_neuron.nodes.index:
         resolved_neuron = unresolved_neuron.select_nucleus_component(inplace=False)
     else:
-        print("WARNING: Using closest point to nucleus to resolve neuron...")
+        if warn_on_missing:
+            print("WARNING: Using closest point to nucleus to resolve neuron...")
         point_id = find_closest_point(
             unresolved_neuron.nodes,
             base_neuron.nodes.loc[base_neuron.nucleus_id, ["x", "y", "z"]],

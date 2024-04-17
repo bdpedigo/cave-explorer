@@ -168,6 +168,9 @@ class NeuronFrame(NetworkFrame):
         metaoperation_stats["n_operations"] = metaoperation_stats[
             "operation_ids"
         ].apply(len)
+        metaoperation_stats["has_filtered"] = metaoperation_stats.index.map(
+            lambda x: any(self.edits.loc[groups[x], "is_filtered"].tolist())
+        )
         return metaoperation_stats
 
     def set_edits(self, edit_ids: Union[list[int], int], inplace=False, prefix=""):
@@ -519,7 +522,9 @@ class NeuronFrame(NetworkFrame):
         points = split_nodes[["x", "y", "z"]].values.astype(float)
 
         if draw_edges:
-            split_edges = self.edges.query(f"{prefix}operation_removed.isin(@split_ids)")
+            split_edges = self.edges.query(
+                f"{prefix}operation_removed.isin(@split_ids)"
+            )
             # split_edges = split_edges.query(
             #     "source in @split_nodes.index and target in @split_nodes.index"
             # )
