@@ -2,9 +2,11 @@
 
 
 import caveclient as cc
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+import seaborn as sns
 from scipy.spatial.distance import cdist
-from tqdm.autonotebook import tqdm
 
 from pkg.metrics import (
     annotate_mtypes,
@@ -15,7 +17,7 @@ from pkg.metrics import (
     compute_target_proportions,
 )
 from pkg.neuronframe import NeuronFrameSequence, load_neuronframe
-from pkg.plot import set_context
+from pkg.plot import savefig, set_context
 from pkg.utils import load_manifest, load_mtypes
 
 # %%
@@ -64,7 +66,7 @@ def compute_dropout_stats_for_neuron(neuron):
 
     metaedits = neuron.metaedits
     filtered_metaedits = metaedits.query("has_filtered")
-    for metaoperation_id in tqdm(filtered_metaedits.index):
+    for metaoperation_id in filtered_metaedits.index:
         edits_to_apply = metaedits.query("metaoperation_id != @metaoperation_id").index
         sequence.apply_edits(
             edits_to_apply, label=metaoperation_id, replace=True, warn_on_missing=False
@@ -128,7 +130,7 @@ def process_neuron(root_id):
 
 from joblib import Parallel, delayed
 
-outs = Parallel(n_jobs=-1, verbose=5)(
+outs = Parallel(n_jobs=-1, verbose=10)(
     delayed(process_neuron)(root_id) for root_id in manifest.index
 )
 
@@ -154,11 +156,6 @@ metaedits_by_neuron.index.set_names(["root_id", "metaoperation_id"], inplace=Tru
 
 # %%
 
-import matplotlib.pyplot as plt
-import numpy as np
-import seaborn as sns
-
-from pkg.plot import savefig
 
 example_root_ids = manifest.query("is_sample").index
 
