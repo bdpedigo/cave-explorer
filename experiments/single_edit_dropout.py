@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from scipy.sparse.csgraph import dijkstra
 from scipy.spatial.distance import cdist
 
 from pkg.metrics import (
@@ -200,3 +201,167 @@ for root_id in example_root_ids:
 #
 # diffs = feature_diffs_for_neuron["counts"]
 # sorted_diff_index = diffs.sort_values("euclidean", ascending=False).index
+
+# %%
+root_id = example_root_ids[19]
+neuron = load_neuronframe(root_id, client)
+
+annotate_pre_synapses(neuron, MTYPES)
+annotate_mtypes(neuron, MTYPES)
+(
+    sequence_features_for_neuron,
+    feature_diffs_for_neuron,
+) = compute_dropout_stats_for_neuron(neuron)
+
+
+# %%
+
+
+def get_metaoperation_modified(row):
+    if row["metaoperation_added"] != -1 and row["metaoperation_removed"] != -1:
+        if row["metaoperation_added"] != row["metaoperation_removed"]:
+            raise ValueError("Both added and removed")
+
+    max_idx = row[["metaoperation_added", "metaoperation_removed"]].max()
+    return max_idx
+
+
+modified_nodes = neuron.nodes.query(
+    "(metaoperation_added != -1) | (metaoperation_removed != -1)"
+).copy()
+modified_nodes["metaoperation_modified"] = modified_nodes.apply(
+    get_metaoperation_modified, axis=1
+)
+
+extended_neuron = neuron.set_edits(neuron.metaedits.query("has_merge & has_filtered"))
+nuc_id = extended_neuron.nucleus_id
+nuc_iloc = extended_neuron.nodes.index.get_indexer_for([nuc_id])[0]
+
+extended_neuron = extended_neuron.apply_edge_lengths()
+
+spadj = extended_neuron.to_sparse_adjacency(weight_col="length")
+
+dists = dijkstra(spadj, directed=False, indices=nuc_iloc, min_only=False)
+
+ilocs = extended_neuron.nodes.index.get_indexer_for(modified_nodes.index)
+
+modified_nodes["path_length_to_nuc"] = dists[ilocs]
+
+metaoperation_min_dists = modified_nodes.groupby("metaoperation_modified")[
+    "path_length_to_nuc"
+].min()
+
+euc_count_dists = feature_diffs_for_neuron["counts"]["euclidean"]
+
+# %%
+min_dist_l2_node_ids = modified_nodes.groupby("metaoperation_modified")[
+    "path_length_to_nuc"
+].idxmin()
+
+
+# %%
+fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+
+sns.scatterplot(
+    x=euc_count_dists,
+    y=metaoperation_min_dists.loc[euc_count_dists.index],
+    ax=ax,
+)
+
+# %%
+fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+
+sns.scatterplot(
+    x=euc_count_dists,
+    y=neuron.metaedits.loc[euc_count_dists.index, "centroid_distance_to_nuc_um"],
+    ax=ax,
+)
+
+# %%
+from troglobyte.features import CAVEWrangler
+
+min_dist_l2_nodes = neuron.nodes.loc[min_dist_l2_node_ids.values]
+removed_min_dist_l2_nodes = min_dist_l2_nodes.query("was_removed")
+# added_min_dist_l2_nodes = min_dist_l2_nodes.query("~was_removed")
+
+# TODO not sure the right thing to be doing here
+before_roots = neuron.edits.loc[removed_min_dist_l2_nodes["operation_removed"].values][
+    "before_root_ids"
+].apply(lambda x: x[0])
+
+
+# %%
+wrangler = CAVEWrangler(client=client, n_jobs=-1, verbose=5)
+wrangler.set_manifest(before_roots.values, removed_min_dist_l2_nodes.index)
+wrangler.query_level2_shape_features()
+points = wrangler.level2_shape_features_[
+    ["rep_coord_x", "rep_coord_y", "rep_coord_z"]
+].droplevel(1)
+points = pd.Series(data=list(zip(*zip(*points.values))), index=points.index)
+wrangler.set_query_boxes_from_points(points, box_width=20_000)
+wrangler.query_level2_edges()
+wrangler.query_level2_ids_from_edges()
+wrangler.query_level2_shape_features()
+wrangler.query_level2_synapse_features()
+wrangler.aggregate_features_by_neighborhood(
+    aggregations=["mean", "std"], neighborhood_hops=10
+)
+
+# %%
+
+relevant_features = wrangler.features_.loc[
+    pd.MultiIndex.from_arrays([before_roots.values, removed_min_dist_l2_nodes.index])
+]
+relevant_features.index = removed_min_dist_l2_nodes["operation_removed"]
+
+relevant_features = relevant_features.dropna()
+# %%
+from sklearn.preprocessing import QuantileTransformer
+
+qt = QuantileTransformer(output_distribution="normal")
+qt.fit(relevant_features)
+
+transformed_relevant_features = qt.transform(relevant_features)
+
+operation_features = neuron.edits.loc[relevant_features.index]
+
+# %%
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+
+lda = LinearDiscriminantAnalysis()
+
+pred = np.squeeze(
+    lda.fit_transform(relevant_features, operation_features["is_merge"])
+)
+
+
+sns.histplot(x=pred, hue=operation_features["is_merge"].values, kde=True)
+
+# %%
+
+coefs = pd.Series(data=np.squeeze(lda.coef_), index=relevant_features.columns)
+
+fig, ax = plt.subplots(1, 1, figsize=(6, 10))
+sns.barplot(x=coefs, y=coefs.index, ax=ax)
+
+# %%
+from sklearn.ensemble import RandomForestClassifier
+
+rf = RandomForestClassifier(n_estimators=1000, max_depth=3)
+
+rf.fit(relevant_features, operation_features["is_merge"])
+
+pred = rf.predict_proba(relevant_features)[:, 1]
+
+sns.histplot(x=pred, hue=operation_features["is_merge"].values, kde=True)
+
+# %%
+feature_importances = pd.Series(
+    data=rf.feature_importances_, index=relevant_features.columns
+)
+
+fig, ax = plt.subplots(1, 1, figsize=(6, 10))
+sns.barplot(x=feature_importances, y=feature_importances.index, ax=ax)
+
+# %%
+

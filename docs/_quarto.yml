@@ -21,6 +21,7 @@ website:
       - methods.qmd
       - section: Results
         contents:
+          - approach.qmd
           - neuronwise.qmd
           - importance.qmd
           - networkwise.qmd

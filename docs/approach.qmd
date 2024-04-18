@@ -1,0 +1,11 @@
+---
+title: Approach
+bibliography: references.bib
+toc: true
+filters:
+   - lightbox
+---
+
+Here, we study a connectome of a millimeter-cubed volume of mouse visual cortex [@microns2021]. The dataset is stored in a CAVE database [@dorkenwald2023a], which tracks the edits which are made over time to the segmentation.
+
+We further focused on a subset of the data which received extensive proofreading, namely, a set of inhibitory neurons located in a column spanning the entire cortical depth [@schneider-mizell2023].
