@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>Proofreading retrospective - Methods</title>
+<title>Proofreading retrospective - Approach</title>
 <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -20,7 +20,27 @@ ul.task-list li input[type="checkbox"] {
   margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
   vertical-align: middle;
 }
-</style>
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+  margin-bottom: 0em;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
 
 
 <script src="site_libs/quarto-nav/quarto-nav.js"></script>
@@ -80,43 +100,14 @@ ul.task-list li input[type="checkbox"] {
   });
 </script>
 
-  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
-
-<script type="text/javascript">
-const typesetMath = (el) => {
-  if (window.MathJax) {
-    // MathJax Typeset
-    window.MathJax.typeset([el]);
-  } else if (window.katex) {
-    // KaTeX Render
-    var mathElements = el.getElementsByClassName("math");
-    var macros = [];
-    for (var i = 0; i < mathElements.length; i++) {
-      var texText = mathElements[i].firstChild;
-      if (mathElements[i].tagName == "SPAN") {
-        window.katex.render(texText.data, mathElements[i], {
-          displayMode: mathElements[i].classList.contains('display'),
-          throwOnError: false,
-          macros: macros,
-          fleqn: false
-        });
-      }
-    }
-  }
-}
-window.Quarto = {
-  typesetMath
-};
-</script>
 
 <link rel="stylesheet" href="styles.css">
-<meta property="og:title" content="Proofreading retrospective - Methods">
+<meta property="og:title" content="Proofreading retrospective - Approach">
 <meta property="og:description" content="">
 <meta property="og:site_name" content="Proofreading retrospective">
 </head>
 
-<body class="nav-sidebar docked nav-fixed slimcontent">
+<body class="nav-sidebar docked nav-fixed">
 
 <div id="quarto-search-results"></div>
   <header id="quarto-header" class="headroom fixed-top">
@@ -152,7 +143,7 @@ window.Quarto = {
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./methods.html">Methods</a></li></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./approach.html">Results</a></li><li class="breadcrumb-item"><a href="./approach.html">Approach</a></li></ol></nav>
         <a class="flex-grow-1" role="button" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -178,7 +169,7 @@ window.Quarto = {
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./methods.html" class="sidebar-item-text sidebar-link active">
+  <a href="./methods.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Methods</span></a>
   </div>
 </li>
@@ -193,7 +184,7 @@ window.Quarto = {
       <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./approach.html" class="sidebar-item-text sidebar-link">
+  <a href="./approach.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text">Approach</span></a>
   </div>
 </li>
@@ -223,30 +214,14 @@ window.Quarto = {
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
     <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
-        <nav id="TOC" role="doc-toc" class="toc-active">
-    <h2 id="toc-title">On this page</h2>
-   
-  <ul>
-  <li><a href="#sec-schemes" id="toc-sec-schemes" class="nav-link active" data-scroll-target="#sec-schemes">Schemes for applying edits to a neuron</a>
-  <ul class="collapse">
-  <li><a href="#historical" id="toc-historical" class="nav-link" data-scroll-target="#historical">Historical</a></li>
-  <li><a href="#clean-and-merge" id="toc-clean-and-merge" class="nav-link" data-scroll-target="#clean-and-merge">Clean-and-merge</a></li>
-  </ul></li>
-  <li><a href="#metrics-to-evaluate" id="toc-metrics-to-evaluate" class="nav-link" data-scroll-target="#metrics-to-evaluate">Metrics to evaluate</a>
-  <ul class="collapse">
-  <li><a href="#proportion-of-inputsoutputs-onto-classes" id="toc-proportion-of-inputsoutputs-onto-classes" class="nav-link" data-scroll-target="#proportion-of-inputsoutputs-onto-classes">Proportion of inputs/outputs onto classes</a></li>
-  <li><a href="#connectivity-probability-by-distance" id="toc-connectivity-probability-by-distance" class="nav-link" data-scroll-target="#connectivity-probability-by-distance">Connectivity probability by distance</a></li>
-  </ul></li>
-  <li><a href="#tables-used" id="toc-tables-used" class="nav-link" data-scroll-target="#tables-used">Tables used</a></li>
-  </ul>
-<div class="toc-actions"><ul><li><a href="https://github.com/bdpedigo/skedits/edit/main/methods.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/bdpedigo/skedits/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+        
     </div>
 <!-- main -->
-<main class="content page-columns page-full" id="quarto-document-content">
+<main class="content" id="quarto-document-content">
 
-<header id="title-block-header" class="quarto-title-block default">
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./approach.html">Results</a></li><li class="breadcrumb-item"><a href="./approach.html">Approach</a></li></ol></nav>
 <div class="quarto-title">
-<h1 class="title">Methods</h1>
+<h1 class="title">Approach</h1>
 </div>
 
 
@@ -263,101 +238,23 @@ window.Quarto = {
 </header>
 
 
-<section id="sec-schemes" class="level2 page-columns page-full">
-<h2 class="anchored" data-anchor-id="sec-schemes">Schemes for applying edits to a neuron</h2>
-<p>Below, we detail the different schemes used for replaying edits onto a neuron.</p>
-<section id="historical" class="level3">
-<h3 class="anchored" data-anchor-id="historical">Historical</h3>
-<p>The simplest scheme is to simply apply the edits on the neuron in the same order in which those edits happened in reality. We denote this the <strong>historical</strong> ordering of edits.</p>
-<p><strong>Algorithm:</strong></p>
-<hr>
-<p>Input: a state of a neuron/segmentation</p>
-<ol type="1">
-<li>From all edits in the history of a given neuron, select the earliest which has not been applied</li>
-<li>Apply the edit</li>
-<li>Compute the new connected component for this neuron from the nucleus</li>
-<li>Compute metrics</li>
-<li>Record the number of operations applied (always 1 for this scheme)</li>
-<li>Recurse (go back to 1.)</li>
-</ol>
-<hr>
-</section>
-<section id="clean-and-merge" class="level3 page-columns page-full">
-<h3 class="anchored" data-anchor-id="clean-and-merge">Clean-and-merge</h3>
-<div class="page-columns page-full"><p>Often, proofreaders will follow what we’ll refer to as a “clean-and-merge” strategy. The idea is that one finds a segment which appears to be part of the current neuron, cleans up that segment by splitting off false-mergers, and then finally connects this (<em>clean</em>)  segment back to the neuron.</p><div class="no-row-height column-margin column-container"><span class="margin-aside"><em>Clean</em> means that all split edits have been applied to the segment</span></div></div>
-<p>Below, we describe how we implement our idealized version of this strategy when applying edits on a neuron. There are two subtle variants of this idea which differ in the order in which merges are applied to the neuron; see 2a. and 2b. in the algorithm below. We denote these strategies <strong>clean-and-merge (historical)</strong> and <strong>clean-and-merge (random)</strong>.</p>
-<p><strong>Algorithm:</strong></p>
-<hr>
-<p>Input: a clean state of a neuron/segmentation</p>
-<ol type="1">
-<li>Find all merge edits which are <em>available</em> </li>
-<li>Choose one of these available merges to apply
-<ol type="a">
-<li>Choose the merge which is earliest in history (historical strategy)</li>
-<li>Choose at among these at random (random strategy)</li>
-</ol></li>
-<li>Find the segment which would be added if this merge is applied</li>
-<li>For that segment, apply all available split edits</li>
-<li>Apply the merge to connect this new segment to the current connected component</li>
-<li>Compute the new connected component for this neuron from the nucleus</li>
-<li>Compute metrics</li>
-<li>Record the number of operations, equal to count of all operations needed for the clean (4.) and the merge (5.)</li>
-<li>Recurse (go back to 1.)</li>
-</ol>
-<div class="no-row-height column-margin column-container"><span class="margin-aside"><em>Available</em> means an edit which connects to the current connected component</span></div><hr>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p>I actually implement this as a merge-and-clean process since the recursion is a bit easier to implement; but I reorder the metrics/counts of edits appropriately to match the above process.</p>
-</div>
-</div>
-</section>
-</section>
-<section id="metrics-to-evaluate" class="level2 page-columns page-full">
-<h2 class="anchored" data-anchor-id="metrics-to-evaluate">Metrics to evaluate</h2>
-<div class="page-columns page-full"><p>Here, we describe the metrics that we evaluate for each <em>neuron-state</em> .</p><div class="no-row-height column-margin column-container"><span class="margin-aside">A <em>neuron-state</em> is just a version of a particular neuron with a particular set of edits applied to it, according to one of the schemes described in <a href="#sec-schemes">the schemes section</a></span></div></div>
-<section id="proportion-of-inputsoutputs-onto-classes" class="level3">
-<h3 class="anchored" data-anchor-id="proportion-of-inputsoutputs-onto-classes">Proportion of inputs/outputs onto classes</h3>
-<p>Assume we have <span class="math inline">\(K\)</span>-classes of neuron (e.g.&nbsp;morphological types). This metric associates each neuron-state with a <span class="math inline">\(K\)</span>-length vector, <span class="math inline">\(x\)</span>, where <span class="math inline">\(x_k\)</span> is the proportion of that neuron-state’s output synapses which target a neuron in class <span class="math inline">\(k\)</span>.</p>
-<p>This metric could also be flipped in the definition above to consider the inputs to a cell.</p>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p>For the categorization of target neurons, I am using <code>aibs_metamodel_mtypes_v661_v2</code>.</p>
-</div>
-</div>
-</section>
-<section id="connectivity-probability-by-distance" class="level3">
-<h3 class="anchored" data-anchor-id="connectivity-probability-by-distance">Connectivity probability by distance</h3>
-<p>Imagine space is discretized into bins of an arbitrary size/shape, for instace, concentric cylinders centered on the soma of a neuron. This metric captures the probability that cell <span class="math inline">\(i\)</span> targets a downstream neuron whose soma lives within a given bin, <span class="math inline">\(l\)</span>.</p>
-</section>
-</section>
-<section id="tables-used" class="level2">
-<h2 class="anchored" data-anchor-id="tables-used">Tables used</h2>
-<ul>
-<li><code>allen_column_mtypes_v2</code>: used to indicate the morphological types for the neurons of interest that I am examining in this work.</li>
-<li><code>aibs_metamodel_mtypes_v661_v2</code>: used to indicate the morphological types for the rest of the neurons in the dataset.</li>
-<li><code>nucleus_detection_v0</code>: used to indicate the location of the nucleus for all neurons in the dataset. This also anchors each neuron to a target ID indicating the identity of the neuron by its soma, since the segmentation is dynamic.</li>
-</ul>
+<p>Here, we study a connectome of a millimeter-cubed volume of mouse visual cortex <span class="citation" data-cites="microns2021">(<a href="#ref-microns2021" role="doc-biblioref">MICrONS Consortium et al. 2021</a>)</span>. The dataset is stored in a CAVE database <span class="citation" data-cites="dorkenwald2023a">(<a href="#ref-dorkenwald2023a" role="doc-biblioref">Dorkenwald et al. 2023</a>)</span>, which tracks the edits which are made over time to the segmentation.</p>
+<p>We further focused on a subset of the data which received extensive proofreading, namely, a set of inhibitory neurons located in a column spanning the entire cortical depth <span class="citation" data-cites="schneider-mizell2023">(<a href="#ref-schneider-mizell2023" role="doc-biblioref">Schneider-Mizell et al. 2023</a>)</span>.</p>
 
 
-</section>
 
-</main> <!-- /main -->
+
+<div id="quarto-appendix" class="default"><section class="quarto-appendix-contents" role="doc-bibliography" id="quarto-bibliography"><h2 class="anchored quarto-appendix-heading">References</h2><div id="refs" class="references csl-bib-body hanging-indent" data-entry-spacing="0" role="list">
+<div id="ref-dorkenwald2023a" class="csl-entry" role="listitem">
+Dorkenwald, Sven, Casey M. Schneider-Mizell, Derrick Brittain, Akhilesh Halageri, Chris Jordan, Nico Kemnitz, Manual A. Castro, et al. 2023. <span>“CAVE: Connectome Annotation Versioning Engine.”</span> <a href="http://biorxiv.org/lookup/doi/10.1101/2023.07.26.550598">http://biorxiv.org/lookup/doi/10.1101/2023.07.26.550598</a>.
+</div>
+<div id="ref-microns2021" class="csl-entry" role="listitem">
+MICrONS Consortium, J. Alexander Bae, Mahaly Baptiste, Caitlyn A. Bishop, Agnes L. Bodor, Derrick Brittain, JoAnn Buchanan, et al. 2021. <span>“Functional Connectomics Spanning Multiple Areas of Mouse Visual Cortex.”</span> <a href="http://dx.doi.org/10.1101/2021.07.28.454025">http://dx.doi.org/10.1101/2021.07.28.454025</a>.
+</div>
+<div id="ref-schneider-mizell2023" class="csl-entry" role="listitem">
+Schneider-Mizell, Casey M, Agnes Bodor, Derrick Brittain, JoAnn Buchanan, Daniel J. Bumbarger, Leila Elabbady, Daniel Kapner, et al. 2023. <span>“Cell-Type-Specific Inhibitory Circuitry from a Connectomic Census of Mouse Visual Cortex.”</span> <a href="http://dx.doi.org/10.1101/2023.01.23.525290">http://dx.doi.org/10.1101/2023.01.23.525290</a>.
+</div>
+</div></section></div></main> <!-- /main -->
 <script id="quarto-html-after-body" type="application/javascript">
 window.document.addEventListener("DOMContentLoaded", function (event) {
   const toggleBodyColorMode = (bsSheetEl) => {
@@ -776,4 +673,4 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
 
 
 
-<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/bdpedigo/skedits/edit/main/methods.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/bdpedigo/skedits/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions"><ul><li><a href="https://github.com/bdpedigo/skedits/edit/main/approach.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/bdpedigo/skedits/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>
