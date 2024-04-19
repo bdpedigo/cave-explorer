@@ -126,7 +126,10 @@ def process_neuron(root_id):
         feature_diffs_for_neuron,
     ) = compute_dropout_stats_for_neuron(neuron)
 
-    return sequence_features_for_neuron, feature_diffs_for_neuron, neuron.metaedits
+    metaedits = neuron.metaedits
+    metaedits["root_id"] = root_id
+
+    return sequence_features_for_neuron, feature_diffs_for_neuron, metaedits
 
 
 from joblib import Parallel, delayed
@@ -203,79 +206,93 @@ for root_id in example_root_ids:
 # sorted_diff_index = diffs.sort_values("euclidean", ascending=False).index
 
 # %%
-root_id = example_root_ids[19]
-neuron = load_neuronframe(root_id, client)
 
-annotate_pre_synapses(neuron, MTYPES)
-annotate_mtypes(neuron, MTYPES)
-(
-    sequence_features_for_neuron,
-    feature_diffs_for_neuron,
-) = compute_dropout_stats_for_neuron(neuron)
+
+pd.concat(feature_diffs_by_neuron["counts"].to_list())
 
 
 # %%
 
+for root_id in example_root_ids[:]:
+    neuron = load_neuronframe(root_id, client)
 
-def get_metaoperation_modified(row):
-    if row["metaoperation_added"] != -1 and row["metaoperation_removed"] != -1:
-        if row["metaoperation_added"] != row["metaoperation_removed"]:
-            raise ValueError("Both added and removed")
+    annotate_pre_synapses(neuron, MTYPES)
+    annotate_mtypes(neuron, MTYPES)
+    (
+        sequence_features_for_neuron,
+        feature_diffs_for_neuron,
+    ) = compute_dropout_stats_for_neuron(neuron)
 
-    max_idx = row[["metaoperation_added", "metaoperation_removed"]].max()
-    return max_idx
+    def get_metaoperation_modified(row):
+        if row["metaoperation_added"] != -1 and row["metaoperation_removed"] != -1:
+            if row["metaoperation_added"] != row["metaoperation_removed"]:
+                raise ValueError("Both added and removed")
 
+        max_idx = row[["metaoperation_added", "metaoperation_removed"]].max()
+        return max_idx
 
-modified_nodes = neuron.nodes.query(
-    "(metaoperation_added != -1) | (metaoperation_removed != -1)"
-).copy()
-modified_nodes["metaoperation_modified"] = modified_nodes.apply(
-    get_metaoperation_modified, axis=1
-)
+    modified_nodes = neuron.nodes.query(
+        "(metaoperation_added != -1) | (metaoperation_removed != -1)"
+    ).copy()
+    modified_nodes["metaoperation_modified"] = modified_nodes.apply(
+        get_metaoperation_modified, axis=1
+    )
 
-extended_neuron = neuron.set_edits(neuron.metaedits.query("has_merge & has_filtered"))
-nuc_id = extended_neuron.nucleus_id
-nuc_iloc = extended_neuron.nodes.index.get_indexer_for([nuc_id])[0]
+    extended_neuron = neuron #
+    # neuron.set_edits(
+    #     neuron.metaedits.query("has_merge & has_filtered")
+    # )
+    nuc_id = extended_neuron.nucleus_id
+    nuc_iloc = extended_neuron.nodes.index.get_indexer_for([nuc_id])[0]
 
-extended_neuron = extended_neuron.apply_edge_lengths()
+    extended_neuron = extended_neuron.apply_edge_lengths()
 
-spadj = extended_neuron.to_sparse_adjacency(weight_col="length")
+    spadj = extended_neuron.to_sparse_adjacency(weight_col="length")
 
-dists = dijkstra(spadj, directed=False, indices=nuc_iloc, min_only=False)
+    dists = dijkstra(spadj, directed=False, indices=nuc_iloc, min_only=False)
 
-ilocs = extended_neuron.nodes.index.get_indexer_for(modified_nodes.index)
+    ilocs = extended_neuron.nodes.index.get_indexer_for(modified_nodes.index)
 
-modified_nodes["path_length_to_nuc"] = dists[ilocs]
+    modified_nodes["path_length_to_nuc"] = dists[ilocs] / 1_000
 
-metaoperation_min_dists = modified_nodes.groupby("metaoperation_modified")[
-    "path_length_to_nuc"
-].min()
+    metaoperation_min_dists = modified_nodes.groupby("metaoperation_modified")[
+        "path_length_to_nuc"
+    ].min()
 
-euc_count_dists = feature_diffs_for_neuron["counts"]["euclidean"]
+    euc_count_dists = feature_diffs_for_neuron["counts"]["euclidean"]
 
-# %%
-min_dist_l2_node_ids = modified_nodes.groupby("metaoperation_modified")[
-    "path_length_to_nuc"
-].idxmin()
+    min_dist_l2_node_ids = modified_nodes.groupby("metaoperation_modified")[
+        "path_length_to_nuc"
+    ].idxmin()
 
+    fig, axs = plt.subplots(1, 2, figsize=(12, 6))
 
-# %%
-fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+    ax = axs[0]
+    sns.scatterplot(
+        y=euc_count_dists,
+        x=metaoperation_min_dists.loc[euc_count_dists.index],
+        hue=metaedits_by_neuron.loc[root_id].loc[euc_count_dists.index, "has_merge"],
+        ax=ax,
+    )
 
-sns.scatterplot(
-    x=euc_count_dists,
-    y=metaoperation_min_dists.loc[euc_count_dists.index],
-    ax=ax,
-)
+    ax = axs[1]
+    sns.scatterplot(
+        y=euc_count_dists,
+        x=neuron.metaedits.loc[euc_count_dists.index, "centroid_distance_to_nuc_um"],
+        hue=metaedits_by_neuron.loc[root_id].loc[euc_count_dists.index, "has_merge"],
+        legend=False,
+        ax=ax,
+    )
 
-# %%
-fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+    savefig(
+        f"edit_dropout_importance_vs_distance-root_id={root_id}",
+        fig,
+        folder="single_edit_dropout",
+        doc_save=True,
+        group="dropout_importance_vs_distance",
+        caption=root_id,
+    )
 
-sns.scatterplot(
-    x=euc_count_dists,
-    y=neuron.metaedits.loc[euc_count_dists.index, "centroid_distance_to_nuc_um"],
-    ax=ax,
-)
 
 # %%
 from troglobyte.features import CAVEWrangler
@@ -330,9 +347,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
 lda = LinearDiscriminantAnalysis()
 
-pred = np.squeeze(
-    lda.fit_transform(relevant_features, operation_features["is_merge"])
-)
+pred = np.squeeze(lda.fit_transform(relevant_features, operation_features["is_merge"]))
 
 
 sns.histplot(x=pred, hue=operation_features["is_merge"].values, kde=True)
@@ -364,4 +379,3 @@ fig, ax = plt.subplots(1, 1, figsize=(6, 10))
 sns.barplot(x=feature_importances, y=feature_importances.index, ax=ax)
 
 # %%
-
