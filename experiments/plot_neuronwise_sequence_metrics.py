@@ -615,16 +615,10 @@ for root_id in example_root_ids:
 # %%
 
 # histograms of number of edits to reach threshold
+metric = "euclidean"
 
-fig, axs = plt.subplots(
-    3, 3, figsize=(16, 12), constrained_layout=True, sharey="row", sharex=False
-)
-for i, feature in enumerate(
-    ["props_by_mtype", "spatial_props", "spatial_props_by_mtype"]
-):
-    for j, scheme in enumerate(
-        ["historical", "clean-and-merge-time", "clean-and-merge-random"]
-    ):
+for i, feature in enumerate(["props_by_mtype"]):
+    for j, scheme in enumerate(["clean-and-merge-time"]):
         if scheme == "historical":
             diff_df = meta_diff_df.loc[idx[:, "historical", :, :]]
         elif scheme == "clean-and-merge-time":
@@ -644,39 +638,55 @@ for i, feature in enumerate(
         )
 
 # %%
-delta = 0.3
-diff_df["pass_threshold"] = diff_df["euclidean"] < delta
 
-final_efforts = diff_df.groupby(["root_id"])["cumulative_n_operations"].max()
+for delta in [0.5, 0.3, 0.1, 0.05]:
+    diff_df["pass_threshold"] = diff_df[metric] < delta
 
+    final_efforts = diff_df.groupby(["root_id"])["cumulative_n_operations"].max()
 
-diff_df["prop_effort"] = (
-    diff_df["cumulative_n_operations"] / final_efforts[diff_df["root_id"]].values
-)
+    diff_df["prop_effort"] = (
+        diff_df["cumulative_n_operations"] / final_efforts[diff_df["root_id"]].values
+    )
 
+    diff_df = diff_df.sort_values("euclidean", ascending=False)
 
-diff_df = diff_df.sort_values("euclidean", ascending=False)
+    first_pass_threshold = (
+        diff_df.query("pass_threshold")
+        .groupby(["root_id", "scheme", "order_by", "random_seed"], dropna=False)
+        .first()
+    )
+    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
 
+    hist_kws = dict(kde=True, element="step", stat="proportion", common_norm=False)
 
-first_pass_threshold = (
-    diff_df.query("pass_threshold")
-    .groupby(["root_id", "scheme", "order_by", "random_seed"])
-    .first()
-)
-fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+    sns.histplot(
+        data=first_pass_threshold,
+        x="cumulative_n_operations",
+        hue="mtype",
+        ax=axs[0],
+        legend=False,
+        **hist_kws,
+    )
 
-hist_kws = dict(kde=True, element="step", bins=25, stat="proportion", common_norm=False)
+    sns.histplot(
+        data=first_pass_threshold,
+        x="prop_effort",
+        hue="mtype",
+        ax=axs[1],
+        **hist_kws,
+    )
 
+    fig.suptitle(
+        f"Threshold = {delta}, metric = {metric},\nfeature = {feature}, scheme={scheme}",
+        y=1.02,
+    )
 
-sns.histplot(
-    data=first_pass_threshold,
-    x="cumulative_n_operations",
-    hue="mtype",
-    ax=axs[0],
-    legend=False,
-    **hist_kws,
-)
+    savefig(
+        f"histogram-threshold-by-type-delta={delta}-metric={metric}-feature={feature}-scheme={scheme}",
+        fig,
+        folder="sequence_output_metrics",
+        doc_save=True,
+        group="histogram-threshold-by-type",
+    )
 
-sns.histplot(
-    data=first_pass_threshold, x="prop_effort", hue="mtype", ax=axs[1], **hist_kws
-)
+# %%

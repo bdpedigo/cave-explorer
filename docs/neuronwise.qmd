@@ -272,3 +272,37 @@ TODO: same treatment as the above
 
 Summary gallery (click images to zoom in and scroll through) of various metrics and edit application methods, here showing the distance to the final state (euclidean distance).
 :::
+
+## Histograms of time to get within delta
+
+### Historical
+
+![](result_images/sequence_output_metrics/histogram-threshold-by-type-delta=0.5-metric=euclidean-feature=props_by_mtype-scheme=historical.png){group="histogram-threshold-by-type"}
+
+![](result_images/sequence_output_metrics/histogram-threshold-by-type-delta=0.3-metric=euclidean-feature=props_by_mtype-scheme=historical.png){group="histogram-threshold-by-type"}
+
+![](result_images/sequence_output_metrics/histogram-threshold-by-type-delta=0.1-metric=euclidean-feature=props_by_mtype-scheme=historical.png){group="histogram-threshold-by-type"}
+
+![](result_images/sequence_output_metrics/histogram-threshold-by-type-delta=0.05-metric=euclidean-feature=props_by_mtype-scheme=historical.png){group="histogram-threshold-by-type"}
+
+### Clean-and-merge by time
+
+![](result_images/sequence_output_metrics/histogram-threshold-by-type-delta=0.5-metric=euclidean-feature=props_by_mtype-scheme=clean-and-merge-time.png){group="histogram-threshold-by-type"}
+
+![](result_images/sequence_output_metrics/histogram-threshold-by-type-delta=0.3-metric=euclidean-feature=props_by_mtype-scheme=clean-and-merge-time.png){group="histogram-threshold-by-type"}
+
+![](result_images/sequence_output_metrics/histogram-threshold-by-type-delta=0.1-metric=euclidean-feature=props_by_mtype-scheme=clean-and-merge-time.png){group="histogram-threshold-by-type"}
+
+![](result_images/sequence_output_metrics/histogram-threshold-by-type-delta=0.05-metric=euclidean-feature=props_by_mtype-scheme=clean-and-merge-time.png){group="histogram-threshold-by-type"}
+
+### Clean-and-merge randomly
+
+![](result_images/sequence_output_metrics/histogram-threshold-by-type-delta=0.5-metric=euclidean-feature=props_by_mtype-scheme=clean-and-merge-random.png){group="histogram-threshold-by-type"}
+
+![](result_images/sequence_output_metrics/histogram-threshold-by-type-delta=0.3-metric=euclidean-feature=props_by_mtype-scheme=clean-and-merge-random.png){group="histogram-threshold-by-type"}
+
+![](result_images/sequence_output_metrics/histogram-threshold-by-type-delta=0.1-metric=euclidean-feature=props_by_mtype-scheme=clean-and-merge-random.png){group="histogram-threshold-by-type"}
+
+![](result_images/sequence_output_metrics/histogram-threshold-by-type-delta=0.05-metric=euclidean-feature=props_by_mtype-scheme=clean-and-merge-random.png){group="histogram-threshold-by-type"}
+
+
