@@ -1,5 +1,7 @@
 # %%
 
+from pathlib import Path
+
 import caveclient as cc
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,6 +21,11 @@ from pkg.utils import load_manifest
 
 client = cc.CAVEclient("minnie65_phase3_v1")
 
+model_path = Path("data/models/local_compartment_classifier_ej_skeletons.skops")
+
+from skops.io import load
+
+model = load(model_path)
 
 # %%
 
@@ -67,9 +74,17 @@ path_length_to_edits = pd.Series(path_length_to_edits, index=edited_nf.nodes.ind
 wrangler = CAVEWrangler(client=client, n_jobs=-1, verbose=False)
 wrangler.set_level2_ids(edited_nf.nodes.index)
 wrangler.query_current_object_ids()  # this is necessary as a proxy for getting synapses
-wrangler.query_level2_shape_features()
-wrangler.query_level2_synapse_features()
 
+wrangler.query_level2_shape_features()
+
+
+# %%
+wrangler.query_level2_synapse_features(method="existing")
+
+
+# %%
+# wrangler.register_model(model, model_name="local_compartment_ej")
+# wrangler.stack_model_predict("local_compartment_ej")
 # %%
 
 # do an aggregation using the graph
@@ -80,10 +95,40 @@ features = features.drop(columns=["rep_coord_x", "rep_coord_y", "rep_coord_z"])
 old_nodes = edited_nf.nodes
 edited_nf.nodes = features
 
-neighborhood_features = edited_nf.k_hop_aggregation(k=10, aggregations=["mean", "std"])
+neighborhood_features = edited_nf.k_hop_aggregation(
+    k=5, aggregations=["mean", "std"], verbose=True
+)
 joined_features = features.join(neighborhood_features, how="left")
 
 edited_nf.nodes = old_nodes
+
+
+
+# %%
+
+y_pred = model.predict(joined_features)
+posteriors = model.predict_proba(joined_features)
+posteriors = pd.DataFrame(
+    posteriors, index=joined_features.index, columns=model.classes_
+)
+
+# %%
+axon_post = posteriors["axon"] / (posteriors.sum(axis=1))
+
+
+edited_nf.nodes["axon_posterior"] = 0.0
+edited_nf.nodes.loc[joined_features.index, "axon_posterior"] = axon_post
+
+#%%
+plotter = pv.Plotter()
+set_up_camera(plotter, edited_nf)
+plotter.add_mesh(
+    edited_nf.to_skeleton_polydata(label="axon_posterior"),
+    line_width=0.1,
+    scalars="axon_posterior",
+    cmap="coolwarm",
+)
+plotter.show()
 
 # %%
 
