@@ -73,12 +73,10 @@ path_length_to_edits = pd.Series(path_length_to_edits, index=edited_nf.nodes.ind
 # download features for the nodes
 wrangler = CAVEWrangler(client=client, n_jobs=-1, verbose=False)
 wrangler.set_level2_ids(edited_nf.nodes.index)
-wrangler.query_current_object_ids()  # this is necessary as a proxy for getting synapses
+wrangler.query_current_object_ids()  # get current ids as a proxy for getting synapses
 
 wrangler.query_level2_shape_features()
 
-
-# %%
 wrangler.query_level2_synapse_features(method="existing")
 
 
@@ -103,7 +101,6 @@ joined_features = features.join(neighborhood_features, how="left")
 edited_nf.nodes = old_nodes
 
 
-
 # %%
 
 y_pred = model.predict(joined_features)
@@ -119,7 +116,7 @@ axon_post = posteriors["axon"] / (posteriors.sum(axis=1))
 edited_nf.nodes["axon_posterior"] = 0.0
 edited_nf.nodes.loc[joined_features.index, "axon_posterior"] = axon_post
 
-#%%
+# %%
 plotter = pv.Plotter()
 set_up_camera(plotter, edited_nf)
 plotter.add_mesh(

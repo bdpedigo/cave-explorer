@@ -1,10 +1,14 @@
 # %%
+from pathlib import Path
+
 import caveclient as cc
 import cloudvolume
 import neuroglancer
 import neuroglancer.static_file_server
 import numpy as np
-from cloudfiles import CloudFiles
+import pandas as pd
+from skops.io import load
+from troglobyte.features import CAVEWrangler
 
 from pkg.neuronframe import load_neuronframe
 from pkg.utils import load_manifest
@@ -13,70 +17,131 @@ client = cc.CAVEclient("minnie65_phase3_v1")
 
 manifest = load_manifest()
 
-root_id = manifest.index[0]
+root_id = manifest.index[2]
 
 nf = load_neuronframe(root_id, client)
 
+edited_nf = nf.set_edits(nf.metaedits.query("has_merge").index, prefix="meta")
+# edited_nf = nf.set_edits([], prefix="meta")
+edited_nf.select_nucleus_component(inplace=True)
+edited_nf.remove_unused_nodes(inplace=True)
+edited_nf
+
+model_path = Path("data/models/local_compartment_classifier_ej_skeletons.skops")
+
+model = load(model_path)
+
 
 # %%
 
-base_info = client.chunkedgraph.segmentation_info
-base_info["skeletons"] = "skeleton"
-info = base_info.copy()
+# download features for the nodes
+wrangler = CAVEWrangler(client=client, n_jobs=-1, verbose=False)
+wrangler.set_level2_ids(edited_nf.nodes.index)
+wrangler.query_current_object_ids()  # get current ids as a proxy for getting synapses
+wrangler.query_level2_shape_features()
+wrangler.query_level2_synapse_features(method="existing")
 
-cv = cloudvolume.CloudVolume(
-    "precomputed://file://./tempskel",
-    mip=0,
-    info=info,
-    compress=False,
+# do an aggregation using the graph
+
+features = wrangler.features_.droplevel("object_id")
+features = features.drop(columns=["rep_coord_x", "rep_coord_y", "rep_coord_z"])
+
+old_nodes = edited_nf.nodes
+edited_nf.nodes = features
+
+neighborhood_features = edited_nf.k_hop_aggregation(
+    k=5, aggregations=["mean", "std"], verbose=True
 )
-cv.commit_info()
+joined_features = features.join(neighborhood_features, how="left")
 
-# %%
-sk_info = cv.skeleton.meta.default_info()
-
-# sk_info["transform"] = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0]
-sk_info["vertex_attributes"] = [
-    {"id": "radius", "data_type": "float32", "num_components": 1},
-    {"id": "vertex_types", "data_type": "float32", "num_components": 1},
-]
-cv.skeleton.meta.info = sk_info
-cv.skeleton.meta.commit_info()
-
-# %%
-vertices = nf.nodes[["x", "y", "z"]].values
-edges_unmapped = nf.edges[["source", "target"]].values
-edges = nf.nodes.index.get_indexer_for(edges_unmapped.flatten()).reshape(
-    edges_unmapped.shape
-)
+edited_nf.nodes = old_nodes
 
 
 # %%
-vertex_types = (nf.nodes["x"] > nf.nodes["x"].mean()).values.astype(np.float32)
 
-radius = 1000 * np.ones(len(vertices), dtype=np.float32)
+y_pred = model.predict(joined_features)
+class_to_int_map = {c: i for i, c in enumerate(model.classes_)}
+y_pred_int = np.array([class_to_int_map[c] for c in y_pred])
 
-sks = []
-for _ in range(1):
-    sk_cv = cloudvolume.Skeleton(
-        vertices,
-        edges,
-        radius,
-        vertex_types,
-        segid=root_id,
-        extra_attributes=sk_info["vertex_attributes"],
-        space="physical",
+edited_nf.nodes["predicted_compartment"] = y_pred_int
+
+# posteriors = model.predict_proba(joined_features)
+# posteriors = pd.DataFrame(
+#     posteriors, index=joined_features.index, columns=model.classes_
+# )
+# axon_post = posteriors["axon"] / (posteriors.sum(axis=1))
+
+# edited_nf.nodes["axon_posterior"] = 0.0
+# edited_nf.nodes.loc[joined_features.index, "axon_posterior"] = axon_post
+
+
+# %%
+
+from typing import Optional
+
+
+def write_skeleton(
+    nodes: pd.DataFrame,
+    edges: pd.DataFrame,
+    client: cc.CAVEclient,
+    attribute: Optional[str] = None,
+    directory: str = "./tempskel",
+):
+    # register an info file and set up CloudVolume
+    base_info = client.chunkedgraph.segmentation_info
+    base_info["skeletons"] = "skeleton"
+    info = base_info.copy()
+
+    cv = cloudvolume.CloudVolume(
+        f"precomputed://file://{directory}",
+        mip=0,
+        info=info,
+        compress=False,
     )
-    # sk_cv.vertex_typ .es =
+    cv.commit_info()
 
-    sks.append(sk_cv)
+    sk_info = cv.skeleton.meta.default_info()
+    sk_info["vertex_attributes"] = [
+        {"id": "radius", "data_type": "float32", "num_components": 1},
+        {"id": "vertex_types", "data_type": "float32", "num_components": 1},
+    ]
+    cv.skeleton.meta.info = sk_info
+    cv.skeleton.meta.commit_info()
 
-# %%
+    sks = []
+    for i in range(1):
+        # extract vertex information
+        vertices = edited_nf.nodes[["x", "y", "z"]].values
+        edges_unmapped = edited_nf.edges[["source", "target"]].values
+        edges = edited_nf.nodes.index.get_indexer_for(edges_unmapped.flatten()).reshape(
+            edges_unmapped.shape
+        )
 
-cv.skeleton.upload(sks)
-# %%
+        vertex_types = nodes[attribute].values.astype(np.float32)
 
-cf = CloudFiles(cv.cloudpath, progress=True)
+        radius = np.ones(len(vertices), dtype=np.float32)
+
+        sk_cv = cloudvolume.Skeleton(
+            vertices,
+            edges,
+            radius,
+            None,
+            segid=i,
+            extra_attributes=sk_info["vertex_attributes"],
+            space="physical",
+        )
+        sk_cv.vertex_types = vertex_types
+
+        sks.append(sk_cv)
+
+        cv.skeleton.upload(sks)
+
+        # cf = CloudFiles(cv.cloudpath, progress=True)
+
+
+write_skeleton(
+    edited_nf.nodes, edited_nf.edges, client, attribute="predicted_compartment"
+)
 
 # %%
 
@@ -89,18 +154,56 @@ coordinate_space = neuroglancer.CoordinateSpace(
     units=["nm", "nm", "nm"],
     scales=[1, 1, 1],  # was 25 25 25
 )
+
+# """
+shader = """
+void main() {
+  float compartment = vCustom2;
+  vec4 uColor = segmentColor();
+#   emitRGB(uColor.rgb*0.5 + vec4(0.5, 0.5, 0.5, 1) * compartment);
+}
+"""
 shader = """
 void main() {
 
   float compartment = vCustom2;
   vec4 uColor = segmentColor();
-  if (compartment == 1.0){    
+
+  if (compartment < 0.5){
+  	emitRGB(uColor.rgb);
+  } else {
+    emitRGB(uColor.rgb*.5);
+  }
+}
+"""
+shader = """
+void main() {
+
+  float compartment = vCustom2;
+  vec4 uColor = segmentColor();
+
+  if (compartment <= 0.5){
   	emitRGB(uColor.rgb);
   }
 
   else{
     emitRGB(vec3(1.0, 1.0, 1.0));
   }
+}
+"""
+shader = """
+void main() {
+  float compartment = vCustom2;
+  vec4 uColor = segmentColor();
+  emitRGB(colormapJet(compartment));
+}
+"""
+
+shader = """
+void main() {
+    float compartment = vCustom2;
+    vec4 uColor = segmentColor();
+    emitRGB(uColor.rgb*0.5 + vec3(0.5, 0.5, 0.5) * compartment);
 }
 """
 
@@ -122,15 +225,19 @@ viewer
 
 # %%
 
-# lines = np.empty((len(edges), 3), dtype=int)
-# lines[:, 0] = 2
-# lines[:, 1:3] = edges
+import pyvista as pv
 
-# poly = pv.PolyData(vertices.astype(float), lines=lines)
+pv.set_jupyter_backend("client")
 
-# plotter = pv.Plotter()
-# plotter.add_mesh(poly)
-# plotter.show()
+lines = np.empty((len(edges), 3), dtype=int)
+lines[:, 0] = 2
+lines[:, 1:3] = edges
+
+poly = pv.PolyData(vertices.astype(float), lines=lines)
+
+plotter = pv.Plotter()
+plotter.add_mesh(poly, scalars=vertex_types, cmap="coolwarm", line_width=10)
+plotter.show()
 # %%
 
 # info = cloudvolume.CloudVolume.create_new_info(
@@ -148,3 +255,5 @@ viewer
 #     # chunk_size=[512, 512, 512],  # units are voxels
 #     volume_size=[500_000, 500_000, 500_000],  # e.g. a cubic millimeter dataset
 # )
+
+# %%
