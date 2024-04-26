@@ -57,23 +57,32 @@ def compute_diffs_to_final(sequence_df):
     return sample_wise_metrics
 
 
-def compute_dropout_stats_for_neuron(neuron):
+def compute_dropout_stats_for_neuron(neuron, prefix="meta"):
     sequence = NeuronFrameSequence(
         neuron,
-        prefix="meta",
-        edit_label_name="metaoperation_id_dropped",
+        prefix=prefix,
+        edit_label_name=f"{prefix}operation_id_dropped",
         include_initial_state=False,
     )
 
-    metaedits = neuron.metaedits
-    filtered_metaedits = metaedits.query("has_filtered")
-    for metaoperation_id in filtered_metaedits.index:
-        edits_to_apply = metaedits.query("metaoperation_id != @metaoperation_id").index
+    if prefix == "meta":
+        edits = neuron.metaedits
+        filtered_edits = edits.query("has_filtered")
+    else:
+        edits = neuron.edits
+        filtered_edits = edits.query("is_filtered")
+
+    for operation_id in filtered_edits.index:
+        edits_to_apply = edits.query(f"{prefix}operation_id != @operation_id").index
         sequence.apply_edits(
-            edits_to_apply, label=metaoperation_id, replace=True, warn_on_missing=False
+            edits_to_apply,
+            label=operation_id,
+            replace=True,
+            warn_on_missing=False,
+            # only_additions=True,
         )
 
-    sequence.apply_edits(metaedits.index, label=-1, replace=True)
+    sequence.apply_edits(edits.index, label=-1, replace=True)
 
     sequence_feature_dfs = {}
     counts = sequence.apply_to_synapses_by_sample(
@@ -134,8 +143,8 @@ def process_neuron(root_id):
 
 from joblib import Parallel, delayed
 
-outs = Parallel(n_jobs=-1, verbose=10)(
-    delayed(process_neuron)(root_id) for root_id in manifest.index
+outs = Parallel(n_jobs=8, verbose=10)(
+    delayed(process_neuron)(root_id) for root_id in manifest.index[:1]
 )
 
 # %%
@@ -238,7 +247,7 @@ for root_id in example_root_ids[:]:
         get_metaoperation_modified, axis=1
     )
 
-    extended_neuron = neuron #
+    extended_neuron = neuron  #
     # neuron.set_edits(
     #     neuron.metaedits.query("has_merge & has_filtered")
     # )
@@ -291,6 +300,48 @@ for root_id in example_root_ids[:]:
         doc_save=True,
         group="dropout_importance_vs_distance",
         caption=root_id,
+    )
+
+# %%
+
+from IPython.display import display
+from nglui import statebuilder
+
+colors = sns.color_palette("coolwarm", n_colors=11)
+for root_id in example_root_ids[0:5]:
+    neuron = load_neuronframe(root_id, client)
+    diffs = feature_diffs_by_neuron.loc[root_id]
+    importances = diffs["counts"]["euclidean"]
+    metaedits = metaedits_by_neuron.loc[root_id].copy()
+    metaedits = metaedits.query("has_filtered & has_merge")
+    metaedits["importance"] = importances
+
+    qs = np.linspace(0, 1, 11)
+    quantile_bins = np.unique(metaedits["importance"].quantile(qs))
+    metaedits["importance_bin"] = (
+        pd.cut(metaedits["importance"], bins=quantile_bins, labels=False, right=False)
+        .fillna(10)
+        .astype(int)
+    )
+
+    # display(neuron.generate_neuroglancer_link(client, color_edits=False))
+    sbs, dfs = neuron._generate_link_bases(client)
+
+    annotation_mapper = statebuilder.PointMapper(
+        point_column="centroid", split_positions=True
+    )
+    for bin_idx, bin_df in metaedits.groupby("importance_bin"):
+        layer = statebuilder.AnnotationLayerConfig(
+            int(bin_idx), mapping_rules=annotation_mapper, color=colors[bin_idx]
+        )
+        sb = statebuilder.StateBuilder(layers=[layer], resolution=[1, 1, 1])
+        sbs.append(sb)
+        dfs.append(bin_df)
+
+    sb = statebuilder.ChainedStateBuilder(sbs)
+
+    display(
+        statebuilder.helpers.package_state(dfs, sb, client=client, return_as="html")
     )
 
 

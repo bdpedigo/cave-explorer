@@ -119,6 +119,7 @@ class NeuronFrameSequence:
         warn_on_reuse: bool = False,
         warn_on_missing: bool = True,
         replace: bool = False,
+        only_additions: bool = False,
     ) -> None:
         if label is None and isinstance(edits, (int, np.integer)):
             label = edits
@@ -144,9 +145,14 @@ class NeuronFrameSequence:
         else:
             self.applied_edit_ids = self.applied_edit_ids.append(edit_ids).unique()
 
-        unresolved_neuron = self.base_neuron.set_edits(
-            self.applied_edit_ids, inplace=False, prefix=self.prefix
-        )
+        if only_additions:
+            unresolved_neuron = self.base_neuron.set_additions(
+                self.applied_edit_ids, inplace=False, prefix=self.prefix
+            )
+        else:
+            unresolved_neuron = self.base_neuron.set_edits(
+                self.applied_edit_ids, inplace=False, prefix=self.prefix
+            )
 
         resolved_neuron = resolve_neuron(
             unresolved_neuron, self.base_neuron, warn_on_missing=warn_on_missing

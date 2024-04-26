@@ -190,6 +190,22 @@ class NeuronFrame(NetworkFrame):
                 query, local_dict=locals(), inplace=inplace
             ).query_edges(query, local_dict=locals(), inplace=inplace)
 
+    def set_additions(self, edit_ids: Union[list[int], int], inplace=False, prefix=""):
+        if isinstance(edit_ids, int):
+            edit_ids = [edit_ids]
+
+        # query does not do any removals
+        query = (
+            f"{prefix}operation_added.isin(@edit_ids) | {prefix}operation_added == -1"
+        )
+        if inplace:
+            self.query_nodes(query, local_dict=locals(), inplace=inplace)
+            self.query_edges(query, local_dict=locals(), inplace=inplace)
+        else:
+            return self.query_nodes(
+                query, local_dict=locals(), inplace=inplace
+            ).query_edges(query, local_dict=locals(), inplace=inplace)
+
     def remove_unused_synapses(
         self, which: Literal["both", "pre", "post"] = "both", inplace=False
     ) -> None:

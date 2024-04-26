@@ -6,26 +6,25 @@ version = "0.1.0"
 
 [tool.poetry.dependencies]
 Jinja2 = ">=3.1.2"
-POT = "^0.9.1"
 brotlicffi = "^1.1.0.0"
-caveclient = "^5.17.2"
+caveclient = "^5.20.3"
 cloud-volume = "^8.27.0"
 gcsfs = "^2023.12.2.post1"
 glasbey = "^0.2.0"
 graspologic = "^3.3.0"
 ipykernel = "^6.25.2"
 ipython = ">8.16.0"
-matplotlib-venn = "^0.11.9"
 meshparty = "^1.16.14"
 navis = "^1.5.0"
 networkframe = { path = "../networkframe", develop = true }
 nglui = "^2.14.3"
 # pkg = { path = "pkg" }
 python = ">3.11.0,<3.12.0"
-scikit-learn = "1.2.2"
+scikit-learn = "^1.4.2"
 tables = { git = "https://github.com/PyTables/PyTables" }
 task-queue = "^2.13.0"
 urllib3 = "^1.26.17"
+pyyaml = "^6.0.1"
 
 [tool.poetry.group.dev]
 optional = true
