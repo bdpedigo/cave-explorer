@@ -45,8 +45,10 @@ nucs.set_index("pt_root_id", inplace=True)
 # 864691135082074359 not much going on here besides the soma
 # 864691135509890057 many sigs
 # 864691135082074359 not much going on here besides the soma
+# 864691136195284556 crazy axon, projection to L2 gets picked up
 
 root_id = proofreading_table.sample(1)["pt_root_id"].values[0]
+# root_id = 864691135234167385
 nuc_id = nucs.loc[root_id, "id"]
 
 filename = f"{root_id}_{nuc_id}.h5"
@@ -453,7 +455,7 @@ for i, (seg, result) in enumerate(most_sig_results.iterrows()):
 state_dict = json.loads(
     sb.make_neuron_neuroglancer_link(client, root_id, return_as="json")
 )
-state_dict["layers"][1]["objectAlpha"] = 0.2
+state_dict["layers"][1]["objectAlpha"] = 0.4
 base_sb = sb.StateBuilder(state_dict)
 sbs = []
 dfs = []
@@ -500,3 +502,55 @@ final_sb = sb.ChainedStateBuilder(sbs)
 final_sb.render_state(dfs, return_as="html")
 
 # %%
+import cloudvolume
+from neuroglancer.coordinate_space import CoordinateSpace
+from neuroglancer.viewer_state import AnnotationPropertySpec
+from neuroglancer.write_annotations import AnnotationWriter
+
+coord_space = CoordinateSpace(names=["x", "y", "z"], units=["nm"] * 3, scales=[1, 1, 1])
+
+ann_props = []
+ann_prop = AnnotationPropertySpec(
+    id="synapse", type="uint16", description="pre_synapses"
+)
+ann_props.append(ann_prop)
+
+writer = AnnotationWriter(
+    coordinate_space=coord_space,
+    annotation_type="point",
+    properties=ann_props,
+)
+
+for i, row in pre_syns.iterrows():
+    writer.add_point(row["ctr_pt_position"], id=i)
+
+writer.write("test_pre_synapses")
+
+base_info = client.chunkedgraph.segmentation_info
+# base_info["skeletons"] = "skeleton"
+info = base_info.copy()
+info["points"] = "points"
+cv = cloudvolume.CloudVolume(
+    "precomputed://gs://allen-minnie-phase3/tempskel", mip=0, info=info, compress=False
+)
+cv.commit_info()
+
+# %%
+
+# CloudFiles("file:///tmp").puts("test_pre_synapses", "test_pre_synapses")
+
+# %%
+import neuroglancer
+import neuroglancer.static_file_server
+
+server = neuroglancer.static_file_server.StaticFileServer(
+    static_dir=".", bind_address="127.0.0.1", daemon=True
+)
+
+viewer = neuroglancer.Viewer()
+with viewer.txn() as s:
+    s.dimensions = coord_space
+    # s.layers["pre_syn"] = neuroglancer.PointAnnotationLayer(
+    #     source="precomputed://test_pre_synapses"
+    # )
+viewer
