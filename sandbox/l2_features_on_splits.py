@@ -24,7 +24,6 @@ client = cc.CAVEclient("minnie65_phase3_v1")
 
 model_path = Path("data/models/local_compartment_classifier_ej_skeletons.skops")
 
-
 model = load(model_path)
 
 # %%
@@ -36,7 +35,7 @@ manifest = manifest.query("is_current")
 nfs_by_root_id = {}
 final_nfs_by_root_id = {}
 
-root_ids = manifest.index[:20]
+root_ids = manifest.index[:]
 for root_id in tqdm(root_ids):
     # load and edit neuron
     nf = load_neuronframe(root_id, client)
@@ -115,6 +114,7 @@ for root_id, edited_nf in tqdm(nfs_by_root_id.items()):
 
 level2_info = pd.concat(level2_info_list, axis=0)
 
+del final_nfs_by_root_id
 
 # %%
 if show_neuron:
@@ -142,7 +142,6 @@ wrangler.query_level2_synapse_features(method="existing")
 
 # %%
 wrangler.register_model(model, "l2class_ej_skeletons")
-wrangler.stack_model_predict_proba("l2class_ej_skeletons")
 
 # %%
 
@@ -175,6 +174,44 @@ for root_id, edited_nf in tqdm(list(nfs_by_root_id.items())[:]):
 
 # %%
 
+wrangler.stack_model_predict_proba("l2class_ej_skeletons")
+
+
+pred_neighborhood_features = []
+for root_id, edited_nf in tqdm(list(nfs_by_root_id.items())[:]):
+    # do an aggregation using the graph
+    # doing this manually here since future versions could operate on the
+    # non-cave graph
+    idx = pd.IndexSlice
+
+    features = wrangler.predict_features_.loc[
+        idx[
+            :,
+            level2_info.query("object_id == @root_id").index.intersection(
+                wrangler.predict_features_.index.get_level_values("level2_id")
+            ),
+        ],
+        :,
+    ]
+    features = features.droplevel("object_id")
+    features = features.reindex(edited_nf.nodes.index)
+
+    # # temporarily add in the features to nodes
+    old_nodes = edited_nf.nodes
+    edited_nf.nodes = features
+    neighborhood_features = edited_nf.k_hop_aggregation(
+        k=5,
+        aggregations=["mean", "std"],
+        engine="scipy",
+    )
+    pred_neighborhood_features.append(neighborhood_features)
+
+    # replace the nodes to the original data
+    edited_nf.nodes = old_nodes
+
+
+# %%
+
 neighborhood_features = pd.concat(all_neighborhood_features, axis=0)
 neighborhood_features = neighborhood_features.loc[
     wrangler.features_.index.get_level_values("level2_id")
@@ -182,6 +219,12 @@ neighborhood_features = neighborhood_features.loc[
 neighborhood_features.index = wrangler.features_.index
 wrangler.neighborhood_features_ = neighborhood_features
 
+pred_neighborhood_features = pd.concat(pred_neighborhood_features, axis=0)
+pred_neighborhood_features = pred_neighborhood_features.loc[
+    wrangler.predict_features_.index.get_level_values("level2_id")
+]
+pred_neighborhood_features.index = wrangler.predict_features_.index
+wrangler.predict_features_ = wrangler.predict_features_.join(pred_neighborhood_features)
 
 # %%
 
@@ -258,31 +301,200 @@ sns.barplot(x=lda.coef_[0], y=X.columns, ax=axs[0])
 sns.barplot(x=rf.feature_importances_, y=X.columns, ax=axs[1])
 
 # %%
-full_X = features.loc[root_id, X_train.columns].dropna()
 
-full_y_pred = lda.predict(transformer.transform(full_X))
+root_id = test_root_ids[2]
+edited_nf = nfs_by_root_id[root_id]
+
+full_X = X_test.loc[root_id]
 full_X_lda = lda.transform(transformer.transform(full_X))
 
 # %%
+from sklearn.preprocessing import StandardScaler
+
 edited_nf.nodes["lda_pred_val"] = 0.0
 edited_nf.nodes.loc[
     edited_nf.nodes.index.intersection(full_X.index), "lda_pred_val"
-] = full_X_lda
+] = 0.1 * StandardScaler().fit_transform(full_X_lda) + 0.5
+
 
 # %%
+
 pv.set_jupyter_backend("client")
 plotter = pv.Plotter()
 set_up_camera(plotter, edited_nf)
 plotter.add_mesh(
     edited_nf.to_skeleton_polydata(label="lda_pred_val"),
-    line_width=0.1,
+    line_width=1,
     scalars="lda_pred_val",
     cmap="coolwarm",
 )
 plotter.add_mesh(
-    edited_nf.to_merge_polydata(),
+    edited_nf.to_split_polydata(),
     color="black",
 )
 plotter.show()
+
+# %%
+
+from pathlib import Path
+from typing import Optional, Union
+
+import caveclient as cc
+import cloudvolume
+import numpy as np
+import pandas as pd
+import seaborn as sns
+from networkframe import NetworkFrame
+from skops.io import load
+
+
+def write_networkframes_to_skeletons(
+    networkframes: Union[NetworkFrame, dict[NetworkFrame]],
+    client: cc.CAVEclient,
+    attribute: Optional[str] = None,
+    directory: str = "gs://allen-minnie-phase3/tempskel",
+):
+    # register an info file and set up CloudVolume
+    base_info = client.chunkedgraph.segmentation_info
+    base_info["skeletons"] = "skeleton"
+    info = base_info.copy()
+
+    cv = cloudvolume.CloudVolume(
+        f"precomputed://{directory}",
+        mip=0,
+        info=info,
+        compress=False,
+    )
+    cv.commit_info()
+
+    sk_info = cv.skeleton.meta.default_info()
+    sk_info["vertex_attributes"] = [
+        {"id": "radius", "data_type": "float32", "num_components": 1},
+        {"id": "vertex_types", "data_type": "float32", "num_components": 1},
+    ]
+    cv.skeleton.meta.info = sk_info
+    cv.skeleton.meta.commit_info()
+
+    sks = []
+    if isinstance(networkframes, NetworkFrame):
+        networkframes = {0: networkframes}
+
+    for name, networkframe in networkframes.items():
+        # extract vertex information
+        vertices = networkframe.nodes[["x", "y", "z"]].values
+        edges_unmapped = networkframe.edges[["source", "target"]].values
+        edges = networkframe.nodes.index.get_indexer_for(
+            edges_unmapped.flatten()
+        ).reshape(edges_unmapped.shape)
+
+        vertex_types = networkframe.nodes[attribute].values.astype(np.float32)
+
+        radius = np.ones(len(vertices), dtype=np.float32)
+
+        sk_cv = cloudvolume.Skeleton(
+            vertices,
+            edges,
+            radius,
+            None,
+            segid=name,
+            extra_attributes=sk_info["vertex_attributes"],
+            space="physical",
+        )
+        sk_cv.vertex_types = vertex_types
+
+        sks.append(sk_cv)
+
+    cv.skeleton.upload(sks)
+
+
+write_networkframes_to_skeletons(
+    {root_id: edited_nf},
+    client,
+    attribute="lda_pred_val",
+    directory="gs://allen-minnie-phase3/tempskel",
+)
+
+# %%
+
+import json
+from pathlib import Path
+from typing import Optional, Union
+
+import caveclient as cc
+import cloudvolume
+import numpy as np
+import pandas as pd
+import seaborn as sns
+from networkframe import NetworkFrame
+from nglui import statebuilder
+from skops.io import load
+
+sbs = []
+dfs = []
+layers = []
+viewer_resolution = client.info.viewer_resolution()
+img_layer = statebuilder.ImageLayerConfig(
+    client.info.image_source(),
+)
+seg_layer = statebuilder.SegmentationLayerConfig(
+    client.info.segmentation_source(),
+    alpha_3d=0.1,
+    name="seg",
+)
+seg_layer.add_selection_map(selected_ids_column="object_id")
+
+skel_layer = statebuilder.SegmentationLayerConfig(
+    "precomputed://gs://allen-minnie-phase3/tempskel",
+    name="skeleton",
+)
+skel_layer.add_selection_map(selected_ids_column="object_id")
+base_sb = statebuilder.StateBuilder(
+    [img_layer, seg_layer, skel_layer],
+    client=client,
+    resolution=viewer_resolution,
+)
+
+sbs.append(base_sb)
+dfs.append(pd.DataFrame({"object_id": [root_id]}))
+
+splits = edited_nf.edits.query("~is_merge").copy()
+splits["centroid_x"] = splits["centroid_x"] / 4
+splits["centroid_y"] = splits["centroid_y"] / 4
+splits["centroid_z"] = splits["centroid_z"] / 40
+
+point_mapper = statebuilder.PointMapper(
+    point_column="centroid", description_column="operation_id", split_positions=True
+)
+point_layer = statebuilder.AnnotationLayerConfig(
+    name="splits", linked_segmentation_layer="seg", mapping_rules=point_mapper
+)
+sb = statebuilder.StateBuilder([point_layer], client=client, resolution=[1, 1, 1])
+sbs.append(sb)
+dfs.append(splits.reset_index())
+
+sb = statebuilder.ChainedStateBuilder(sbs)
+json_out = statebuilder.helpers.package_state(dfs, sb, client=client, return_as="json")
+state_dict = json.loads(json_out)
+
+shader = """
+void main() {
+    float compartment = vCustom2;
+    vec4 uColor = segmentColor();
+    emitRGB(vec3(0.1, 0.1, 0.3) + compartment * vec3(1, 0, 0));
+}
+"""
+skel_rendering_kws = {
+    "shader": shader,
+    "mode2d": "lines_and_points",
+    "mode3d": "lines",
+    "lineWidth3d": 2.5,
+}
+
+state_dict["layers"][2]["skeletonRendering"] = skel_rendering_kws
+
+
+statebuilder.StateBuilder(base_state=state_dict, client=client).render_state(
+    return_as="html"
+)
 
 # %%
