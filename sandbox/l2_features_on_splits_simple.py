@@ -1,6 +1,5 @@
 # %%
 
-from datetime import timedelta
 from pathlib import Path
 
 import caveclient as cc
@@ -9,25 +8,22 @@ import numpy as np
 import pandas as pd
 import pyvista as pv
 import seaborn as sns
-from scipy.sparse.csgraph import dijkstra
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, pairwise_distances_argmin_min
 from sklearn.preprocessing import QuantileTransformer
 from skops.io import load
+from tqdm.auto import tqdm
 from troglobyte.features import CAVEWrangler
 
 from pkg.edits import get_detailed_change_log
-from pkg.neuronframe import load_neuronframe
 from pkg.plot import set_up_camera
-from pkg.utils import load_manifest
 
 client = cc.CAVEclient("minnie65_phase3_v1")
 
 model_path = Path("data/models/local_compartment_classifier_ej_skeletons.skops")
 
 model = load(model_path)
-
 
 proofreading_df = client.materialize.query_table("proofreading_status_public_release")
 
@@ -46,11 +42,16 @@ extended_df = proofreading_df.query(
 
 # %%
 
-from sklearn.metrics import pairwise_distances_argmin_min
+out_path = Path("results/outs/split_features")
 
+box_width = 5_000
+neighborhood_hops = 5
+verbose = False
 all_features = []
 all_labels = []
-for root_id in extended_df["pt_root_id"].sample(1):
+root_ids = extended_df["pt_root_id"].sample(100, random_state=88)
+
+for root_id in tqdm(root_ids):
     change_log = get_detailed_change_log(root_id, client)
     change_log["timestamp"] = pd.to_datetime(
         change_log["timestamp"], utc=True, format="ISO8601"
@@ -71,218 +72,87 @@ for root_id in extended_df["pt_root_id"].sample(1):
     splits = change_log.query("~is_merge")
 
     before_roots = splits["before_root_ids"].explode()
-    timestamps = splits["timestamp"]
-    timestamps = timestamps - timedelta(milliseconds=2)
+    # timestamps = splits["timestamp"]
+    # timestamps = timestamps - timedelta(milliseconds=2)
 
     points_by_root = {}
-    timestamps_by_root = {}
     for operation_id, before_root in before_roots.items():
         point = splits.loc[operation_id, "centroid_nm"]
         points_by_root[before_root] = point
-        timestamps_by_root[before_root] = timestamps.loc[operation_id]
     points_by_root = pd.Series(points_by_root)
-    timestamps_by_root = pd.Series(timestamps_by_root)
 
-    wrangler = CAVEWrangler(client=client, n_jobs=-1, verbose=10)
+    wrangler = CAVEWrangler(client=client, n_jobs=-1, verbose=verbose)
     wrangler.set_objects(before_roots.to_list())
-    wrangler.set_query_boxes_from_points(points_by_root, box_width=10_000)
+    wrangler.set_query_boxes_from_points(points_by_root, box_width=box_width)
     wrangler.query_level2_shape_features()
     wrangler.query_level2_synapse_features(method="update")
     wrangler.register_model(model, "l2class_ej_skeleton")
     wrangler.aggregate_features_by_neighborhood(
-        aggregations=["mean", "std"], neighborhood_hops=5
+        aggregations=["mean", "std"], neighborhood_hops=neighborhood_hops
     )
-    all_features.append(wrangler.features_)
-    labels = pd.Series("split", index=wrangler.features_.index, name="label").to_frame()
+    features = wrangler.features_
+    features = features.dropna()
+    features["current_root_id"] = root_id
+    features = features.reset_index().set_index(
+        ["current_root_id", "object_id", "level2_id"]
+    )
+    all_features.append(features)
 
-    # TODO instead of argmin, could just use the object_id that was specified, maybe? 
+    labels = pd.Series("split", index=features.index, name="label").to_frame()
     _, min_dists_to_edit = pairwise_distances_argmin_min(
-        wrangler.features_[["rep_coord_x", "rep_coord_y", "rep_coord_z"]],
-        points_by_root.values,
+        features[["rep_coord_x", "rep_coord_y", "rep_coord_z"]],
+        np.stack(points_by_root.values),
     )
     labels["min_dist_to_edit"] = min_dists_to_edit
+    labels["current_root_id"] = root_id
+    labels = labels.reset_index().set_index(
+        ["current_root_id", "object_id", "level2_id"]
+    )
+    all_labels.append(labels)
 
+    # now do the same for the final cleaned neuron
+    wrangler = CAVEWrangler(client=client, n_jobs=-1, verbose=verbose)
+    wrangler.set_objects([root_id])
+    wrangler.query_level2_shape_features()
+    wrangler.query_level2_synapse_features(method="existing")
+    wrangler.register_model(model, "l2class_ej_skeleton")
+    wrangler.aggregate_features_by_neighborhood(
+        aggregations=["mean", "std"], neighborhood_hops=neighborhood_hops
+    )
+    features = wrangler.features_
+    features = features.dropna()
+    all_features.append(features)
+    labels = pd.Series("no split", index=features.index, name="label").to_frame()
+    _, min_dists_to_edit = pairwise_distances_argmin_min(
+        features[["rep_coord_x", "rep_coord_y", "rep_coord_z"]],
+        np.stack(points_by_root.values),
+    )
+    labels["min_dist_to_edit"] = min_dists_to_edit
+    labels["root_id"] = root_id
     all_labels.append(labels)
 
 # %%
 
-manifest = load_manifest()
-manifest["is_current"] = client.chunkedgraph.is_latest_roots(manifest.index.to_list())
-manifest = manifest.query("is_current")
+features = pd.concat(all_features, axis=0)
+labels = pd.concat(all_labels, axis=0)
 
-root_ids = manifest.index[:16]
+features.to_csv("feature_dump.csv")
+labels.to_csv("label_dump.csv")
 
+# %%
+split_labels = labels.query("(label == 'split') & (min_dist_to_edit < 2000)")
+non_split_labels = labels.query("(label == 'no split')")
 
-def generate_features_for_root(
-    root_id: int, client: cc.CAVEclient, return_networkframes=False
-):
-    # load and edit neuron
-    nf = load_neuronframe(root_id, client)
-    edited_nf = nf.set_edits(nf.metaedits.query("has_merge").index, prefix="meta")
-    edited_nf.select_nucleus_component(inplace=True)
-    edited_nf.remove_unused_nodes(inplace=True)
+# %%
 
-    final_nf = nf.set_edits(nf.edits.index)
-    final_nf.select_nucleus_component(inplace=True)
-    final_nf.remove_unused_nodes(inplace=True)
-
-    # generate path lengths to closest edits
-    edited_nf.apply_edge_lengths(inplace=True)
-    edited_nf.to_sparse_adjacency(weight_col="length")
-
-    splits = edited_nf.edits.query("~is_merge")
-    edit_index = edited_nf.nodes.query(
-        "operation_added.isin(@splits.index) | operation_removed.isin(@splits.index)"
-    ).index
-    edit_index = edit_index.intersection(edited_nf.nodes.index)
-    edit_iloc = edited_nf.nodes.index.get_indexer_for(edit_index)
-    sparse_adj = edited_nf.to_sparse_adjacency(weight_col="length")
-    sparse_adj = (sparse_adj + sparse_adj.T) / 2
-
-    path_lengths = dijkstra(
-        sparse_adj, indices=edit_iloc, min_only=True, directed=False
-    )
-
-    path_lengths = pd.Series(
-        path_lengths, index=edited_nf.nodes.index, name="path_length_to_edit"
-    )
-    # path_lengths = path_lengths.reset_index().set_index(["object_id", "level2_id"])['path_length_to_edit']
-    # all_path_lengths.append(path_lengths)
-
-    # generate training data
-    close_nodes = path_lengths[path_lengths < 2_000].index
-    somewhat_close_nodes = path_lengths[path_lengths < 10_000].index
-    far_nodes = path_lengths[path_lengths >= 25_000].index
-    far_final_nodes = far_nodes.intersection(final_nf.nodes.index)
-
-    # relevant_index = somewhat_close_nodes.union(final_nf.nodes.index)
-    # relevant_index = relevant_index.intersection(edited_nf.nodes.index)
-    relevant_index = edited_nf.nodes.index
-
-    relevant_nf = edited_nf.query_nodes(
-        "index.isin(@relevant_index)", local_dict=locals()
-    ).deepcopy()
-
-    relevant_nf.nodes["dist_to_edit_class"] = "far"
-    relevant_nf.nodes.loc[close_nodes, "dist_to_edit_class"] = "close"
-    relevant_nf.nodes["scalars"] = relevant_nf.nodes["dist_to_edit_class"].map(
-        {"close": 1.0, "far": 0.0}
-    )
-
-    level2_info = pd.DataFrame(index=relevant_index)
-    level2_info.index.name = "level2_id"
-    level2_info["object_id"] = root_id
-    level2_info["dist_to_edit"] = path_lengths
-    level2_info["dist_to_edit_class"] = relevant_nf.nodes["dist_to_edit_class"]
-
-    # download features for the nodes
-    wrangler = CAVEWrangler(client=client, n_jobs=None, verbose=False)
-    wrangler.set_level2_ids(relevant_index)
-    wrangler.query_current_object_ids()  # get current ids as a proxy for getting synapses
-    wrangler.query_level2_shape_features()
-
-    wrangler.query_level2_synapse_features(method="existing")
-
-    wrangler.register_model(model, "l2class_ej_skeletons")
-
-    # do an aggregation using the graph
-    # doing this manually here since future versions could operate on the
-    # non-cave graph
-    features = wrangler.features_
-    features = features.drop(columns=["rep_coord_x", "rep_coord_y", "rep_coord_z"])
-    features = features.droplevel("object_id")
-
-    # this can have Nan and that's chill
-    features = features.reindex(relevant_nf.nodes.index)
-
-    # # temporarily add in the features to nodes for the aggregation
-    old_nodes = relevant_nf.nodes
-    relevant_nf.nodes = features
-    neighborhood_features = relevant_nf.k_hop_aggregation(
-        k=5,
-        aggregations=["mean", "std"],
-        engine="scipy",
-    )
-    wrangler.neighborhood_features = neighborhood_features.loc[
-        wrangler.features_.index.get_level_values("level2_id")
-    ]
-    neighborhood_features.index = wrangler.features_.index
-    wrangler.neighborhood_features_ = neighborhood_features
-
-    # stack the model and predict classes
-    wrangler.stack_model_predict_proba("l2class_ej_skeletons")
-
-    # do another round after stacking the model
-    features = wrangler.predict_features_
-    features = features.droplevel("object_id")
-    features = features.reindex(relevant_nf.nodes.index)
-
-    # # temporarily add in the features to nodes
-    # old_nodes = relevant_nf.nodes
-    relevant_nf.nodes = features
-    pred_neighborhood_features = relevant_nf.k_hop_aggregation(
-        k=5,
-        aggregations=["mean", "std"],
-        engine="scipy",
-    )
-
-    # replace the nodes to the original data
-    relevant_nf.nodes = old_nodes
-
-    pred_neighborhood_features = pred_neighborhood_features.loc[
-        wrangler.predict_features_.index.get_level_values("level2_id")
-    ]
-    pred_neighborhood_features.index = wrangler.predict_features_.index
-    wrangler.predict_features_ = wrangler.predict_features_.join(
-        pred_neighborhood_features
-    )
-
-    features = wrangler.features_.droplevel("object_id").reset_index()
-    features["object_id"] = root_id
-    features = features.set_index(["object_id", "level2_id"])
-
-    level2_info = level2_info.reset_index().set_index(["object_id", "level2_id"])
-    level2_info = level2_info.loc[features.index]
-
-    if not return_networkframes:
-        return features, level2_info
-    else:
-        return features, level2_info, relevant_nf, edited_nf, final_nf
-
-
-from joblib import Parallel, delayed
-
-results = Parallel(n_jobs=4, verbose=10)(
-    delayed(generate_features_for_root)(root_id, client) for root_id in root_ids
+X = pd.concat(
+    [features.loc[split_labels.index], features.loc[non_split_labels.index]], axis=0
 )
-
-# %%
-
-features = pd.concat([x[0] for x in results], axis=0)
-level2_info = pd.concat([x[1] for x in results], axis=0)
-
-
-# %%
-features_close = features.loc[level2_info.query("dist_to_edit_class == 'close'").index]
-features_far = features.loc[level2_info.query("dist_to_edit_class == 'far'").index]
-
-features_close = features_close.dropna()
-features_far = features_far.dropna()
-
-# sub_features_far = features_far.sample(n=1 * len(features_close))
-sub_features_far = features_far
-
-# %%
-
-X = pd.concat([features_close, sub_features_far], axis=0)
-# X["object_id"] = X.index.map(level2_info["object_id"])
-X = X.drop(columns=["rep_coord_x", "rep_coord_y", "rep_coord_z"])
-# X = X.drop(columns=[x for x in X.columns if "std" in x])
+X = X.drop(columns=[col for col in X.columns if "rep_coord_" in col])
 y = pd.Series(
-    ["split"] * len(features_close) + ["no split"] * len(sub_features_far),
+    ["split"] * len(split_labels) + ["no split"] * len(non_split_labels),
     index=X.index,
 )
-# X = X.reset_index().set_index(["object_id", "level2_id"])
 y.index = X.index
 
 # %%
@@ -290,11 +160,11 @@ from sklearn.model_selection import train_test_split
 
 train_root_ids, test_root_ids = train_test_split(root_ids, test_size=0.2)
 
-X_train = X.loc[train_root_ids]
-y_train = y.loc[train_root_ids]
+X_train = X
+y_train = y
 
-X_test = X.loc[test_root_ids]
-y_test = y.loc[test_root_ids]
+X_test = X
+y_test = y
 
 # %%
 # try LDA
@@ -335,8 +205,17 @@ sns.barplot(x=lda.coef_[0], y=X.columns, ax=axs[0])
 sns.barplot(x=rf.feature_importances_, y=X.columns, ax=axs[1])
 
 # %%
+from pkg.neuronframe import load_neuronframe
 
 root_id = test_root_ids[3]
+
+nf = load_neuronframe(root_id, client)
+edited_nf = nf.set_edits(nf.metaedits.query("has_merge").index, prefix="meta")
+edited_nf.select_nucleus_component(inplace=True)
+edited_nf.remove_unused_nodes(inplace=True)
+
+
+# %%
 
 features, level2_info, relevant_nf, edited_nf, final_nf = generate_features_for_root(
     root_id, client, return_networkframes=True
