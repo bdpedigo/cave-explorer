@@ -4358,6 +4358,29 @@ files = [
 ]
 
 [[package]]
+name = "pcg-skel"
+version = "1.0.2"
+description = "Skeletonization using the pychunkedgraph"
+optional = false
+python-versions = ">=3.9"
+files = [
+    {file = "pcg_skel-1.0.2-py3-none-any.whl", hash = "sha256:513153c5ef46f6a92978be76c7df0e197ad0a8e8099594c1a36c2c804269eafe"},
+    {file = "pcg_skel-1.0.2.tar.gz", hash = "sha256:073fb485b2b27d3ddb998b85356ff9e69e2003dafa4dc3e1538dc997c74116e9"},
+]
+
+[package.dependencies]
+caveclient = ">=4.12.4"
+cloud-volume = ">=3.6.0"
+fastremap = "*"
+meshparty = ">=1.12.0"
+numpy = "*"
+orjson = "*"
+pandas = "*"
+scipy = "*"
+sqlitedict = "*"
+trimesh = "*"
+
+[[package]]
 name = "pexpect"
 version = "4.8.0"
 description = "Pexpect allows easy control of interactive console applications."
@@ -6012,6 +6035,16 @@ files = [
 ]
 
 [[package]]
+name = "sqlitedict"
+version = "2.1.0"
+description = "Persistent dict in Python, backed up by sqlite3 and pickle, multithread-safe."
+optional = false
+python-versions = "*"
+files = [
+    {file = "sqlitedict-2.1.0.tar.gz", hash = "sha256:03d9cfb96d602996f1d4c2db2856f1224b96a9c431bdd16e78032a72940f9e8c"},
+]
+
+[[package]]
 name = "stack-data"
 version = "0.6.2"
 description = "Extract data from python stack frames and tracebacks for informative displays"
@@ -6849,4 +6882,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">3.11.0,<3.12.0"
-content-hash = "bfc662db0d16b77ef1138d7e0934e8f593352c0e7ee463e51168b95ada9ed164"
+content-hash = "e01be6c53bd022f0d1f364265879eb9c1c56eb591e51169c9ba1696c714aff0e"

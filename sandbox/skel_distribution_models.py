@@ -82,6 +82,7 @@ def load_mw(directory, filename):
         f.seek(0)
         mw = meshwork.load_meshwork(f)
 
+    mw.reset_mask()
     return mw
 
 

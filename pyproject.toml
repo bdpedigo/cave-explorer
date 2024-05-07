@@ -25,6 +25,7 @@ tables = { git = "https://github.com/PyTables/PyTables" }
 task-queue = "^2.13.0"
 urllib3 = "^1.26.17"
 pyyaml = "^6.0.1"
+pcg-skel = "^1.0.2"
 
 [tool.poetry.group.dev]
 optional = true

@@ -13,7 +13,6 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report
 from sklearn.preprocessing import QuantileTransformer
 from skops.io import load
-from tqdm.auto import tqdm
 from troglobyte.features import CAVEWrangler
 
 from pkg.neuronframe import load_neuronframe
@@ -32,11 +31,12 @@ manifest = load_manifest()
 manifest["is_current"] = client.chunkedgraph.is_latest_roots(manifest.index.to_list())
 manifest = manifest.query("is_current")
 
-nfs_by_root_id = {}
-final_nfs_by_root_id = {}
+root_ids = manifest.index[:16]
 
-root_ids = manifest.index[:40]
-for root_id in tqdm(root_ids):
+
+def generate_features_for_root(
+    root_id: int, client: cc.CAVEclient, return_networkframes=False
+):
     # load and edit neuron
     nf = load_neuronframe(root_id, client)
     edited_nf = nf.set_edits(nf.metaedits.query("has_merge").index, prefix="meta")
@@ -46,33 +46,11 @@ for root_id in tqdm(root_ids):
     final_nf = nf.set_edits(nf.edits.index)
     final_nf.select_nucleus_component(inplace=True)
     final_nf.remove_unused_nodes(inplace=True)
-    final_nfs_by_root_id[root_id] = final_nf
 
     # generate path lengths to closest edits
     edited_nf.apply_edge_lengths(inplace=True)
     edited_nf.to_sparse_adjacency(weight_col="length")
-    nfs_by_root_id[root_id] = edited_nf
 
-# %%
-
-show_neuron = False
-
-if show_neuron:
-    pv.set_jupyter_backend("client")
-    plotter = pv.Plotter()
-    set_up_camera(plotter, edited_nf)
-    plotter.add_mesh(edited_nf.to_skeleton_polydata(), color="black", line_width=0.1)
-    plotter.add_mesh(final_nf.to_skeleton_polydata(), color="blue", line_width=0.3)
-    plotter.add_mesh(edited_nf.to_split_polydata(), color="red")
-    plotter.show()
-
-
-# %%
-
-level2_info_list = []
-
-all_path_lengths = []
-for root_id, edited_nf in tqdm(nfs_by_root_id.items()):
     splits = edited_nf.edits.query("~is_merge")
     edit_index = edited_nf.nodes.query(
         "operation_added.isin(@splits.index) | operation_removed.isin(@splits.index)"
@@ -96,159 +74,136 @@ for root_id, edited_nf in tqdm(nfs_by_root_id.items()):
     close_nodes = path_lengths[path_lengths < 2_000].index
     somewhat_close_nodes = path_lengths[path_lengths < 10_000].index
     far_nodes = path_lengths[path_lengths >= 25_000].index
-    final_nf = final_nfs_by_root_id[root_id]
     far_final_nodes = far_nodes.intersection(final_nf.nodes.index)
 
-    edited_nf.nodes["dist_to_edit_class"] = "far"
-    edited_nf.nodes.loc[close_nodes, "dist_to_edit_class"] = "close"
-    edited_nf.nodes["scalars"] = edited_nf.nodes["dist_to_edit_class"].map(
+    # relevant_index = somewhat_close_nodes.union(final_nf.nodes.index)
+    # relevant_index = relevant_index.intersection(edited_nf.nodes.index)
+    relevant_index = edited_nf.nodes.index
+
+    relevant_nf = edited_nf.query_nodes(
+        "index.isin(@relevant_index)", local_dict=locals()
+    ).deepcopy()
+
+    relevant_nf.nodes["dist_to_edit_class"] = "far"
+    relevant_nf.nodes.loc[close_nodes, "dist_to_edit_class"] = "close"
+    relevant_nf.nodes["scalars"] = relevant_nf.nodes["dist_to_edit_class"].map(
         {"close": 1.0, "far": 0.0}
     )
 
-    neuron_level2_info = pd.DataFrame(index=somewhat_close_nodes.union(far_nodes))
-    neuron_level2_info.index.name = "level2_id"
-    neuron_level2_info["object_id"] = root_id
-    neuron_level2_info["dist_to_edit"] = path_lengths
-    neuron_level2_info["dist_to_edit_class"] = edited_nf.nodes["dist_to_edit_class"]
-    level2_info_list.append(neuron_level2_info)
+    level2_info = pd.DataFrame(index=relevant_index)
+    level2_info.index.name = "level2_id"
+    level2_info["object_id"] = root_id
+    level2_info["dist_to_edit"] = path_lengths
+    level2_info["dist_to_edit_class"] = relevant_nf.nodes["dist_to_edit_class"]
 
-level2_info = pd.concat(level2_info_list, axis=0)
+    # download features for the nodes
+    wrangler = CAVEWrangler(client=client, n_jobs=None, verbose=False)
+    wrangler.set_level2_ids(relevant_index)
+    wrangler.query_current_object_ids()  # get current ids as a proxy for getting synapses
+    wrangler.query_level2_shape_features()
 
-del final_nfs_by_root_id
+    wrangler.query_level2_synapse_features(method="existing")
 
-# %%
-if show_neuron:
-    pv.set_jupyter_backend("client")
-    plotter = pv.Plotter()
-    set_up_camera(plotter, edited_nf)
-    plotter.add_mesh(
-        edited_nf.to_skeleton_polydata(label="scalars"),
-        scalars="scalars",
-        line_width=0.1,
-    )
-    # plotter.add_mesh(final_nf.to_skeleton_polydata(), color="blue", line_width=0.3)
-    plotter.add_mesh(edited_nf.to_split_polydata(), color="red")
-    plotter.show()
+    wrangler.register_model(model, "l2class_ej_skeletons")
 
-# %%
-
-# download features for the nodes
-wrangler = CAVEWrangler(client=client, n_jobs=-1, verbose=True)
-wrangler.set_level2_ids(level2_info.index)
-wrangler.query_current_object_ids()  # get current ids as a proxy for getting synapses
-wrangler.query_level2_shape_features()
-# %%
-wrangler.query_level2_synapse_features(method="existing")
-
-# %%
-wrangler.register_model(model, "l2class_ej_skeletons")
-
-# %%
-
-all_neighborhood_features = []
-for root_id, edited_nf in tqdm(list(nfs_by_root_id.items())[:]):
     # do an aggregation using the graph
     # doing this manually here since future versions could operate on the
     # non-cave graph
-    idx = pd.IndexSlice
-
-    features = wrangler.features_.loc[
-        idx[:, level2_info.query("object_id == @root_id").index], :
-    ]
+    features = wrangler.features_
     features = features.drop(columns=["rep_coord_x", "rep_coord_y", "rep_coord_z"])
     features = features.droplevel("object_id")
-    features = features.reindex(edited_nf.nodes.index)
 
-    # # temporarily add in the features to nodes
-    old_nodes = edited_nf.nodes
-    edited_nf.nodes = features
-    neighborhood_features = edited_nf.k_hop_aggregation(
+    # this can have Nan and that's chill
+    features = features.reindex(relevant_nf.nodes.index)
+
+    # # temporarily add in the features to nodes for the aggregation
+    old_nodes = relevant_nf.nodes
+    relevant_nf.nodes = features
+    neighborhood_features = relevant_nf.k_hop_aggregation(
         k=5,
         aggregations=["mean", "std"],
         engine="scipy",
     )
-    all_neighborhood_features.append(neighborhood_features)
-
-    # replace the nodes to the original data
-    edited_nf.nodes = old_nodes
-
-# %%
-
-wrangler.stack_model_predict_proba("l2class_ej_skeletons")
-
-
-pred_neighborhood_features = []
-for root_id, edited_nf in tqdm(list(nfs_by_root_id.items())[:]):
-    # do an aggregation using the graph
-    # doing this manually here since future versions could operate on the
-    # non-cave graph
-    idx = pd.IndexSlice
-
-    features = wrangler.predict_features_.loc[
-        idx[
-            :,
-            level2_info.query("object_id == @root_id").index.intersection(
-                wrangler.predict_features_.index.get_level_values("level2_id")
-            ),
-        ],
-        :,
+    wrangler.neighborhood_features = neighborhood_features.loc[
+        wrangler.features_.index.get_level_values("level2_id")
     ]
+    neighborhood_features.index = wrangler.features_.index
+    wrangler.neighborhood_features_ = neighborhood_features
+
+    # stack the model and predict classes
+    wrangler.stack_model_predict_proba("l2class_ej_skeletons")
+
+    # do another round after stacking the model
+    features = wrangler.predict_features_
     features = features.droplevel("object_id")
-    features = features.reindex(edited_nf.nodes.index)
+    features = features.reindex(relevant_nf.nodes.index)
 
     # # temporarily add in the features to nodes
-    old_nodes = edited_nf.nodes
-    edited_nf.nodes = features
-    neighborhood_features = edited_nf.k_hop_aggregation(
+    # old_nodes = relevant_nf.nodes
+    relevant_nf.nodes = features
+    pred_neighborhood_features = relevant_nf.k_hop_aggregation(
         k=5,
         aggregations=["mean", "std"],
         engine="scipy",
     )
-    pred_neighborhood_features.append(neighborhood_features)
 
     # replace the nodes to the original data
-    edited_nf.nodes = old_nodes
+    relevant_nf.nodes = old_nodes
 
+    pred_neighborhood_features = pred_neighborhood_features.loc[
+        wrangler.predict_features_.index.get_level_values("level2_id")
+    ]
+    pred_neighborhood_features.index = wrangler.predict_features_.index
+    wrangler.predict_features_ = wrangler.predict_features_.join(
+        pred_neighborhood_features
+    )
+
+    features = wrangler.features_.droplevel("object_id").reset_index()
+    features["object_id"] = root_id
+    features = features.set_index(["object_id", "level2_id"])
+
+    level2_info = level2_info.reset_index().set_index(["object_id", "level2_id"])
+    level2_info = level2_info.loc[features.index]
+
+    if not return_networkframes:
+        return features, level2_info
+    else:
+        return features, level2_info, relevant_nf, edited_nf, final_nf
+
+
+from joblib import Parallel, delayed
+
+results = Parallel(n_jobs=4, verbose=10)(
+    delayed(generate_features_for_root)(root_id, client) for root_id in root_ids
+)
 
 # %%
 
-neighborhood_features = pd.concat(all_neighborhood_features, axis=0)
-neighborhood_features = neighborhood_features.loc[
-    wrangler.features_.index.get_level_values("level2_id")
-]
-neighborhood_features.index = wrangler.features_.index
-wrangler.neighborhood_features_ = neighborhood_features
+features = pd.concat([x[0] for x in results], axis=0)
+level2_info = pd.concat([x[1] for x in results], axis=0)
 
-pred_neighborhood_features = pd.concat(pred_neighborhood_features, axis=0)
-pred_neighborhood_features = pred_neighborhood_features.loc[
-    wrangler.predict_features_.index.get_level_values("level2_id")
-]
-pred_neighborhood_features.index = wrangler.predict_features_.index
-wrangler.predict_features_ = wrangler.predict_features_.join(pred_neighborhood_features)
 
 # %%
-
-features = wrangler.features_.droplevel("object_id")
-
 features_close = features.loc[level2_info.query("dist_to_edit_class == 'close'").index]
 features_far = features.loc[level2_info.query("dist_to_edit_class == 'far'").index]
 
 features_close = features_close.dropna()
 features_far = features_far.dropna()
 
-sub_features_far = features_far.sample(n=1 * len(features_close))
+# sub_features_far = features_far.sample(n=1 * len(features_close))
+sub_features_far = features_far
 
 # %%
 
 X = pd.concat([features_close, sub_features_far], axis=0)
-X["object_id"] = X.index.map(level2_info["object_id"])
+# X["object_id"] = X.index.map(level2_info["object_id"])
 X = X.drop(columns=["rep_coord_x", "rep_coord_y", "rep_coord_z"])
 # X = X.drop(columns=[x for x in X.columns if "std" in x])
 y = pd.Series(
     ["split"] * len(features_close) + ["no split"] * len(sub_features_far),
     index=X.index,
 )
-X = X.reset_index().set_index(["object_id", "level2_id"])
+# X = X.reset_index().set_index(["object_id", "level2_id"])
 y.index = X.index
 
 # %%
@@ -266,7 +221,7 @@ y_test = y.loc[test_root_ids]
 # try LDA
 transformer = QuantileTransformer(output_distribution="normal")
 X_transformed = transformer.fit_transform(X_train)
-lda = LinearDiscriminantAnalysis()
+lda = LinearDiscriminantAnalysis(priors=[0.5, 0.5])
 lda.fit(X_transformed, y_train)
 
 X_lda = lda.transform(X_transformed)
@@ -283,7 +238,7 @@ print(classification_report(y_test, y_pred_test))
 
 # %%
 # try random forest
-rf = RandomForestClassifier(n_estimators=600, max_depth=4)
+rf = RandomForestClassifier(n_estimators=500, max_depth=4)
 rf.fit(X_train, y_train)
 
 y_pred_train = rf.predict(X_train)
@@ -302,11 +257,45 @@ sns.barplot(x=rf.feature_importances_, y=X.columns, ax=axs[1])
 
 # %%
 
-root_id = test_root_ids[2]
-edited_nf = nfs_by_root_id[root_id]
+root_id = test_root_ids[3]
+
+features, level2_info, relevant_nf, edited_nf, final_nf = generate_features_for_root(
+    root_id, client, return_networkframes=True
+)
 
 full_X = X_test.loc[root_id]
 full_X_lda = lda.transform(transformer.transform(full_X))
+
+
+# %%
+
+show_neuron = True
+
+if show_neuron:
+    pv.set_jupyter_backend("client")
+    plotter = pv.Plotter()
+    set_up_camera(plotter, edited_nf)
+    plotter.add_mesh(edited_nf.to_skeleton_polydata(), color="black", line_width=1)
+    plotter.add_mesh(final_nf.to_skeleton_polydata(), color="blue", line_width=1)
+    plotter.add_mesh(edited_nf.to_split_polydata(), color="red")
+    plotter.show()
+
+
+# %%
+if show_neuron:
+    pv.set_jupyter_backend("client")
+    plotter = pv.Plotter()
+    set_up_camera(plotter, relevant_nf)
+
+    plotter.add_mesh(
+        relevant_nf.to_skeleton_polydata(label="scalars"),
+        scalars="scalars",
+        line_width=0.1,
+    )
+    # plotter.add_mesh(final_nf.to_skeleton_polydata(), color="blue", line_width=0.3)
+    plotter.add_mesh(relevant_nf.to_split_polydata(), color="red")
+    plotter.show()
+
 
 # %%
 from sklearn.preprocessing import StandardScaler
