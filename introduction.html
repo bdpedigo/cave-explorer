@@ -228,6 +228,12 @@ window.Quarto = {
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="./animations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Animations</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="./importance.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Edit importance</span></a>
   </div>
@@ -294,7 +300,7 @@ window.Quarto = {
 <div class="page-columns page-full"><p>In <span class="citation" data-cites="priebe2013">Priebe, Vogelstein, and Bock (<a href="#ref-priebe2013" role="doc-biblioref">2013</a>)</span>, the authors ask whether one should, under a fixed “budget,” desire a small amount of highly proofread data or a larger amount of partially proofread, noisy data. They frame this question from the perspective of statistical hypothesis testing, asking which approach has higher power for distinguishing network parameters under a toy model. This work is an illustrative case for why, at least in theory, it is possible to actually <em>prefer</em> lots of unproofread data to a smaller amount of curated data. This is a prospect worth considering, especially in light of costly proofreading endeavors. However, this work was done in a toy model which was set up such that unproofread data had no <em>bias</em>, but merely represented a noisier version of a ground truth network.  In reality, the unproofread networks we observe in connectomics likely have extreme bias in the way that errors are observed. For instance, one error in segmentation could lead to missing the entire primary axon of a neuron, effectively deleting all of that neurons outputs in one stroke. In our work, we will study similar questions using real connectome datasets and their edits rather than a toy model. This will allow us to examine similar questions but in this more realistic setting where proofreading likely changes the distribution of outputs from a neuron, say.</p><div class="no-row-height column-margin column-container"><span class="margin-aside"><em>Bias:</em> the distance between an expected value of an estimator and the true value of the parameter it is trying to estimate.</span></div></div>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><a href="./images/priebe-comparison.png" class="lightbox" data-glightbox="description: .lightbox-desc-1" data-gallery="quarto-lightbox-gallery-1" title="Text describing the key result from @priebe2013. In essence, power is greater in their toy example when tracing more edges with more errors."><img src="./images/priebe-comparison.png" class="img-fluid figure-img" alt="Text describing the key result from Priebe, Vogelstein, and Bock (2013). In essence, power is greater in their toy example when tracing more edges with more errors."></a></p>
+<p><a href="./images/priebe-comparison.png" class="lightbox" data-gallery="quarto-lightbox-gallery-1" data-glightbox="description: .lightbox-desc-1" title="Text describing the key result from @priebe2013. In essence, power is greater in their toy example when tracing more edges with more errors."><img src="./images/priebe-comparison.png" class="img-fluid figure-img" alt="Text describing the key result from Priebe, Vogelstein, and Bock (2013). In essence, power is greater in their toy example when tracing more edges with more errors."></a></p>
 <figcaption>Text describing the key result from <span class="citation" data-cites="priebe2013">Priebe, Vogelstein, and Bock (<a href="#ref-priebe2013" role="doc-biblioref">2013</a>)</span>. In essence, power is greater in their toy example when tracing more edges with more errors.</figcaption>
 </figure>
 </div>
@@ -303,7 +309,7 @@ window.Quarto = {
 <figure class="figure">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><a href="images/schlegel-variability.png" class="lightbox" data-glightbox="description: .lightbox-desc-2" data-gallery="quarto-lightbox-gallery-2" title="Figure 4H from @schlegel2023, credit to the authors of that work. Diagram depicts method for probabilistically scaling observed data by completion rates, an indicator of reconstruction completeness. Plot shows confidence regions for technical variability under said model."><img src="images/schlegel-variability.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:75.0%" alt="Figure 4H from Schlegel et al. (2023), credit to the authors of that work. Diagram depicts method for probabilistically scaling observed data by completion rates, an indicator of reconstruction completeness. Plot shows confidence regions for technical variability under said model."></a></p>
+<p><a href="images/schlegel-variability.png" class="lightbox" data-gallery="quarto-lightbox-gallery-2" data-glightbox="description: .lightbox-desc-2" title="Figure 4H from @schlegel2023, credit to the authors of that work. Diagram depicts method for probabilistically scaling observed data by completion rates, an indicator of reconstruction completeness. Plot shows confidence regions for technical variability under said model."><img src="images/schlegel-variability.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:75.0%" alt="Figure 4H from Schlegel et al. (2023), credit to the authors of that work. Diagram depicts method for probabilistically scaling observed data by completion rates, an indicator of reconstruction completeness. Plot shows confidence regions for technical variability under said model."></a></p>
 </figure>
 </div>
 <figcaption>Figure 4H from <span class="citation" data-cites="schlegel2023">Schlegel et al. (<a href="#ref-schlegel2023" role="doc-biblioref">2023</a>)</span>, credit to the authors of that work. Diagram depicts method for probabilistically scaling observed data by completion rates, an indicator of reconstruction completeness. Plot shows confidence regions for technical variability under said model.</figcaption>
@@ -318,7 +324,7 @@ window.Quarto = {
 <div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><a href="images/casey-twig-errors.png" class="lightbox" data-glightbox="description: .lightbox-desc-3" data-gallery="quarto-lightbox-gallery-3" title="Figure 10D from @schneider-mizell2016. Most errors in reconstruction fall on twigs for this dataset."><img src="images/casey-twig-errors.png" height="100" alt="Figure 10D from Schneider-Mizell et al. (2016). Most errors in reconstruction fall on twigs for this dataset." class="figure-img"></a></p>
+<p><a href="images/casey-twig-errors.png" class="lightbox" data-gallery="quarto-lightbox-gallery-3" data-glightbox="description: .lightbox-desc-3" title="Figure 10D from @schneider-mizell2016. Most errors in reconstruction fall on twigs for this dataset."><img src="images/casey-twig-errors.png" height="100" alt="Figure 10D from Schneider-Mizell et al. (2016). Most errors in reconstruction fall on twigs for this dataset." class="figure-img"></a></p>
 <figcaption>Figure 10D from <span class="citation" data-cites="schneider-mizell2016">Schneider-Mizell et al. (<a href="#ref-schneider-mizell2016" role="doc-biblioref">2016</a>)</span>. Most errors in reconstruction fall on twigs for this dataset.</figcaption>
 </figure>
 </div>
@@ -326,7 +332,7 @@ window.Quarto = {
 <div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><a href="images/casey-twigs-per-synapse.png" class="lightbox" data-glightbox="description: .lightbox-desc-4" data-gallery="quarto-lightbox-gallery-4" title="Figure3J from @schneider-mizell2016. Most multisynaptically connected neuron pairs are also connected by more than one twig in this dataset."><img src="images/casey-twigs-per-synapse.png" height="100" alt="Figure3J from Schneider-Mizell et al. (2016). Most multisynaptically connected neuron pairs are also connected by more than one twig in this dataset." class="figure-img"></a></p>
+<p><a href="images/casey-twigs-per-synapse.png" class="lightbox" data-gallery="quarto-lightbox-gallery-4" data-glightbox="description: .lightbox-desc-4" title="Figure3J from @schneider-mizell2016. Most multisynaptically connected neuron pairs are also connected by more than one twig in this dataset."><img src="images/casey-twigs-per-synapse.png" height="100" alt="Figure3J from Schneider-Mizell et al. (2016). Most multisynaptically connected neuron pairs are also connected by more than one twig in this dataset." class="figure-img"></a></p>
 <figcaption>Figure3J from <span class="citation" data-cites="schneider-mizell2016">Schneider-Mizell et al. (<a href="#ref-schneider-mizell2016" role="doc-biblioref">2016</a>)</span>. Most multisynaptically connected neuron pairs are also connected by more than one twig in this dataset.</figcaption>
 </figure>
 </div>
@@ -798,7 +804,7 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
 <input type="hidden" id="giscus-base-theme" value="light">
 <input type="hidden" id="giscus-alt-theme" value="dark">
 </div> <!-- /content -->
-<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/bdpedigo/skedits/edit/main/introduction.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/bdpedigo/skedits/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer><script>var lightboxQuarto = GLightbox({"selector":".lightbox","descPosition":"bottom","closeEffect":"zoom","openEffect":"zoom","loop":false});
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/bdpedigo/skedits/edit/main/introduction.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/bdpedigo/skedits/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer><script>var lightboxQuarto = GLightbox({"descPosition":"bottom","closeEffect":"zoom","openEffect":"zoom","selector":".lightbox","loop":false});
 window.onload = () => {
   lightboxQuarto.on('slide_before_load', (data) => {
     const { slideIndex, slideNode, slideConfig, player, trigger } = data;
