@@ -23,6 +23,7 @@ website:
         contents:
           - approach.qmd
           - neuronwise.qmd
+          - animations.qmd
           - importance.qmd
           - networkwise.qmd
   comments:

@@ -42,16 +42,8 @@ extended_df = proofreading_df.query(
 
 # %%
 
-out_path = Path("results/outs/split_features")
 
-box_width = 5_000
-neighborhood_hops = 5
-verbose = False
-all_features = []
-all_labels = []
-root_ids = extended_df["pt_root_id"].sample(100, random_state=88)
-
-for root_id in tqdm(root_ids):
+def get_change_log(root_id, client):
     change_log = get_detailed_change_log(root_id, client)
     change_log["timestamp"] = pd.to_datetime(
         change_log["timestamp"], utc=True, format="ISO8601"
@@ -68,19 +60,32 @@ for root_id in tqdm(root_ids):
     change_log["centroid_nm"] = change_log["centroid"].apply(
         lambda x: x * np.array([8, 8, 40])
     )
+    return change_log
 
+
+out_path = Path("results/outs/split_features")
+
+box_width = 5_000
+neighborhood_hops = 5
+verbose = False
+all_features = []
+all_labels = []
+root_ids = extended_df["pt_root_id"].sample(100, random_state=88)
+
+for root_id in tqdm(root_ids):
+    # get the change log
+    change_log = get_change_log(root_id, client)
     splits = change_log.query("~is_merge")
 
+    # going to query the object right before, at that edit
     before_roots = splits["before_root_ids"].explode()
-    # timestamps = splits["timestamp"]
-    # timestamps = timestamps - timedelta(milliseconds=2)
-
     points_by_root = {}
     for operation_id, before_root in before_roots.items():
         point = splits.loc[operation_id, "centroid_nm"]
         points_by_root[before_root] = point
     points_by_root = pd.Series(points_by_root)
 
+    # set up a query
     wrangler = CAVEWrangler(client=client, n_jobs=-1, verbose=verbose)
     wrangler.set_objects(before_roots.to_list())
     wrangler.set_query_boxes_from_points(points_by_root, box_width=box_width)
@@ -90,25 +95,27 @@ for root_id in tqdm(root_ids):
     wrangler.aggregate_features_by_neighborhood(
         aggregations=["mean", "std"], neighborhood_hops=neighborhood_hops
     )
-    features = wrangler.features_
-    features = features.dropna()
-    features["current_root_id"] = root_id
-    features = features.reset_index().set_index(
+
+    # save features
+    split_features = wrangler.features_
+    split_features = split_features.dropna()
+    split_features["current_root_id"] = root_id
+    split_features = split_features.reset_index().set_index(
         ["current_root_id", "object_id", "level2_id"]
     )
-    all_features.append(features)
 
-    labels = pd.Series("split", index=features.index, name="label").to_frame()
+    split_labels = pd.Series(
+        "split", index=split_features.index, name="label"
+    ).to_frame()
     _, min_dists_to_edit = pairwise_distances_argmin_min(
-        features[["rep_coord_x", "rep_coord_y", "rep_coord_z"]],
+        split_features[["rep_coord_x", "rep_coord_y", "rep_coord_z"]],
         np.stack(points_by_root.values),
     )
-    labels["min_dist_to_edit"] = min_dists_to_edit
-    labels["current_root_id"] = root_id
-    labels = labels.reset_index().set_index(
+    split_labels["min_dist_to_edit"] = min_dists_to_edit
+    split_labels["current_root_id"] = root_id
+    split_labels = split_labels.reset_index().set_index(
         ["current_root_id", "object_id", "level2_id"]
     )
-    all_labels.append(labels)
 
     # now do the same for the final cleaned neuron
     wrangler = CAVEWrangler(client=client, n_jobs=-1, verbose=verbose)
@@ -119,17 +126,24 @@ for root_id in tqdm(root_ids):
     wrangler.aggregate_features_by_neighborhood(
         aggregations=["mean", "std"], neighborhood_hops=neighborhood_hops
     )
-    features = wrangler.features_
-    features = features.dropna()
-    all_features.append(features)
-    labels = pd.Series("no split", index=features.index, name="label").to_frame()
+    nonsplit_features = wrangler.features_
+    nonsplit_features = nonsplit_features.dropna()
+    all_features.append(nonsplit_features)
+    nonsplit_labels = pd.Series(
+        "no split", index=nonsplit_features.index, name="label"
+    ).to_frame()
     _, min_dists_to_edit = pairwise_distances_argmin_min(
-        features[["rep_coord_x", "rep_coord_y", "rep_coord_z"]],
+        nonsplit_features[["rep_coord_x", "rep_coord_y", "rep_coord_z"]],
         np.stack(points_by_root.values),
     )
-    labels["min_dist_to_edit"] = min_dists_to_edit
-    labels["root_id"] = root_id
-    all_labels.append(labels)
+    nonsplit_labels["min_dist_to_edit"] = min_dists_to_edit
+    nonsplit_labels["root_id"] = root_id
+
+    features = pd.concat([split_features, nonsplit_features], axis=0)
+    labels = pd.concat([split_labels, nonsplit_labels], axis=0)
+    features.to_csv(f"local_features_root_id={root_id}.csv")
+    labels.to_csv(f"local_labels_root_id={root_id}.csv")
+
 
 # %%
 

@@ -173,7 +173,7 @@ def generate_features_for_root(
 
 from joblib import Parallel, delayed
 
-results = Parallel(n_jobs=4, verbose=10)(
+results = Parallel(n_jobs=1, verbose=10)(
     delayed(generate_features_for_root)(root_id, client) for root_id in root_ids
 )
 

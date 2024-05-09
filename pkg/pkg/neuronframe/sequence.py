@@ -39,6 +39,7 @@ class NeuronFrameSequence:
         edit_label_name=None,
         edits=None,
         include_initial_state=True,
+        warn_on_missing=True,
     ):
         self.base_neuron = base_neuron
         self.prefix = prefix
@@ -59,7 +60,9 @@ class NeuronFrameSequence:
                 edits["n_operations"] = np.ones(len(edits), dtype=int)
             self.edits = edits.copy()
             if include_initial_state:
-                self.apply_edits(self.applied_edit_ids, label=None)
+                self.apply_edits(
+                    self.applied_edit_ids, label=None, warn_on_missing=warn_on_missing
+                )
         else:
             self.edits = edits
 

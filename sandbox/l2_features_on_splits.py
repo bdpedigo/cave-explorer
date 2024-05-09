@@ -35,7 +35,7 @@ manifest = manifest.query("is_current")
 nfs_by_root_id = {}
 final_nfs_by_root_id = {}
 
-root_ids = manifest.index[:40]
+root_ids = manifest.index[:10]
 for root_id in tqdm(root_ids):
     # load and edit neuron
     nf = load_neuronframe(root_id, client)
