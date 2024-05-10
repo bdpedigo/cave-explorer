@@ -174,8 +174,6 @@ for root_id, edited_nf in tqdm(list(nfs_by_root_id.items())[:]):
 
 # %%
 
-wrangler.stack_model_predict_proba("l2class_ej_skeletons")
-
 
 pred_neighborhood_features = []
 for root_id, edited_nf in tqdm(list(nfs_by_root_id.items())[:]):
@@ -208,6 +206,9 @@ for root_id, edited_nf in tqdm(list(nfs_by_root_id.items())[:]):
 
     # replace the nodes to the original data
     edited_nf.nodes = old_nodes
+
+#%%
+wrangler.stack_model_predict_proba("l2class_ej_skeleton2s")
 
 
 # %%

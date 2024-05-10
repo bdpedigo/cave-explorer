@@ -36,7 +36,7 @@ manifest = manifest.query("is_current")
 nfs_by_root_id = {}
 
 l2_ids = []
-root_ids = manifest.index[:40]
+root_ids = manifest.index[:10]
 for root_id in root_ids:
     # load and edit neuron
     nf = load_neuronframe(root_id, client)
@@ -206,7 +206,7 @@ plotter = pv.Plotter()
 set_up_camera(plotter, edited_nf)
 plotter.add_mesh(
     edited_nf.to_skeleton_polydata(label="lda_pred_val"),
-    line_width=0.1,
+    line_width=1.0,
     scalars="lda_pred_val",
     cmap="coolwarm",
 )
