@@ -20,10 +20,12 @@ def _create_time_ordered_sequence_dict(
     root_id: Optional[int] = None,
     use_cache: bool = True,
     cache_verbose: bool = False,
+    only_load: bool = False,
 ) -> dict:
     root_id
     use_cache
     cache_verbose
+    only_load
 
     neuron_sequence = NeuronFrameSequence(
         neuron, prefix="", edit_label_name="operation_id"
@@ -45,11 +47,19 @@ def create_time_ordered_sequence(
     root_id: Optional[int] = None,
     use_cache: bool = True,
     cache_verbose: bool = False,
+    only_load: bool = False,
 ) -> NeuronFrameSequence:
     info = _create_time_ordered_sequence_dict(
-        neuron, root_id=root_id, use_cache=use_cache, cache_verbose=cache_verbose
+        neuron,
+        root_id=root_id,
+        use_cache=use_cache,
+        cache_verbose=cache_verbose,
+        only_load=only_load,
     )
-    return NeuronFrameSequence.from_dict_and_neuron(info, neuron)
+    if info is None:
+        return None
+    else:
+        return NeuronFrameSequence.from_dict_and_neuron(info, neuron)
 
 
 @lazycloud(

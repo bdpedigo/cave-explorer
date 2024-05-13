@@ -272,6 +272,8 @@ for root_id in tqdm(working_nodes["working_root_id"].unique()[:]):
             "n_total_edits": n_total_edits,
             "n_select_edits": n_select_edits,
             "order": selected_state["order"],
+            "n_outputs": len(neuron.pre_synapses),
+            "n_inputs": len(neuron.post_synapses),
         }
 
         for which in ["pre", "post"]:
@@ -287,14 +289,8 @@ synapse_selection_df = pd.DataFrame(rows)
 synapse_selection_df.query("p_neuron_effort == 0.5")["n_select_edits"].sum()
 
 # %%
-efforts = []
-for _ in range(50):
-    efforts.append(
-        synapse_selection_df.query("p_neuron_effort == 1")
-        .sample(frac=0.5)["n_select_edits"]
-        .sum()
-    )
-print(np.mean(efforts))
+neuron_outputs = synapse_selection_df.groupby("root_id")["n_outputs"].first()
+
 
 # %%
 
@@ -311,7 +307,7 @@ for p_neuron_effort in [0, 0.5, 1.0]:
             index_list = [(np.arange(len(working_nodes)), None)]
         else:
             sss = StratifiedShuffleSplit(
-                n_splits=10, train_size=p_neurons, random_state=88
+                n_splits=25, train_size=p_neurons, random_state=88
             )
             index_list = sss.split(working_nodes.index, working_nodes["mtype"])
 
@@ -406,11 +402,6 @@ synapse_group_counts_by_strategy["strategy"] = list(
         synapse_group_counts_by_strategy["p_neuron_effort"],
     )
 )
-# # %%
-# synapse_group_counts_by_strategy["p_synapses"] = (
-#     synapse_group_counts_by_strategy["n_synapses"]
-#     / synapse_group_counts_by_strategy["p_neurons"]
-# )
 
 # %%
 import matplotlib.pyplot as plt
@@ -456,3 +447,120 @@ for source_mtype, sub_df in synapse_group_counts_by_strategy.groupby("source_mty
 # as the metric of interest
 
 # %%
+
+from scipy.stats import spearmanr
+
+reciprocal_ratios_by_strategy = []
+for key, nf in nfs_by_strategy.items():
+    edges = nf.edges.copy()
+    edges = edges.groupby(["source", "target"]).size().reset_index(name="weight")
+    edge_index = edges.set_index(["source", "target"]).index.unique()
+    sources = edges["source"]
+    targets = edges["target"]
+    reverse_edge_index = pd.MultiIndex.from_tuples(
+        zip(targets, sources), names=["source", "target"]
+    ).unique()
+
+    reciprocal_edges = edge_index.intersection(reverse_edge_index)
+
+    edge_weights_forward = edges.set_index(["source", "target"]).loc[reciprocal_edges][
+        "weight"
+    ]
+    edge_weights_reverse = edges.set_index(["source", "target"]).loc[
+        reciprocal_edges.reorder_levels(["target", "source"])
+    ]["weight"]
+    stat, pvalue = spearmanr(edge_weights_forward.values, edge_weights_reverse.values)
+
+    reciprocal_ratio = len(reciprocal_edges) / len(edge_index)
+    reciprocal_ratios_by_strategy.append(
+        {
+            "p_neurons": key[0],
+            "p_neuron_effort": key[1],
+            "split": key[2],
+            "reciprocal_ratio": reciprocal_ratio,
+            "reciprocal_weight_corr": stat,
+            "reciprocal_weight_pvalue": pvalue,
+        }
+    )
+
+reciprocal_ratios_by_strategy = pd.DataFrame(reciprocal_ratios_by_strategy)
+reciprocal_ratios_by_strategy[
+    "n_select_edits"
+] = reciprocal_ratios_by_strategy.set_index(
+    ["p_neurons", "p_neuron_effort", "split"]
+).index.map(stats_by_strategy["n_select_edits"])
+
+# %%
+sns.scatterplot(x=edge_weights_forward.values, y=edge_weights_reverse.values, alpha=0.2)
+
+# %%
+fig, ax = plt.subplots(1, 1, figsize=(6, 4))
+
+sns.scatterplot(
+    data=reciprocal_ratios_by_strategy,
+    x="p_neuron_effort",
+    y="reciprocal_ratio",
+    style="p_neurons",
+    hue="p_neuron_effort",
+    palette="tab10",
+)
+
+# %%
+fig, ax = plt.subplots(1, 1, figsize=(6, 4))
+
+sns.scatterplot(
+    data=reciprocal_ratios_by_strategy,
+    x="n_select_edits",
+    y="reciprocal_ratio",
+    style="p_neurons",
+    hue="p_neuron_effort",
+    palette="tab10",
+)
+ax.set(xlabel="Number of edits used", ylabel="Reciprocal ratio")
+sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
+
+# %%
+
+fig, ax = plt.subplots(1, 1, figsize=(6, 4))
+
+sns.scatterplot(
+    data=reciprocal_ratios_by_strategy,
+    x="n_select_edits",
+    y="reciprocal_weight_corr",
+    style="p_neurons",
+    hue="p_neuron_effort",
+    palette="tab10",
+)
+
+# %%
+fig, ax = plt.subplots(1, 1, figsize=(6, 4))
+
+sns.scatterplot(
+    data=reciprocal_ratios_by_strategy,
+    x="n_select_edits",
+    y="reciprocal_weight_pvalue",
+    style="p_neurons",
+    hue="p_neuron_effort",
+    palette="tab10",
+)
+# %%
+for key, nf in nfs_by_strategy.items():
+    nf = nf.apply_node_features("mtype")
+    nf = nf.query_edges("source_mtype == 'ITC'")
+    edges = nf.edges
+    outputs_by_type = edges.groupby(["source", "target_mtype"]).size()
+    outputs_by_type = outputs_by_type.reset_index(name="n_synapses")
+    # outputs_by_type["prop_synapses"] = outputs_by_type["n_synapses"] / outputs_by_type[
+    #     "source"
+    # ].map(neuron_outputs)
+    outputs_by_type["prop_synapses"] = outputs_by_type["n_synapses"] / outputs_by_type[
+        "source"
+    ].map(edges.groupby("source").size())
+    outputs_by_type.set_index(["source", "target_mtype"], inplace=True)
+
+    if np.random.rand() < 0.1:
+        props_by_type_wide = outputs_by_type["prop_synapses"].unstack().fillna(0)
+        grid = sns.clustermap(props_by_type_wide.T, cmap="viridis")
+        grid.figure.suptitle(f"{key}")
+
+

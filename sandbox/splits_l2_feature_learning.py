@@ -1,6 +1,5 @@
 # %%
 
-import glob
 from pathlib import Path
 
 import caveclient as cc
@@ -79,8 +78,17 @@ root_ids = extended_df["pt_root_id"].sample(100, random_state=88, replace=False)
 
 # %%
 
-feature_files = glob.glob(str(out_path) + "/local_features_*.csv")
-label_files = glob.glob(str(out_path) + "/local_labels_*.csv")
+# feature_files = glob.glob(str(out_path) + "/local_features_*.csv")
+# label_files = glob.glob(str(out_path) + "/local_labels_*.csv")
+
+feature_files = [
+    out_path / f"local_features_root_id={root}.csv"
+    for root in [864691135577956101, 864691135212863360]
+]
+label_files = [
+    out_path / f"local_labels_root_id={root}.csv"
+    for root in [864691135577956101, 864691135212863360]
+]
 
 features = []
 for file in feature_files:
@@ -95,7 +103,30 @@ for file in label_files:
 labels = pd.concat(labels)
 labels = labels.loc[features.index]
 
-assert features.index.equals(labels.index)
+# assert features.index.equals(labels.index)
+
+# %%
+sub_labels = labels.query(
+    "label.isin(['split', 'postsplit']) & min_dist_to_edit < 2_000"
+)
+sub_features = features.loc[sub_labels.index]
+
+X = sub_features.drop(
+    columns=[col for col in sub_features.columns if "rep_coord_" in col]
+)
+X = X.drop(columns=[col for col in X.columns if "pca_unwrapped_" in col])
+y = sub_labels["label"]
+
+from sklearn.preprocessing import QuantileTransformer
+
+model = Pipeline(
+    [
+        ("transform", QuantileTransformer(output_distribution="normal")),
+        ("lda", LinearDiscriminantAnalysis()),
+    ]
+)
+model.fit(X, y)
+
 
 # %%
 labels = labels.query("(label=='nonsplit') | (min_dist_to_edit < 2_000)")
@@ -183,13 +214,11 @@ sns.histplot(
 )
 
 
-
 # %%
 fig, ax = plt.subplots(1, 1, figsize=(10, 10))
 
 X_lda_test = model.transform(X_test)
 sns.histplot(x=X_lda_test[:, 0], hue=y_test, ax=ax)
-
 
 
 # %%
@@ -202,7 +231,6 @@ new_change_log = get_change_log(new_root_id, client)
 new_splits = new_change_log.query("~is_merge")
 new_splits = new_splits.sort_values("timestamp")
 first_new_root_id = new_splits["before_root_ids"].iloc[0][0]
-
 
 
 from troglobyte.features import CAVEWrangler
@@ -237,7 +265,6 @@ from sklearn.metrics import pairwise_distances_argmin_min
 closest, min_dist = pairwise_distances_argmin_min(split_positions, positions)
 
 relevant_splits = new_splits.iloc[min_dist < 3_000]
-
 
 
 features = wrangler.features_.dropna()

@@ -497,3 +497,5 @@ nodes = final_nf.nodes
 for sub_ilocs, _ in sss.split(nodes.index, nodes["mtype"]):
     subnodes = nodes.iloc[sub_ilocs]
     subnodes.groupby("mtype").size()
+
+

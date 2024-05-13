@@ -59,27 +59,29 @@ def get_change_log(root_id, client):
 
 out_path = Path("results/outs/split_features")
 
-box_width = 40_000
+box_width = 20_000
 neighborhood_hops = 5
-verbose = False
+verbose = True
 
 shape_time = 0
 ids_time = 0
 synapse_time = 0
 aggregate_time = 0
 
-root_ids = extended_df["pt_root_id"].sample(100, random_state=888, replace=False)[2:]
-for root_id in tqdm(root_ids):
+root_ids = extended_df["pt_root_id"].sample(100, random_state=8888, replace=False)[:10]
+for root_id in tqdm(root_ids, disable=not verbose):
     # get the change log
     change_log = get_change_log(root_id, client)
     splits = change_log.query("~is_merge")
 
     # going to query the object right before, at that edit
     before_roots = splits["before_root_ids"].explode()
+    after_roots = splits["roots"].apply(lambda x: x[-1])
     points_by_root = {}
     for operation_id, before_root in before_roots.items():
         point = splits.loc[operation_id, "centroid_nm"]
         points_by_root[before_root] = point
+        points_by_root[after_roots[operation_id]] = point
     points_by_root = pd.Series(points_by_root)
 
     # set up a query
@@ -121,6 +123,35 @@ for root_id in tqdm(root_ids):
     )
     split_labels["min_dist_to_edit"] = min_dists_to_edit
 
+    postsplit_wrangler = CAVEWrangler(client=client, n_jobs=-1, verbose=verbose)
+    postsplit_wrangler.set_objects(after_roots.to_list())
+    postsplit_wrangler.set_query_boxes_from_points(points_by_root, box_width=box_width)
+    postsplit_wrangler.query_level2_ids()
+    postsplit_wrangler.query_level2_shape_features()
+    postsplit_wrangler.query_level2_synapse_features(method="update")
+    postsplit_wrangler.register_model(model, "l2class_ej_skeleton")
+    postsplit_wrangler.aggregate_features_by_neighborhood(
+        aggregations=["mean", "std"], neighborhood_hops=neighborhood_hops
+    )
+
+    # handle features
+    postsplit_features = postsplit_wrangler.features_
+    postsplit_features = postsplit_features.dropna()
+    postsplit_features["current_root_id"] = root_id
+    postsplit_features = postsplit_features.reset_index().set_index(
+        ["current_root_id", "object_id", "level2_id"]
+    )
+
+    # handle labels
+    postsplit_labels = pd.Series(
+        "postsplit", index=postsplit_features.index, name="label"
+    ).to_frame()
+    _, min_dists_to_edit = pairwise_distances_argmin_min(
+        postsplit_features[["rep_coord_x", "rep_coord_y", "rep_coord_z"]],
+        np.stack(points_by_root.values),
+    )
+    postsplit_labels["min_dist_to_edit"] = min_dists_to_edit
+
     # now do the same stuff for the final cleaned neuron
     nonsplit_wrangler = CAVEWrangler(client=client, n_jobs=-1, verbose=verbose)
     nonsplit_wrangler.set_objects([root_id])
@@ -151,11 +182,52 @@ for root_id in tqdm(root_ids):
     nonsplit_labels["min_dist_to_edit"] = min_dists_to_edit
 
     # save
-    features = pd.concat([split_features, nonsplit_features], axis=0)
-    labels = pd.concat([split_labels, nonsplit_labels], axis=0)
+    features = pd.concat(
+        [split_features, postsplit_features, nonsplit_features], axis=0
+    )
+    labels = pd.concat([split_labels, postsplit_labels, nonsplit_labels], axis=0)
     features.to_csv(out_path / f"local_features_root_id={root_id}.csv")
     labels.to_csv(out_path / f"local_labels_root_id={root_id}.csv")
 
 print(
     f"Timing: ids={ids_time / total_time:.2f}, shape={shape_time / total_time:.2f}, synapse={synapse_time / total_time:.2f}, aggregate = {aggregate_time / total_time:.2f}"
 )
+
+# %%
+
+import glob
+
+feature_files = glob.glob(str(out_path) + "/local_features_*.csv")
+label_files = glob.glob(str(out_path) + "/local_labels_*.csv")
+
+features = []
+for file in feature_files:
+    cell_features = pd.read_csv(file, index_col=[0, 1, 2])
+    features.append(cell_features)
+features = pd.concat(features)
+
+labels = []
+for file in label_files:
+    cell_labels = pd.read_csv(file, index_col=[0, 1, 2])
+    labels.append(cell_labels)
+labels = pd.concat(labels)
+labels = labels.loc[features.index]
+
+assert features.index.equals(labels.index)
+
+# %%
+X = features.drop(columns=["rep_coord_x", "rep_coord_y", "rep_coord_z"])
+X = X.dropna()
+
+dist = 3_000
+y = labels.query("label.isin(['split', 'postsplit']) & min_dist_to_edit < @dist")[
+    "label"
+]
+
+X = X.loc[y.index]
+# y = y[X.index]
+
+from sklearn.preprocessing import QuantileTransformer
+
+qt = QuantileTransformer()
+X = qt.fit_transform(X)

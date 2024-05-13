@@ -54,6 +54,8 @@ class NeuronFrameSequence:
             if self.prefix == "meta":
                 edits = self.base_neuron.metaedits
             else:
+                if isinstance(self.base_neuron, str): 
+                    print(self.base_neuron)
                 edits = self.base_neuron.edits
                 edits["has_split"] = ~edits["is_merge"]
                 edits["has_merge"] = edits["is_merge"]
@@ -104,10 +106,6 @@ class NeuronFrameSequence:
             return None
         else:
             return list(self._sequence_info.keys())[-1]
-
-    @property
-    def current_unresolved_neuron(self) -> Self:
-        return self.unresolved_sequence[self.latest_label]
 
     @property
     def current_resolved_neuron(self) -> Self:
@@ -161,7 +159,6 @@ class NeuronFrameSequence:
             unresolved_neuron, self.base_neuron, warn_on_missing=warn_on_missing
         )
 
-        self.unresolved_sequence[label] = unresolved_neuron
         self.resolved_sequence[label] = resolved_neuron
 
         self._sequence_info[label] = {
