@@ -53,6 +53,9 @@ def create_sequences(root_id):
 
     neuron = load_neuronframe(root_id, client)
 
+    if neuron is None or isinstance(neuron, str):
+        neuron = load_neuronframe(root_id, client, use_cache=False)
+
     create_time_ordered_sequence(neuron, root_id)
 
     create_merge_and_clean_sequence(neuron, root_id, order_by="time")

@@ -17,3 +17,4 @@ VAR_PATH = Path(__file__).parent.parent.parent.parent / "docs" / "_variables.yml
 COLUMN_MTYPES_TABLE = "allen_column_mtypes_v2"
 MTYPES_TABLE = "aibs_metamodel_mtypes_v661_v2"
 NUCLEUS_TABLE = "nucleus_detection_v0"
+INHIBITORY_CTYPES_TABLE = "connectivity_groups_v795"
