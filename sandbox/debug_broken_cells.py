@@ -3,7 +3,6 @@ import caveclient as cc
 from tqdm.auto import tqdm
 
 from pkg.neuronframe import load_neuronframe
-from pkg.sequence import create_time_ordered_sequence
 
 client = cc.CAVEclient("minnie65_phase3_v1")
 # %%
@@ -17,8 +16,12 @@ itc_table = mtype_table.query('cell_type == "ITC"')
 
 # %%
 
+from pkg.sequence import create_time_ordered_sequence
+
+missing = 0
 for root_id in tqdm(itc_table["pt_root_id"]):
-    neuron = load_neuronframe(root_id, client=client)
-    if isinstance(neuron, str): 
-        neuron = load_neuronframe(root_id, client=client, use_cache=False)
-    sequence = create_time_ordered_sequence(neuron, root_id)
+    neuron = load_neuronframe(root_id, client=client, only_load=True)
+    sequence = create_time_ordered_sequence(neuron, root_id, only_load=True)
+    if sequence is None or isinstance(neuron, (str)):
+        missing += 1
+

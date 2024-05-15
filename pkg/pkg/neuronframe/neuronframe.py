@@ -1,11 +1,10 @@
 import random
 from typing import Literal, Optional, Self, Union
 
+import caveclient as cc
 import numpy as np
 import pandas as pd
 import pyvista as pv
-
-import caveclient as cc
 from networkframe import NetworkFrame
 
 from ..plot import set_up_camera
@@ -23,9 +22,10 @@ class NeuronFrame(NetworkFrame):
         neuron_id: Optional[int] = None,
         pre_synapse_mapping_col: str = "pre_pt_level2_id",
         post_synapse_mapping_col: str = "post_pt_level2_id",
+        validate: bool = False,
         **kwargs,
     ):
-        super().__init__(nodes, edges, **kwargs)
+        super().__init__(nodes, edges, validate=validate, **kwargs)
 
         if pre_synapses is None:
             pre_synapses = pd.DataFrame()

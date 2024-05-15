@@ -256,31 +256,48 @@ edits["root_id"] = root_id
 
 from tqdm.auto import tqdm
 
+from pkg.sequence import create_merge_and_clean_sequence
+
 working_nodes = nodes.query("has_sequence")
 rows = []
 for root_id in tqdm(working_nodes["working_root_id"].unique()[:]):
     neuron = load_neuronframe(root_id, client, cache_verbose=False)
-    sequence = create_time_ordered_sequence(neuron, root_id)
-    for p_neuron_effort in [0, 0.5, 1.0]:
-        n_total_edits = len(sequence) - 1
-        n_select_edits = np.floor(n_total_edits * p_neuron_effort).astype(int)
-        selected_state = sequence.sequence_info.iloc[n_select_edits]
+    # sequence = create_time_ordered_sequence(neuron, root_id)
+    rng = np.random.default_rng(8888)
+    for i in range(10):
+        seed = rng.integers(0, np.iinfo(np.int32).max, dtype=np.int32)
+        sequence = create_merge_and_clean_sequence(
+            neuron, root_id, order_by="random", random_seed=seed
+        )
+        # sequence = create_merge_and_clean_sequence(neuron, root_id, order_by='random', random_seed=)
+        for p_neuron_effort in [0, 0.5, 1.0]:
+            # n_total_edits = len(sequence) - 1
+            # n_select_edits = np.floor(n_total_edits * p_neuron_effort).astype(int)
+            # selected_state = sequence.sequence_info.iloc[n_select_edits]
+            n_total_edits = sequence.sequence_info["cumulative_n_operations"].max()
+            n_select_edits = np.floor(n_total_edits * p_neuron_effort).astype(int)
+            selected_state_idx = np.abs(
+                sequence.sequence_info["cumulative_n_operations"] - n_select_edits
+            ).idxmin()
+            selected_state = sequence.sequence_info.loc[selected_state_idx]
 
-        row = {
-            "root_id": root_id,
-            "p_neuron_effort": p_neuron_effort,
-            "n_total_edits": n_total_edits,
-            "n_select_edits": n_select_edits,
-            "order": selected_state["order"],
-            "n_outputs": len(neuron.pre_synapses),
-            "n_inputs": len(neuron.post_synapses),
-        }
+            row = {
+                "root_id": root_id,
+                "p_neuron_effort": p_neuron_effort,
+                "n_total_edits": n_total_edits,
+                "n_select_edits": n_select_edits,
+                "order": selected_state["order"],
+                "n_outputs": len(neuron.pre_synapses),
+                "n_inputs": len(neuron.post_synapses),
+                "seed": seed,
+                "i": i,
+            }
 
-        for which in ["pre", "post"]:
-            selected_synapses = selected_state[f"{which}_synapses"]
-            selected_synapses = np.intersect1d(selected_synapses, induced_synapses)
-            row[f"{which}_synapses"] = selected_synapses.tolist()
-        rows.append(row)
+            for which in ["pre", "post"]:
+                selected_synapses = selected_state[f"{which}_synapses"]
+                selected_synapses = np.intersect1d(selected_synapses, induced_synapses)
+                row[f"{which}_synapses"] = selected_synapses.tolist()
+            rows.append(row)
 
 # %%
 synapse_selection_df = pd.DataFrame(rows)
@@ -293,8 +310,6 @@ neuron_outputs = synapse_selection_df.groupby("root_id")["n_outputs"].first()
 
 
 # %%
-
-p_effort = 0.5
 
 nfs_by_strategy = {}
 stats = {}
@@ -317,43 +332,48 @@ for p_neuron_effort in [0, 0.5, 1.0]:
             sub_synapse_selections = synapse_selections_at_effort.query(
                 "root_id in @sub_roots"
             )
+            for sequence in range(10):
+                seq_synapse_selections = sub_synapse_selections.query("i == @sequence")
 
-            pre_synapses_long = (
-                sub_synapse_selections.explode("pre_synapses")[
-                    ["root_id", "pre_synapses"]
-                ]
-                .rename({"root_id": "source"}, axis=1)
-                .dropna()
-                .set_index("pre_synapses")
-            )
-            post_synapses_long = (
-                sub_synapse_selections.explode("post_synapses")[
-                    ["root_id", "post_synapses"]
-                ]
-                .rename({"root_id": "target"}, axis=1)
-                .dropna()
-                .set_index("post_synapses")
-            )
+                pre_synapses_long = (
+                    seq_synapse_selections.explode("pre_synapses")[
+                        ["root_id", "pre_synapses"]
+                    ]
+                    .rename({"root_id": "source"}, axis=1)
+                    .dropna()
+                    .set_index("pre_synapses")
+                )
+                post_synapses_long = (
+                    seq_synapse_selections.explode("post_synapses")[
+                        ["root_id", "post_synapses"]
+                    ]
+                    .rename({"root_id": "target"}, axis=1)
+                    .dropna()
+                    .set_index("post_synapses")
+                )
 
-            sub_edges = pre_synapses_long.join(
-                post_synapses_long, how="inner", lsuffix="_pre", rsuffix="_post"
-            )
-            sub_edges = sub_edges.query("source != target")
+                sub_edges = pre_synapses_long.join(
+                    post_synapses_long, how="inner", lsuffix="_pre", rsuffix="_post"
+                )
+                sub_edges = sub_edges.query("source != target")
 
-            nfs_by_strategy[(p_neurons, p_neuron_effort, i)] = NetworkFrame(
-                nodes=sub_nodes.set_index("working_root_id"), edges=sub_edges
-            )
-            row = {
-                "n_edges": len(sub_edges),
-                "n_nodes": len(sub_nodes),
-                "n_select_edits": sub_synapse_selections["n_select_edits"].sum(),
-            }
-            stats[(p_neurons, p_neuron_effort, i)] = row
+                nfs_by_strategy[
+                    (p_neurons, p_neuron_effort, i, sequence)
+                ] = NetworkFrame(
+                    nodes=sub_nodes.set_index("working_root_id"), edges=sub_edges
+                )
+                row = {
+                    "n_edges": len(sub_edges),
+                    "n_nodes": len(sub_nodes),
+                    "n_select_edits": seq_synapse_selections["n_select_edits"].sum(),
+                    "sequence": sequence,
+                }
+                stats[(p_neurons, p_neuron_effort, i, sequence)] = row
 
 # %%
 stats_by_strategy = pd.DataFrame(stats).T
 stats_by_strategy.index.set_names(
-    ["p_neurons", "p_neuron_effort", "split"], inplace=True
+    ["p_neurons", "p_neuron_effort", "split", "sequence"], inplace=True
 )
 
 # %%
@@ -370,6 +390,7 @@ for key, nf in nfs_by_strategy.items():
     synapse_counts["p_neurons"] = key[0]
     synapse_counts["p_neuron_effort"] = key[1]
     synapse_counts["split"] = key[2]
+    synapse_counts["sequence"] = key[3]
     # synapse_counts.name = key
     synapse_group_counts_by_strategy.append(synapse_counts)
     # synapse_group_counts_by_strategy.append(synapse_counts)
@@ -392,7 +413,7 @@ synapse_group_counts_by_strategy["connection"] = list(
 synapse_group_counts_by_strategy[
     "n_select_edits"
 ] = synapse_group_counts_by_strategy.set_index(
-    ["p_neurons", "p_neuron_effort", "split"]
+    ["p_neurons", "p_neuron_effort", "split", "sequence"]
 ).index.map(stats_by_strategy["n_select_edits"])
 
 # %%
@@ -407,6 +428,7 @@ synapse_group_counts_by_strategy["strategy"] = list(
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+set_context()
 fig, axs = plt.subplots(
     4, 4, figsize=(12, 10), sharex=True, sharey=False, constrained_layout=True
 )
@@ -448,7 +470,7 @@ for source_mtype, sub_df in synapse_group_counts_by_strategy.groupby("source_mty
 
 # %%
 
-from scipy.stats import spearmanr
+from scipy.stats import pearsonr
 
 reciprocal_ratios_by_strategy = []
 for key, nf in nfs_by_strategy.items():
@@ -469,7 +491,7 @@ for key, nf in nfs_by_strategy.items():
     edge_weights_reverse = edges.set_index(["source", "target"]).loc[
         reciprocal_edges.reorder_levels(["target", "source"])
     ]["weight"]
-    stat, pvalue = spearmanr(edge_weights_forward.values, edge_weights_reverse.values)
+    stat, pvalue = pearsonr(edge_weights_forward.values, edge_weights_reverse.values)
 
     reciprocal_ratio = len(reciprocal_edges) / len(edge_index)
     reciprocal_ratios_by_strategy.append(
@@ -477,6 +499,7 @@ for key, nf in nfs_by_strategy.items():
             "p_neurons": key[0],
             "p_neuron_effort": key[1],
             "split": key[2],
+            "sequence": key[3],
             "reciprocal_ratio": reciprocal_ratio,
             "reciprocal_weight_corr": stat,
             "reciprocal_weight_pvalue": pvalue,
@@ -487,7 +510,7 @@ reciprocal_ratios_by_strategy = pd.DataFrame(reciprocal_ratios_by_strategy)
 reciprocal_ratios_by_strategy[
     "n_select_edits"
 ] = reciprocal_ratios_by_strategy.set_index(
-    ["p_neurons", "p_neuron_effort", "split"]
+    ["p_neurons", "p_neuron_effort", "split", "sequence"]
 ).index.map(stats_by_strategy["n_select_edits"])
 
 # %%
@@ -522,7 +545,6 @@ sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
 # %%
 
 fig, ax = plt.subplots(1, 1, figsize=(6, 4))
-
 sns.scatterplot(
     data=reciprocal_ratios_by_strategy,
     x="n_select_edits",
@@ -531,6 +553,8 @@ sns.scatterplot(
     hue="p_neuron_effort",
     palette="tab10",
 )
+ax.set(xlabel="Number of edits used", ylabel="Reciprocal weight correlation")
+sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
 
 # %%
 fig, ax = plt.subplots(1, 1, figsize=(6, 4))
@@ -544,6 +568,7 @@ sns.scatterplot(
     palette="tab10",
 )
 # %%
+
 for key, nf in nfs_by_strategy.items():
     nf = nf.apply_node_features("mtype")
     nf = nf.query_edges("source_mtype == 'ITC'")
@@ -558,9 +583,145 @@ for key, nf in nfs_by_strategy.items():
     ].map(edges.groupby("source").size())
     outputs_by_type.set_index(["source", "target_mtype"], inplace=True)
 
-    if np.random.rand() < 0.1:
-        props_by_type_wide = outputs_by_type["prop_synapses"].unstack().fillna(0)
-        grid = sns.clustermap(props_by_type_wide.T, cmap="viridis")
-        grid.figure.suptitle(f"{key}")
+    # if (key[0] == 1 and key[1] == 0.5) or (key[0] == 0.5 and key[1] == 1):
+    #     props_by_type_wide = outputs_by_type["prop_synapses"].unstack().fillna(0)
+    #     grid = sns.clustermap(props_by_type_wide.T, cmap="viridis")
+    #     grid.figure.suptitle(f"p_neurons = {key[0]}, p_neuron_effort = {key[1]}")
+
+# %%
+
+from scipy.cluster.hierarchy import dendrogram, linkage
+
+from pkg.plot import set_context
+
+set_context(font_scale=2)
+
+keys = []
+# keys += [(0.5, 1.0, 0, 0), (1.0, 0.5, 0, 0)]
+# keys += [(0.5, 1.0, 1, 1), (1.0, 0.5, 0, 1)]
+# keys += [(0.5, 1.0, 2, 2), (1.0, 0.5, 0, 2)]
+# keys += [(0.5, 1.0, 3, 3), (1.0, 0.5, 0, 3)]
+keys += [(0.5, 1.0, 4, 4), (1.0, 0.5, 0, 4)]
+keys += [(0.5, 1.0, 5, 5), (1.0, 0.5, 0, 5)]
+keys += [(0.5, 1.0, 6, 6), (1.0, 0.5, 0, 6)]
+keys += [(0.5, 1.0, 7, 7), (1.0, 0.5, 0, 7)]
+
+fig, axs = plt.subplots(2, 4, figsize=(25, 10), sharey=True, constrained_layout=False)
+for i, key in enumerate(keys):
+    nf = nfs_by_strategy[key]
+    nf = nf.apply_node_features("mtype")
+    nf = nf.query_edges("source_mtype == 'ITC'")
+    edges = nf.edges
+    outputs_by_type = edges.groupby(["source", "target_mtype"]).size()
+    outputs_by_type = outputs_by_type.reset_index(name="n_synapses")
+    outputs_by_type["prop_synapses"] = outputs_by_type["n_synapses"] / outputs_by_type[
+        "source"
+    ].map(edges.groupby("source").size())
+    outputs_by_type.set_index(["source", "target_mtype"], inplace=True)
+
+    props_by_type_wide = outputs_by_type["prop_synapses"].unstack().fillna(0)
+    # grid = sns.clustermap(
+    #     props_by_type_wide.T, cmap="viridis", xticklabels=False, figsize=(5, 3)
+    # )
+    # grid.figure.suptitle(f"p_neurons = {key[0]}, p_neuron_effort = {key[1]}")
+    mat = props_by_type_wide.T.loc[["DTC", "PTC", "ITC", "STC"]]
+
+    # do a seaborn style sorting of the columns using scipy dendrogram, but don't
+    # plot the dendrogram
+
+    Z = linkage(mat.T, method="ward")
+    indices = dendrogram(Z, no_plot=True)["leaves"]
+    mat = mat.iloc[:, indices]
+    if mat.iloc[0, 0] < 0.4:
+        mat_values = mat.values
+        mat_values = mat_values[:, ::-1]
+        mat = pd.DataFrame(mat_values, index=mat.index, columns=mat.columns)
+
+    ax = axs.T.flat[i]
+    sns.heatmap(
+        mat,
+        xticklabels=False,
+        cbar=False,
+        ax=ax,
+        cmap="RdBu_r",
+        center=0,
+    )
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+
+ax = axs[0, 0]
+ax.text(
+    -0.2,
+    0.5,
+    "Half neurons,\nall edits",
+    ha="right",
+    va="center",
+    transform=ax.transAxes,
+    fontsize="xx-large",
+)
+plt.setp(ax.get_yticklabels(), rotation=0)
+ax = axs[1, 0]
+ax.text(
+    -0.2,
+    0.5,
+    "All neurons,\nhalf edits",
+    ha="right",
+    va="center",
+    transform=ax.transAxes,
+    fontsize="xx-large",
+)
+plt.setp(ax.get_yticklabels(), rotation=0)
+
+for i in range(4):
+    ax = axs[0, i]
+    ax.set_title("Sample " + str(i + 1))
+    ax = axs[1, i]
+    ax.set_title("Sample " + str(i + 1))
 
 
+# %%
+
+key = (1.0, 1.0, 0, 0)
+nf = nfs_by_strategy[key]
+nf = nf.apply_node_features("mtype")
+nf = nf.query_edges("source_mtype == 'ITC'")
+edges = nf.edges
+outputs_by_type = edges.groupby(["source", "target_mtype"]).size()
+outputs_by_type = outputs_by_type.reset_index(name="n_synapses")
+outputs_by_type["prop_synapses"] = outputs_by_type["n_synapses"] / outputs_by_type[
+    "source"
+].map(edges.groupby("source").size())
+outputs_by_type.set_index(["source", "target_mtype"], inplace=True)
+
+props_by_type_wide = outputs_by_type["prop_synapses"].unstack().fillna(0)
+# grid = sns.clustermap(
+#     props_by_type_wide.T, cmap="viridis", xticklabels=False, figsize=(5, 3)
+# )
+# grid.figure.suptitle(f"p_neurons = {key[0]}, p_neuron_effort = {key[1]}")
+mat = props_by_type_wide.T.loc[["DTC", "PTC", "ITC", "STC"]]
+
+# do a seaborn style sorting of the columns using scipy dendrogram, but don't
+# plot the dendrogram
+
+Z = linkage(mat.T, method="ward")
+indices = dendrogram(Z, no_plot=True)["leaves"]
+mat = mat.iloc[:, indices]
+if mat.iloc[0, 0] < 0.4:
+    mat_values = mat.values
+    mat_values = mat_values[:, ::-1]
+    mat = pd.DataFrame(mat_values, index=mat.index, columns=mat.columns)
+
+fig, ax = plt.subplots(1, 1, figsize=(6, 4))
+sns.heatmap(
+    mat,
+    xticklabels=False,
+    cbar=False,
+    ax=ax,
+    cmap="RdBu_r",
+    center=0,
+)
+ax.set_xlabel("")
+ax.set_ylabel("")
+plt.setp(ax.get_yticklabels(), rotation=0)
+
+# %%
