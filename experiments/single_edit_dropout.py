@@ -1,5 +1,6 @@
 # %%
 
+from joblib import Parallel, delayed
 
 import caveclient as cc
 import matplotlib.pyplot as plt
@@ -8,6 +9,7 @@ import pandas as pd
 import seaborn as sns
 from scipy.sparse.csgraph import dijkstra
 from scipy.spatial.distance import cdist
+from scipy.stats import spearmanr
 
 from pkg.metrics import (
     annotate_mtypes,
@@ -31,9 +33,6 @@ manifest = load_manifest()
 MTYPES = load_mtypes(client)
 
 # %%
-example_root_ids = manifest.query("is_sample").index
-
-root_id = example_root_ids[14]
 
 
 def compute_diffs_to_final(sequence_df):
@@ -58,6 +57,7 @@ def compute_diffs_to_final(sequence_df):
 
 
 def compute_dropout_stats_for_neuron(neuron, prefix="meta"):
+    root_id = neuron.neuron_id
     sequence = NeuronFrameSequence(
         neuron,
         prefix=prefix,
@@ -141,10 +141,11 @@ def process_neuron(root_id):
     return sequence_features_for_neuron, feature_diffs_for_neuron, metaedits
 
 
-from joblib import Parallel, delayed
+
+example_root_ids = manifest.query("is_sample").index
 
 outs = Parallel(n_jobs=8, verbose=10)(
-    delayed(process_neuron)(root_id) for root_id in manifest.index[:1]
+    delayed(process_neuron)(root_id) for root_id in example_root_ids
 )
 
 # %%
@@ -152,7 +153,7 @@ outs = Parallel(n_jobs=8, verbose=10)(
 sequence_features_by_neuron = {}
 feature_diffs_by_neuron = {}
 metaedits_by_neuron = {}
-for out, root_id in zip(outs, manifest.index):
+for out, root_id in zip(outs, example_root_ids):
     sequence_features_by_neuron[root_id] = out[0]
     feature_diffs_by_neuron[root_id] = out[1]
     metaedits_by_neuron[root_id] = out[2]
@@ -169,8 +170,6 @@ metaedits_by_neuron.index.set_names(["root_id", "metaoperation_id"], inplace=Tru
 
 # %%
 
-
-example_root_ids = manifest.query("is_sample").index
 
 for root_id in example_root_ids:
     diffs = feature_diffs_by_neuron.loc[root_id]
@@ -201,18 +200,40 @@ for root_id in example_root_ids:
 
     axs[1, 2].set_xlabel("Operation rank")
 
+    target_id = manifest.loc[root_id, "target_id"]
     savefig(
-        f"edit_dropout_importance_root_id={root_id}",
+        f"edit_dropout_importance_target_id={target_id}",
         fig,
         folder="single_edit_dropout",
         doc_save=True,
         group="dropout_importance",
-        caption=root_id,
+        caption=target_id,
     )
 
-#
-# diffs = feature_diffs_for_neuron["counts"]
-# sorted_diff_index = diffs.sort_values("euclidean", ascending=False).index
+# %%
+
+rows = []
+for root_id in example_root_ids:
+    diffs = feature_diffs_by_neuron.loc[root_id]
+    base_diffs = diffs["counts"]["euclidean"]
+    for feature in diffs.index:
+        feature_diffs = diffs.loc[feature]["euclidean"]
+        corr, p = spearmanr(base_diffs, feature_diffs)
+        rows.append({"root_id": root_id, "feature": feature, "corr": corr, "p": p})
+
+results = pd.DataFrame(rows)
+results = results.query('feature != "counts"')
+
+fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+sns.stripplot(data=results, x="feature", y="corr", jitter=0.2)
+
+savefig(
+    "corr_vs_counts",
+    fig,
+    folder="single_edit_dropout",
+    doc_save=True,
+    group="corr_vs_counts",
+)
 
 # %%
 
@@ -222,7 +243,7 @@ pd.concat(feature_diffs_by_neuron["counts"].to_list())
 
 # %%
 
-for root_id in example_root_ids[:]:
+for root_id in example_root_ids:
     neuron = load_neuronframe(root_id, client)
 
     annotate_pre_synapses(neuron, MTYPES)
@@ -293,13 +314,14 @@ for root_id in example_root_ids[:]:
         ax=ax,
     )
 
+    target_id = manifest.loc[root_id, "target_id"]
     savefig(
-        f"edit_dropout_importance_vs_distance-root_id={root_id}",
+        f"edit_dropout_importance_vs_distance-target_id={target_id}",
         fig,
         folder="single_edit_dropout",
         doc_save=True,
         group="dropout_importance_vs_distance",
-        caption=root_id,
+        caption=target_id,
     )
 
 # %%
@@ -308,7 +330,7 @@ from IPython.display import display
 from nglui import statebuilder
 
 colors = sns.color_palette("coolwarm", n_colors=11)
-for root_id in example_root_ids[0:5]:
+for root_id in example_root_ids:
     neuron = load_neuronframe(root_id, client)
     diffs = feature_diffs_by_neuron.loc[root_id]
     importances = diffs["counts"]["euclidean"]

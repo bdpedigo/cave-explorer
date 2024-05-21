@@ -64,7 +64,8 @@ for root_id in manifest.query("is_sample").index[:]:
         )
         max_dist = max(max_dist, distances.max())
 
-    name = f"all_edits_by_time-root_id={root_id}"
+    target_id = manifest.loc[root_id, "target_id"]
+    name = f"all_edits_by_time-target_id={target_id}"
 
     pre_synapses = neuron_sequence.base_neuron.pre_synapses
     pre_synapses["post_mtype"] = pre_synapses["post_pt_root_id"].map(
@@ -156,7 +157,7 @@ for root_id in manifest.query("is_sample").index[:]:
         fig=fig,
         update=update,
         doc_save=True,
-        caption=root_id,
+        caption=target_id,
         group="all_edits_by_time_animation",
         verbose=verbose,
         # highlight_merge_color="#1b9e77",

@@ -6,7 +6,9 @@ import pandas as pd
 from cloudfiles import CloudFiles
 
 from pkg.constants import (
+    COLUMN_MTYPES_TABLE,
     INHIBITORY_CTYPES_TABLE,
+    MTYPES_TABLE,
     NUCLEUS_TABLE,
     OUT_PATH,
     PROOFREADING_TABLE,
@@ -19,8 +21,17 @@ from pkg.utils import load_manifest
 client = cc.CAVEclient("minnie65_phase3_v1")
 proofreading_df = client.materialize.query_table(PROOFREADING_TABLE)
 inhibitory_column_df = client.materialize.query_table(INHIBITORY_CTYPES_TABLE)
+mtypes_df = client.materialize.query_table(MTYPES_TABLE)
+mtypes_lookup = mtypes_df.drop_duplicates("pt_root_id").set_index("pt_root_id")[
+    "cell_type"
+]
+column_mtypes_df = client.materialize.query_table(COLUMN_MTYPES_TABLE)
+column_mtypes_lookup = column_mtypes_df.drop_duplicates("pt_root_id").set_index(
+    "pt_root_id"
+)["cell_type"]
 nuc_df = client.materialize.query_table(NUCLEUS_TABLE)
 nuc_df.drop_duplicates("pt_root_id", inplace=True)
+
 # %%
 nuc_lookup = nuc_df.set_index("pt_root_id")["id"]
 # %%
@@ -44,6 +55,21 @@ neuron_manifest.loc[inhibitory_column_df["pt_root_id"], "in_inhibitory_column"] 
 
 neuron_manifest["in_proofreading_table"] = False
 neuron_manifest.loc[proofreading_df["pt_root_id"], "in_proofreading_table"] = True
+# %%
+
+# join the two mtype lookup series such that the column mtypes take precedence
+# over the mtypes
+
+joined_mtypes_lookup = column_mtypes_lookup.reindex(
+    mtypes_lookup.index.union(column_mtypes_lookup.index)
+).combine_first(mtypes_lookup)
+
+assert (
+    joined_mtypes_lookup.loc[column_mtypes_lookup.index] == column_mtypes_lookup
+).all()
+
+# %%
+neuron_manifest["mtype"] = joined_mtypes_lookup
 
 
 # %%
@@ -121,8 +147,8 @@ neuron_manifest["target_id"] = (
 )
 neuron_manifest.dropna(subset=["target_id"], inplace=True)
 
-neuron_manifest['current_root_id'] = neuron_manifest['current_root_id'].astype(int)
-neuron_manifest['target_id'] = neuron_manifest['target_id'].astype(int)
+neuron_manifest["current_root_id"] = neuron_manifest["current_root_id"].astype(int)
+neuron_manifest["target_id"] = neuron_manifest["target_id"].astype(int)
 
 # %%
 
@@ -136,34 +162,58 @@ write_variable(n_samples, "manifest-n_samples")
 #     .sort_index()
 #     .sample(n=n_samples, random_state=8888)
 # )
-examples = [
-    864691135082840567,
-    864691135132887456,
-    864691135135922201,
-    864691135213953920,
-    864691135292201142,
-    864691135359413848,
-    864691135502190941,
-    864691135503003997,
-    864691135518510218,
-    864691135561619681,
-    864691135865244030,
-    864691135386650965,
-    864691135660772080,
-    864691135697284250,
-    864691135808473885,
-    864691135919630768,
-    864691135995786154,
-    864691136066728600,
-    864691136618908301,
-    864691136903387826,
+# examples = [
+#     864691135082840567,
+#     864691135132887456,
+#     864691134886016762,
+#     864691135213953920,
+#     864691135292201142,
+#     864691135359413848,
+#     864691135502190941,
+#     864691135503003997,
+#     864691135518510218,
+#     864691135561619681,
+#     864691135865244030,
+#     864691135386650965,
+#     864691135660772080,
+#     864691135697284250,
+#     864691135808473885,
+#     864691135919630768,
+#     864691135995786154,
+#     864691136066728600,
+#     864691136618908301,
+#     864691136903387826,
+# ]
+example_targets = [
+    264920,
+    298930,
+    291122,
+    271886,
+    307066,
+    262692,
+    262555,
+    267293,
+    298796,
+    255137,
+    265035,
+    292670,
+    260519,
+    301085,
+    267068,
+    260505,
+    258281,
+    301218,
+    258293,
+    307264,
 ]
 
+neuron_manifest = neuron_manifest.reset_index().set_index("target_id")
 neuron_manifest["is_sample"] = False
-neuron_manifest.loc[examples, "is_sample"] = True
+neuron_manifest.loc[example_targets, "is_sample"] = True
 neuron_manifest["is_example"] = False
-neuron_manifest.loc[examples, "is_example"] = True
+neuron_manifest.loc[example_targets, "is_example"] = True
 
+neuron_manifest = neuron_manifest.reset_index().set_index("root_id")
 # TODO add in all of the neuron target id logic here
 
 neuron_manifest.to_csv(OUT_PATH / "manifest" / "neuron_manifest.csv")

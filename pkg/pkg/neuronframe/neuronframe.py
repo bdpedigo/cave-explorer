@@ -561,6 +561,7 @@ class NeuronFrame(NetworkFrame):
         show_edits=False,
         show=True,
         scalar=None,
+        cmap=None
     ):
         if plotter is None:
             plotter = pv.Plotter()
@@ -570,6 +571,7 @@ class NeuronFrame(NetworkFrame):
             color=color,
             line_width=line_width,
             scalars=scalar,
+            cmap=cmap
         )
 
         if self.has_edits and show_edits:
