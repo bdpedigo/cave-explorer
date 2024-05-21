@@ -17,33 +17,61 @@ manifest = load_manifest()
 client = cc.CAVEclient("minnie65_phase3_v1")
 
 # %%
-manifest.query("in_inhibitory_column & is_current", inplace=True)
+# manifest.query("in_inhibitory_column & is_current", inplace=True)
 
-all_edits = []
-all_metaedits = []
-rows = []
+manifest = pd.DataFrame(
+    index=[
+        864691135163673901,
+        864691135617152361,
+        864691136090326071,
+        864691135565870679,
+        864691135510120201,
+        864691135214129208,
+        864691135759725134,
+        864691135256861871,
+        864691135759685966,
+        864691135946980644,
+        864691134941217635,
+        864691136275234061,
+        864691135741431915,
+        864691135361314119,
+        864691135777918816,
+        864691136137805181,
+        864691135737446276,
+        864691136451680255,
+        864691135468657292,
+        864691135578006277,
+        864691136452245759,
+        864691135916365670,
+    ]
+)
+# all_edits = []
+# all_metaedits = []
+# rows = []
 for root_id in tqdm(manifest.index[:]):
-    neuron = load_neuronframe(root_id, client)
-    edited_neuron = neuron.set_edits(neuron.edits.index)
-    edited_neuron.select_nucleus_component(inplace=True)
-    edited_neuron.apply_edge_lengths(inplace=True)
-    all_edits.append(neuron.edits)
-    all_metaedits.append(neuron.metaedits)
-    rows.append(
-        {
-            "root_id": root_id,
-            "n_edges_unedited": len(neuron.edges),
-            "n_nodes_unedited": len(neuron.nodes),
-            "n_edits": len(neuron.edits),
-            "n_metaedits": len(neuron.metaedits),
-            "n_merges": len(neuron.edits.query("is_merge")),
-            "n_splits": len(neuron.edits.query("~is_merge")),
-            "edge_length_sum": edited_neuron.edges["length"].sum(),
-            "n_nodes": len(edited_neuron.nodes),
-            "n_edges": len(edited_neuron.edges),
-        }
-    )
-summary_info = pd.DataFrame(rows).set_index("root_id")
+    out = load_neuronframe(root_id, client, only_load=True)
+    if out is None:
+        print("Failed to load neuronframe for", root_id)
+#     edited_neuron = neuron.set_edits(neuron.edits.index)
+#     edited_neuron.select_nucleus_component(inplace=True)
+#     edited_neuron.apply_edge_lengths(inplace=True)
+#     all_edits.append(neuron.edits)
+#     all_metaedits.append(neuron.metaedits)
+#     rows.append(
+#         {
+#             "root_id": root_id,
+#             "n_edges_unedited": len(neuron.edges),
+#             "n_nodes_unedited": len(neuron.nodes),
+#             "n_edits": len(neuron.edits),
+#             "n_metaedits": len(neuron.metaedits),
+#             "n_merges": len(neuron.edits.query("is_merge")),
+#             "n_splits": len(neuron.edits.query("~is_merge")),
+#             "edge_length_sum": edited_neuron.edges["length"].sum(),
+#             "n_nodes": len(edited_neuron.nodes),
+#             "n_edges": len(edited_neuron.edges),
+#         }
+#     )
+# summary_info = pd.DataFrame(rows).set_index("root_id")
 
 
 # %%
@@ -51,7 +79,9 @@ summary_info = pd.DataFrame(rows).set_index("root_id")
 
 def extract_skeleton_nf_for_root(root_id, client):
     try:
-        neuron = load_neuronframe(root_id, client)
+        neuron = load_neuronframe(root_id, client, only_load=True)
+        if neuron is None:
+            return None
         edited_neuron = neuron.set_edits(neuron.edits.index)
         edited_neuron.select_nucleus_component(inplace=True)
         edited_neuron.apply_edge_lengths(inplace=True)
@@ -121,7 +151,7 @@ skeleton_nfs = {
 }
 
 # %%
-bins = np.linspace(100, 500, 51)
+bins = np.linspace(50, 500, 31)
 
 for root_id, skeleton_nf in skeleton_nfs.items():
     skeleton_nf.apply_node_features(["x", "y", "z", "radius"], inplace=True)
@@ -207,7 +237,7 @@ ax.set_xlim(100, 500)
 
 from pkg.plot import savefig
 
-savefig("error_rate_vs_radius", fig, folder="simple_stats", doc_save=True)
+savefig("chi_cells_error_rate_vs_radius", fig, folder="simple_stats", doc_save=True)
 
 # %%
 fig, axs = plt.subplots(
@@ -234,7 +264,7 @@ ax.set_xlabel("Radius estimate (nm)")
 ax.set_ylabel("Inverse error rate (um/edit)")
 ax.set_xlim(100, 500)
 
-savefig("inverse_error_rate_vs_radius", fig, folder="simple_stats", doc_save=True)
+savefig("chi_cells_inverse_error_rate_vs_radius", fig, folder="simple_stats", doc_save=True)
 
 
 # %%
@@ -270,4 +300,4 @@ sns.histplot(summary_info["n_metaedits"], ax=ax)
 fig, ax = plt.subplots(1, 1, figsize=(6, 5))
 sns.scatterplot(data=summary_info, x="n_nodes_unedited", y="n_edits", ax=ax)
 
-#%%
+# %%

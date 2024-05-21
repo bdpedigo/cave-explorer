@@ -13,8 +13,9 @@ manifest.query("in_inhibitory_column", inplace=True)
 
 # %%
 root_id = manifest.index[0]
-meshwork = pcg_skel.coord_space_meshwork(root_id, client=client)
 
+
+meshwork = pcg_skel.coord_space_meshwork(root_id, client=client)
 
 level2_nodes = meshwork.anno.lvl2_ids.df.copy()
 level2_nodes.set_index("mesh_ind_filt", inplace=True)
