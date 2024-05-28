@@ -22,7 +22,6 @@ from pkg.utils import load_manifest
 client = cc.CAVEclient("minnie65_phase3_v1")
 
 model_path = Path("data/models/local_compartment_classifier_ej_skeletons.skops")
-
 model = load(model_path)
 
 # %%
@@ -31,7 +30,7 @@ manifest = load_manifest()
 manifest["is_current"] = client.chunkedgraph.is_latest_roots(manifest.index.to_list())
 manifest = manifest.query("is_current")
 
-root_ids = manifest.index[:10]
+root_ids = manifest.index[:5]
 
 
 def generate_features_for_root(

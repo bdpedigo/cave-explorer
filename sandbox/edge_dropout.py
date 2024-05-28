@@ -1,20 +1,25 @@
 # %%
 
+import pickle
+from itertools import chain
 from typing import Callable, Optional, Union
 
 import caveclient as cc
 import cloudvolume
 import matplotlib.pyplot as plt
+import networkx as nx
 import numpy as np
 import pandas as pd
 import pcg_skel
 import pyvista as pv
 import seaborn as sns
 from networkframe import NetworkFrame
+from scipy.sparse.csgraph import dijkstra
 from scipy.spatial.distance import cdist
 from sklearn.metrics import pairwise_distances_argmin
 from tqdm.auto import tqdm
 
+from pkg.constants import OUT_PATH
 from pkg.metrics import (
     annotate_mtypes,
     annotate_pre_synapses,
@@ -121,15 +126,8 @@ root_point = get_nucleus_point_nm(root_id, client=client)
 
 # %%
 
-from itertools import chain
-
-import networkx as nx
-from scipy.sparse.csgraph import dijkstra
-
-sequence_features_by_neuron = []
-feature_diffs_by_neuron = []
-
-for root_id in manifest.index[:1]:
+root_ids = manifest.index[:17]
+for root_id in root_ids:
     root_point = get_nucleus_point_nm(root_id, client=client)
 
     # set the neuronframe to the final state
@@ -176,6 +174,10 @@ for root_id in manifest.index[:1]:
     skeleton_nf.edges["target_indexer"] = skeleton_nf.nodes.index.get_indexer_for(
         skeleton_nf.edges["target"]
     )
+
+    with open(OUT_PATH / "edge_dropout" / f"skeleton_root_id={root_id}.pkl", "wb") as f:
+        pickle.dump(skeleton_nf, f)
+
     # remove each edge one by one
     # HACK:there is a much much smarter way to do this starting from tips and removing edges
     # one by one. could do this in a way that avoids recomputing the adjacency matrix
@@ -185,17 +187,12 @@ for root_id in manifest.index[:1]:
 
     # return dropped_level2_nf.pre_synapses.index
 
-    dropped_skeleton_nf = NeuronFrame(
-        skeleton_nf.nodes.copy(),
-        skeleton_nf.edges.copy(),
-        nucleus_id=skeleton_nf.nucleus_id,
-    )
     n_edges = len(skeleton_nf.edges)
     pre_synapse_ids_by_edge = {}
 
     soma_index = skeleton_nf.nodes["topological_order"].idxmax()
 
-    lil_adjacency = dropped_skeleton_nf.to_sparse_adjacency(format="lil")
+    lil_adjacency = skeleton_nf.to_sparse_adjacency(format="lil")
     pre_syns = final_nf.pre_synapses
     for edge_id, row in tqdm(skeleton_nf.edges.iterrows(), total=n_edges):
         # drop the edge
@@ -230,10 +227,10 @@ for root_id in manifest.index[:1]:
         # dropped_level2_nf.remove_unused_nodes(inplace=True)
         # dropped_level2_nf.remove_unused_synapses(inplace=True)
 
-        pre_synapse_ids_by_edge[edge_id] = (
-            pre_syns.query("pre_pt_level2_id.isin(@used_level2_nodes)").index
-        )
- 
+        pre_synapse_ids_by_edge[edge_id] = pre_syns.query(
+            "pre_pt_level2_id.isin(@used_level2_nodes)"
+        ).index
+
     # from joblib import Parallel, delayed
 
     # outs = Parallel(n_jobs=-1, verbose=10)(
@@ -292,7 +289,12 @@ for root_id in manifest.index[:1]:
     sequence_feature_dfs["spatial_props_by_mtype"] = spatial_props_by_mtype
 
     sequence_features_for_neuron = pd.Series(sequence_feature_dfs, name=root_id)
-    sequence_features_by_neuron.append(sequence_features_for_neuron)
+    with open(
+        OUT_PATH / "edge_dropout" / f"sequence_features_root_id={root_id}.pkl", "wb"
+    ) as f:
+        pickle.dump(sequence_features_for_neuron, f)
+
+    # sequence_features_by_neuron.append(sequence_features_for_neuron)
 
     diffs_by_feature = {}
     for feature_name, feature_df in sequence_features_for_neuron.items():
@@ -300,8 +302,72 @@ for root_id in manifest.index[:1]:
         diffs_by_feature[feature_name] = diffs
 
     feature_diffs_for_neuron = pd.Series(diffs_by_feature, name=root_id)
-    feature_diffs_by_neuron.append(feature_diffs_for_neuron)
 
+    with open(
+        OUT_PATH / "edge_dropout" / f"feature_diffs_root_id={root_id}.pkl", "wb"
+    ) as f:
+        pickle.dump(feature_diffs_for_neuron, f)
+
+    # feature_diffs_by_neuron.append(feature_diffs_for_neuron)
+
+# %%
+
+
+sequence_features_by_neuron = []
+feature_diffs_by_neuron = []
+skeleton_nfs = []
+for root_id in root_ids:
+    with open(
+        OUT_PATH / "edge_dropout" / f"sequence_features_root_id={root_id}.pkl", "rb"
+    ) as f:
+        sequence_features_for_neuron = pickle.load(f)
+        sequence_features_by_neuron.append(sequence_features_for_neuron)
+
+    with open(
+        OUT_PATH / "edge_dropout" / f"feature_diffs_root_id={root_id}.pkl", "rb"
+    ) as f:
+        feature_diffs_for_neuron = pickle.load(f)
+        feature_diffs_by_neuron.append(feature_diffs_for_neuron)
+
+    with open(OUT_PATH / "edge_dropout" / f"skeleton_root_id={root_id}.pkl", "rb") as f:
+        skeleton_nf = pickle.load(f)
+        skeleton_nfs.append(skeleton_nf)
+
+# %%
+from pkg.utils import load_casey_palette
+
+fig, axs = plt.subplots(1, 5, figsize=(20, 5), constrained_layout=True, sharex=True)
+
+mtype_palette = load_casey_palette()
+for root_id, diffs in zip(root_ids, feature_diffs_by_neuron):
+    mtype = manifest.loc[root_id, "mtype"]
+    color = mtype_palette[mtype]
+    sorted_diff_index = diffs["counts"].sort_values("euclidean", ascending=False).index
+    for i, (feature_name, diffs) in enumerate(diffs.items()):
+        feat_diffs = diffs.loc[sorted_diff_index]
+        ax = axs[i]
+        sns.scatterplot(
+            x=np.arange(len(feat_diffs)),
+            y=feat_diffs["euclidean"],
+            ax=ax,
+            s=1,
+            linewidth=0,
+            alpha=0.2,
+            color=color,
+        )
+        ax.set_title(feature_name)
+        ax.set_yscale("log")
+# %%
+fig, axs = plt.subplots(len(root_ids), 1, figsize=(5, 0.5 * len(root_ids)), sharex=True)
+for i, (root_id, diffs) in enumerate(zip(root_ids, feature_diffs_by_neuron)):
+    color = mtype_palette[manifest.loc[root_id, "mtype"]]
+    sns.histplot(diffs["counts"]["euclidean"], log_scale=True, ax=axs[i], color=color)
+    ax.set_ylabel("")
+    ax.set_yticks([])
+    ax.spines['left'].set_visible(False)
+
+#%%
+manifest = load_manifest()
 
 # %%
 
@@ -342,22 +408,33 @@ savefig(f"edge_dropout_importances_target_id={target_id}", fig, folder="edge_dro
 
 # %%
 
-skeleton_nf.edges["importance"] = feature_diffs_for_neuron["counts"]["euclidean"]
-
-# %%
-spadj = skeleton_nf.to_sparse_adjacency(weight_col="importance")
-spadj = spadj + spadj.T
-
-node_importances = np.sum(spadj, axis=0)
-
-skeleton_nf.nodes["importance"] = node_importances
-
-# %%
-
-
 pv.set_jupyter_backend("client")
-skeleton_nf.plot_pyvista(scalar="importance", cmap="Reds", line_width=3)
 
+plotter = pv.Plotter(shape=(4, 4))
+
+for i, (root_id, skeleton_nf, feature_diffs_for_neuron) in enumerate(
+    zip(root_ids[:16], skeleton_nfs, feature_diffs_by_neuron)
+):
+    skeleton_nf.edges["importance"] = feature_diffs_for_neuron["counts"]["euclidean"]
+
+    spadj = skeleton_nf.to_sparse_adjacency(weight_col="importance")
+    spadj = spadj + spadj.T
+
+    node_importances = np.sum(spadj, axis=0)
+
+    skeleton_nf.nodes["importance"] = node_importances
+
+    skeleton_polydata = skeleton_nf.to_skeleton_polydata(label="importance")
+    plotter.subplot(*np.unravel_index(i, (4, 4)))
+    plotter.add_mesh(
+        skeleton_polydata, scalars="importance", cmap="Reds", line_width=5, opacity=0.5
+    )
+    plotter.add_mesh(skeleton_polydata, color="grey", line_width=0.5)
+
+    # skeleton_nf.plot_pyvista(scalar="importance", cmap="Reds", line_width=3)
+plotter.link_views()
+plotter.show_axes()
+plotter.show()
 # %%
 sns.histplot(node_importances, log_scale=True)
 

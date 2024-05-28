@@ -1,57 +1,57 @@
 # %%
-import caveclient as cc
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import pcg_skel
 import seaborn as sns
-from networkframe import NetworkFrame
-from tqdm.auto import tqdm
-
 from pkg.neuronframe import load_neuronframe
 from pkg.skeleton import extract_meshwork_node_mappings
 from pkg.utils import load_manifest
+from tqdm.auto import tqdm
+
+import caveclient as cc
+import pcg_skel
+from networkframe import NetworkFrame
 
 manifest = load_manifest()
 
 client = cc.CAVEclient("minnie65_phase3_v1")
 
 # %%
-# manifest.query("in_inhibitory_column & is_current", inplace=True)
+manifest.query("in_inhibitory_column & is_current", inplace=True)
 
-manifest = pd.DataFrame(
-    index=[
-        864691135163673901,
-        864691135617152361,
-        864691136090326071,
-        864691135565870679,
-        864691135510120201,
-        864691135214129208,
-        864691135759725134,
-        864691135256861871,
-        864691135759685966,
-        864691135946980644,
-        864691134941217635,
-        864691136275234061,
-        864691135741431915,
-        864691135361314119,
-        864691135777918816,
-        864691136137805181,
-        864691135737446276,
-        864691136451680255,
-        864691135468657292,
-        864691135578006277,
-        864691136452245759,
-        864691135916365670,
-    ]
-)
+# manifest = pd.DataFrame(
+#     index=[
+#         864691135163673901,
+#         864691135617152361,
+#         864691136090326071,
+#         864691135565870679,
+#         864691135510120201,
+#         864691135214129208,
+#         864691135759725134,
+#         864691135256861871,
+#         864691135759685966,
+#         864691135946980644,
+#         864691134941217635,
+#         864691136275234061,
+#         864691135741431915,
+#         864691135361314119,
+#         864691135777918816,
+#         864691136137805181,
+#         864691135737446276,
+#         864691136451680255,
+#         864691135468657292,
+#         864691135578006277,
+#         864691136452245759,
+#         864691135916365670,
+#     ]
+# )
 # all_edits = []
 # all_metaedits = []
 # rows = []
-for root_id in tqdm(manifest.index[:]):
-    out = load_neuronframe(root_id, client, only_load=True)
-    if out is None:
-        print("Failed to load neuronframe for", root_id)
+# for root_id in tqdm(manifest.index[:]):
+#     out = load_neuronframe(root_id, client, only_load=True)
+#     if out is None:
+#         print("Failed to load neuronframe for", root_id)
 #     edited_neuron = neuron.set_edits(neuron.edits.index)
 #     edited_neuron.select_nucleus_component(inplace=True)
 #     edited_neuron.apply_edge_lengths(inplace=True)
@@ -85,6 +85,8 @@ def extract_skeleton_nf_for_root(root_id, client):
         edited_neuron = neuron.set_edits(neuron.edits.index)
         edited_neuron.select_nucleus_component(inplace=True)
         edited_neuron.apply_edge_lengths(inplace=True)
+        splits = edited_neuron.edits.query("~is_merge")
+        merges = edited_neuron.edits.query("is_merge")
 
         # get radius info
         meshwork = pcg_skel.coord_space_meshwork(root_id, client=client)
@@ -127,6 +129,13 @@ def extract_skeleton_nf_for_root(root_id, client):
         skeleton_nf.nodes["operations"] = skeleton_nf.nodes.index.map(
             operations_by_skeleton_node
         )
+        skeleton_nf.nodes["splits"] = skeleton_nf.nodes["operations"].apply(
+            lambda x: [op for op in x if op in splits.index]
+        )
+        skeleton_nf.nodes["merges"] = skeleton_nf.nodes["operations"].apply(
+            lambda x: [op for op in x if op in merges.index]
+        )
+
         # HACK sure this info is somewhere in the meshwork
         skeleton_nf.nodes["radius"] = edited_neuron.nodes.groupby("skeleton_index")[
             "radius"
@@ -150,9 +159,8 @@ skeleton_nfs = {
     root_id: nf for root_id, nf in zip(root_ids, all_skeleton_nfs) if nf is not None
 }
 
-# %%
-bins = np.linspace(50, 500, 31)
 
+# %%
 for root_id, skeleton_nf in skeleton_nfs.items():
     skeleton_nf.apply_node_features(["x", "y", "z", "radius"], inplace=True)
     skeleton_nf.edges["radius"] = (
@@ -163,8 +171,33 @@ for root_id, skeleton_nf in skeleton_nfs.items():
         - skeleton_nf.edges[["target_x", "target_y", "target_z"]].values,
         axis=1,
     )
+
+# %%
+skeleton_nodes = pd.concat([nf.nodes for nf in skeleton_nfs.values()])
+skeleton_edges = pd.concat(
+    [nf.edges for nf in skeleton_nfs.values()], ignore_index=True
+)
+
+from statsmodels.stats.weightstats import DescrStatsW
+
+ds = DescrStatsW(data=skeleton_edges["radius"], weights=skeleton_edges["length"])
+
+adaptive_bins = True
+if adaptive_bins:
+    bins = ds.quantile(np.linspace(0.0, 1.0, 21))
+else:
+    bins = np.linspace(50, 500, 31)
+
+# %%
+for root_id, skeleton_nf in skeleton_nfs.items():
     skeleton_nf.nodes["radius_bin"] = pd.cut(skeleton_nf.nodes["radius"], bins=bins)
     skeleton_nf.edges["radius_bin"] = pd.cut(skeleton_nf.edges["radius"], bins=bins)
+
+skeleton_nodes = pd.concat([nf.nodes for nf in skeleton_nfs.values()])
+skeleton_edges = pd.concat(
+    [nf.edges for nf in skeleton_nfs.values()], ignore_index=True
+)
+
 
 import pickle
 
@@ -173,11 +206,6 @@ from pkg.constants import OUT_PATH
 with open(OUT_PATH / "simple_stats" / "skeleton_nfs.pkl", "wb") as f:
     pickle.dump(skeleton_nfs, f)
 
-# %%
-skeleton_nodes = pd.concat([nf.nodes for nf in skeleton_nfs.values()])
-skeleton_edges = pd.concat(
-    [nf.edges for nf in skeleton_nfs.values()], ignore_index=True
-)
 
 # %%
 
@@ -195,16 +223,57 @@ sns.histplot(
 
 # %%
 
-ops_per_bin = {}
-for idx, group_data in skeleton_nodes.groupby("radius_bin", dropna=True)["operations"]:
-    group_data = np.unique(group_data.explode().dropna())
-    ops_per_bin[idx] = len(group_data)
-ops_per_bin = pd.Series(ops_per_bin)
-n_in_bin = skeleton_nodes.groupby("radius_bin").size()
-length_in_bin = skeleton_edges.groupby("radius_bin")["length"].sum()
+rows = []
+for idx, group_data in skeleton_nodes.groupby("radius_bin", dropna=True):
+    operations = np.unique(group_data["operations"].explode().dropna())
+    splits = np.unique(group_data["splits"].explode().dropna())
+    merges = np.unique(group_data["merges"].explode().dropna())
+    rows.append(
+        {
+            "radius_bin": idx,
+            "n_nodes": len(group_data),
+            "n_operations": len(operations),
+            "n_splits": len(splits),
+            "n_merges": len(merges),
+            "radius_bin_mid": idx.mid,
+        }
+    )
+results_df = pd.DataFrame(rows).set_index("radius_bin")
+
+results_df["length_in_bin_nm"] = skeleton_edges.groupby("radius_bin")["length"].sum()
+
+results_df["operations_per_nm"] = (
+    results_df["n_operations"] / results_df["length_in_bin_nm"]
+)
+results_df["splits_per_nm"] = results_df["n_splits"] / results_df["length_in_bin_nm"]
+results_df["merges_per_nm"] = results_df["n_merges"] / results_df["length_in_bin_nm"]
+
+results_df["nm_per_operation"] = 1 / results_df["operations_per_nm"]
+results_df["nm_per_split"] = 1 / results_df["splits_per_nm"]
+results_df["nm_per_merge"] = 1 / results_df["merges_per_nm"]
+
+results_df.reset_index(inplace=True)
+
 
 # %%
-rate_per_bin = (ops_per_bin / length_in_bin).fillna(0)
+value_vars = [
+    "n_operations",
+    "n_splits",
+    "n_merges",
+    "operations_per_nm",
+    "splits_per_nm",
+    "merges_per_nm",
+    "nm_per_operation",
+    "nm_per_split",
+    "nm_per_merge",
+]
+id_vars = results_df.columns.difference(value_vars)
+results_df_long = results_df.melt(
+    id_vars=id_vars,
+    value_vars=value_vars,
+    var_name="metric",
+    value_name="value",
+)
 
 # %%
 from pkg.plot import set_context
@@ -220,7 +289,6 @@ fig, axs = plt.subplots(
     sharex=True,
 )
 
-
 sns.histplot(
     x=skeleton_edges["radius"],
     weights=skeleton_edges["length"],
@@ -230,14 +298,63 @@ sns.histplot(
 )
 
 ax = axs[1]
-sns.scatterplot(x=rate_per_bin.index.mid, y=rate_per_bin.values * 1000, ax=ax)
+sns.scatterplot(
+    data=results_df,
+    x="radius_bin_mid",
+    y=results_df["operations_per_nm"] * 1000,
+    ax=ax,
+)
 ax.set_xlabel("Radius estimate (nm)")
 ax.set_ylabel("Error rate (edits / um)")
 ax.set_xlim(100, 500)
 
-from pkg.plot import savefig
 
-savefig("chi_cells_error_rate_vs_radius", fig, folder="simple_stats", doc_save=True)
+# savefig("chi_cells_error_rate_vs_radius", fig, folder="simple_stats", doc_save=True)
+# %%
+
+fig, axs = plt.subplots(
+    2,
+    1,
+    figsize=(6, 6),
+    gridspec_kw=dict(height_ratios=[2, 5]),
+    constrained_layout=True,
+    sharex=True,
+)
+
+ax = axs[0]
+sns.histplot(
+    x=skeleton_edges["radius"],
+    weights=skeleton_edges["length"],
+    ax=ax,
+    binwidth=10,
+    stat="proportion",
+)
+ax.set_ylabel("Proportion\nof arbor")
+
+ax = axs[1]
+
+sns.lineplot(
+    data=results_df_long.query(
+        "metric.isin(['operations_per_nm', 'splits_per_nm', 'merges_per_nm'])"
+    ),
+    x="radius_bin_mid",
+    y="value",
+    hue="metric",
+    ax=ax,
+    markers=True,
+    style="metric",
+)
+ax.set_xlabel("Radius estimate (nm)")
+ax.set_ylabel("Detected error rate\n(edits / nm)")
+ax.set_xlim(100, 500)
+label_texts = ax.get_legend().texts
+label_texts[0].set_text("All")
+label_texts[1].set_text("False merge")
+label_texts[2].set_text("False split")
+ax.get_legend().set_title("Error type")
+
+fig.suptitle("Inhibitory neurons (column)")
+
 
 # %%
 fig, axs = plt.subplots(
@@ -258,13 +375,19 @@ sns.histplot(
 )
 
 ax = axs[1]
-distance_expected_errors = 1 / (rate_per_bin.values * 1000)
-sns.scatterplot(x=rate_per_bin.index.mid, y=distance_expected_errors, ax=ax)
+sns.scatterplot(
+    data=results_df,
+    x="radius_bin_mid",
+    y=results_df["nm_per_operation"] * 1000,
+    ax=ax,
+)
 ax.set_xlabel("Radius estimate (nm)")
 ax.set_ylabel("Inverse error rate (um/edit)")
 ax.set_xlim(100, 500)
 
-savefig("chi_cells_inverse_error_rate_vs_radius", fig, folder="simple_stats", doc_save=True)
+# savefig(
+#     "chi_cells_inverse_error_rate_vs_radius", fig, folder="simple_stats", doc_save=True
+# )
 
 
 # %%
