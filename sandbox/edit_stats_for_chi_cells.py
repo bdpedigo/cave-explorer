@@ -45,6 +45,7 @@ def extract_skeleton_nf_for_root(root_id, client):
         meshwork = pcg_skel.coord_space_meshwork(root_id, client=client)
         pcg_skel.features.add_volumetric_properties(meshwork, client)
         pcg_skel.features.add_segment_properties(meshwork)
+        meshwork.anchor_annotations('segment_properties')
         radius_by_level2 = meshwork.anno.segment_properties["r_eff"].to_frame()
         mesh_to_level2_ids = meshwork.anno.lvl2_ids.df.set_index("mesh_ind_filt")[
             "lvl2_id"
@@ -223,64 +224,54 @@ def compute_edit_morphology_stats(skeleton_nodes, skeleton_edges, units="um"):
 # %%
 skeleton_nodes.explode("operations").groupby(["operations", "radius_bin"]).size()
 
-# %%
-bin_ops = (
-    skeleton_nodes.explode("operations").groupby(["operations", "radius_bin"]).size()
-)
-bin_ops = bin_ops[bin_ops > 0]
-unique_bin_ops = bin_ops.reset_index().drop(columns=0).groupby("operations").first()
-assert unique_bin_ops.index.is_unique
-
-unique_bin_ops
 
 # %%
-units = "um"
-rows = []
-for idx, group_data in skeleton_nodes.groupby("radius_bin", dropna=True):
-    operations = np.unique(group_data["operations"].explode().dropna())
-    splits = np.unique(group_data["splits"].explode().dropna())
-    merges = np.unique(group_data["merges"].explode().dropna())
-    rows.append(
-        {
-            "radius_bin": idx,
-            "n_nodes": len(group_data),
-            "n_operations": len(operations),
-            "n_splits": len(splits),
-            "n_merges": len(merges),
-            "radius_bin_mid": idx.mid,
-        }
+def compute_edit_morphology_stats2(skeleton_nodes, skeleton_edges, units="um"):
+    item_counts = []
+    for item in ["operations", "splits", "merges"]:
+        bin_ops = skeleton_nodes.explode(item).groupby([item, "radius_bin"]).size()
+
+        bin_ops = bin_ops[bin_ops > 0]
+        # TODO first or last here?
+        unique_bin_ops = bin_ops.reset_index().drop(columns=0).groupby(item).last()
+        assert unique_bin_ops.index.is_unique
+
+        counts_by_bin = unique_bin_ops.groupby("radius_bin").size()
+        counts_by_bin.name = f"n_{item}"
+        item_counts.append(counts_by_bin)
+
+    results_df = pd.concat(item_counts, axis=1)
+    results_df.reset_index(inplace=True)
+    results_df["radius_bin_mid"] = results_df["radius_bin"].apply(lambda x: x.mid)
+
+    results_df[f"length_in_bin_{units}"] = skeleton_edges.groupby("radius_bin")[
+        "length"
+    ].sum()
+    if units == "um":
+        results_df[f"length_in_bin_{units}"] /= 1000
+
+    results_df[f"operations_per_{units}"] = (
+        results_df["n_operations"] / results_df[f"length_in_bin_{units}"]
+    )
+    results_df[f"splits_per_{units}"] = (
+        results_df["n_splits"] / results_df[f"length_in_bin_{units}"]
+    )
+    results_df[f"merges_per_{units}"] = (
+        results_df["n_merges"] / results_df[f"length_in_bin_{units}"]
     )
 
+    results_df[f"{units}_per_operation"] = 1 / results_df[f"operations_per_{units}"]
+    results_df[f"{units}_per_split"] = 1 / results_df[f"splits_per_{units}"]
+    results_df[f"{units}_per_merge"] = 1 / results_df[f"merges_per_{units}"]
 
-results_df = pd.DataFrame(rows).set_index("radius_bin")
-
-results_df[f"length_in_bin_{units}"] = skeleton_edges.groupby("radius_bin")[
-    "length"
-].sum()
-if units == "um":
-    results_df[f"length_in_bin_{units}"] /= 1000
-
-results_df[f"operations_per_{units}"] = (
-    results_df["n_operations"] / results_df[f"length_in_bin_{units}"]
-)
-results_df[f"splits_per_{units}"] = (
-    results_df["n_splits"] / results_df[f"length_in_bin_{units}"]
-)
-results_df[f"merges_per_{units}"] = (
-    results_df["n_merges"] / results_df[f"length_in_bin_{units}"]
-)
-
-results_df[f"{units}_per_operation"] = 1 / results_df[f"operations_per_{units}"]
-results_df[f"{units}_per_split"] = 1 / results_df[f"splits_per_{units}"]
-results_df[f"{units}_per_merge"] = 1 / results_df[f"merges_per_{units}"]
-
-results_df.reset_index(inplace=True)
+    results_df.reset_index(inplace=True)
+    return results_df
 
 
 # %%
 units = "um"
 
-results_df = compute_edit_morphology_stats(
+results_df = compute_edit_morphology_stats2(
     train_skeleton_nodes, train_skeleton_edges, units=units
 )
 value_vars = [

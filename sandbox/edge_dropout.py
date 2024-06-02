@@ -4,21 +4,13 @@ import pickle
 from itertools import chain
 from typing import Callable, Optional, Union
 
-import caveclient as cc
 import cloudvolume
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import pandas as pd
-import pcg_skel
 import pyvista as pv
 import seaborn as sns
-from networkframe import NetworkFrame
-from scipy.sparse.csgraph import dijkstra
-from scipy.spatial.distance import cdist
-from sklearn.metrics import pairwise_distances_argmin
-from tqdm.auto import tqdm
-
 from pkg.constants import OUT_PATH
 from pkg.metrics import (
     annotate_mtypes,
@@ -31,6 +23,14 @@ from pkg.metrics import (
 from pkg.neuronframe import NeuronFrame, load_neuronframe
 from pkg.plot import savefig, set_context
 from pkg.utils import get_nucleus_point_nm, load_manifest, load_mtypes
+from scipy.sparse.csgraph import dijkstra
+from scipy.spatial.distance import cdist
+from sklearn.metrics import pairwise_distances_argmin
+from tqdm.auto import tqdm
+
+import caveclient as cc
+import pcg_skel
+from networkframe import NetworkFrame
 
 
 def apply_to_synapses_by_sample(
@@ -126,8 +126,8 @@ root_point = get_nucleus_point_nm(root_id, client=client)
 
 # %%
 
-root_ids = manifest.index[:17]
-for root_id in root_ids:
+root_ids = manifest.index[:1]
+for root_id in tqdm(root_ids):
     root_point = get_nucleus_point_nm(root_id, client=client)
 
     # set the neuronframe to the final state
@@ -141,6 +141,8 @@ for root_id in root_ids:
     meshwork = pcg_skel.coord_space_meshwork(
         root_id, client=client, root_point=root_point, root_point_resolution=[1, 1, 1]
     )
+    pcg_skel.features.add_volumetric_properties(meshwork, client)
+    pcg_skel.features.add_segment_properties(meshwork)
 
     level2_nodes = meshwork.anno.lvl2_ids.df.copy()
     level2_nodes.set_index("mesh_ind_filt", inplace=True)
@@ -152,8 +154,12 @@ for root_id in root_ids:
     )
     skeleton_to_level2 = level2_nodes.groupby("skeleton_index")["level2_id"].unique()
 
+    radius_by_level2 = meshwork.anno.segment_properties["r_eff"].to_frame()
+    radius_by_skeleton = radius_by_level2.groupby(level2_nodes["skeleton_index"]).mean()
+
     # skeleton networkframe
     skeleton_nodes = pd.DataFrame(meshwork.skeleton.vertices, columns=["x", "y", "z"])
+    skeleton_nodes["radius"] = radius_by_skeleton
     # note the convention reversal here
     skeleton_edges = pd.DataFrame(meshwork.skeleton.edges, columns=["source", "target"])
     skel_nuc_id = pairwise_distances_argmin(
@@ -174,6 +180,10 @@ for root_id in root_ids:
     skeleton_nf.edges["target_indexer"] = skeleton_nf.nodes.index.get_indexer_for(
         skeleton_nf.edges["target"]
     )
+    skeleton_nf.apply_node_features("radius", inplace=True)
+    skeleton_nf.edges["radius"] = (
+        skeleton_nf.edges["source"] + skeleton_nf.edges["target"]
+    ) / 2
 
     with open(OUT_PATH / "edge_dropout" / f"skeleton_root_id={root_id}.pkl", "wb") as f:
         pickle.dump(skeleton_nf, f)
@@ -196,8 +206,9 @@ for root_id in root_ids:
     pre_syns = final_nf.pre_synapses
     for edge_id, row in tqdm(skeleton_nf.edges.iterrows(), total=n_edges):
         # drop the edge
-        i = row["source_indexer"]
-        j = row["target_indexer"]
+        i = int(row["source_indexer"])
+        j = int(row["target_indexer"])
+
         lil_adjacency[i, j] = 0
 
         mask = dijkstra(lil_adjacency, directed=False, indices=soma_index)
@@ -309,6 +320,14 @@ for root_id in root_ids:
         pickle.dump(feature_diffs_for_neuron, f)
 
     # feature_diffs_by_neuron.append(feature_diffs_for_neuron)
+# %%
+
+import seaborn as sns 
+
+select_diffs = diffs_by_feature["counts"]["euclidean"]
+radius = skeleton_edges['radius']
+
+sns.scatterplot(x=radius, y=select_diffs, alpha=0.8, s=3)
 
 # %%
 
@@ -364,9 +383,9 @@ for i, (root_id, diffs) in enumerate(zip(root_ids, feature_diffs_by_neuron)):
     sns.histplot(diffs["counts"]["euclidean"], log_scale=True, ax=axs[i], color=color)
     ax.set_ylabel("")
     ax.set_yticks([])
-    ax.spines['left'].set_visible(False)
+    ax.spines["left"].set_visible(False)
 
-#%%
+# %%
 manifest = load_manifest()
 
 # %%
@@ -510,11 +529,12 @@ write_networkframes_to_skeletons(
 import json
 from typing import Optional, Union
 
-import caveclient as cc
 import cloudvolume
 import numpy as np
 import pandas as pd
 import seaborn as sns
+
+import caveclient as cc
 from networkframe import NetworkFrame
 from nglui import statebuilder
 
