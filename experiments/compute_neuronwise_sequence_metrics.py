@@ -14,7 +14,6 @@ from pkg.neuronframe import NeuronFrame, load_neuronframe
 from pkg.sequence import create_merge_and_clean_sequence, create_time_ordered_sequence
 from pkg.utils import load_manifest, load_mtypes
 
-# %%
 cloud_bucket = "allen-minnie-phase3"
 folder = "edit_sequences"
 
@@ -36,8 +35,8 @@ files["scheme"] = "historical"
 files.loc[files["order_by"].notna(), "scheme"] = "clean-and-merge"
 
 files_finished = files.query("root_id in @has_all")
-
 manifest = load_manifest()
+
 # %%
 
 
@@ -246,6 +245,14 @@ inputs = [
     )
 ]
 
+# %%
+
+inputs = [
+    (root_id, rows)
+    for root_id, rows in files_finished.query("root_id.isin(@root_ids)").groupby(
+        "root_id"
+    )
+]
 
 results = Parallel(n_jobs=8, verbose=10)(
     delayed(process_for_neuron)(*input) for input in inputs
