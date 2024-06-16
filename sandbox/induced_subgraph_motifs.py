@@ -16,8 +16,9 @@ from networkframe import NetworkFrame
 
 from pkg.io import write_variable
 from pkg.neuronframe import load_neuronframe
-from pkg.plot import savefig, set_context
+from pkg.plot import set_context
 from pkg.sequence import create_time_ordered_sequence
+from pkg.utils import load_manifest
 
 # %%
 
@@ -25,41 +26,43 @@ set_context("paper", font_scale=1.5)
 
 client = cc.CAVEclient("minnie65_phase3_v1")
 
-query_neurons = client.materialize.query_table("connectivity_groups_v795")
+# query_neurons = client.materialize.query_table("connectivity_groups_v795")
 
-root_options = query_neurons["pt_root_id"].values
+# root_options = query_neurons["pt_root_id"].values
 
+manifest = load_manifest()
 
+root_options = manifest.query("in_inhibitory_column").index
 # %%
 
-nodes = pd.DataFrame()
-nodes["working_root_id"] = root_options
+nodes = manifest
+root_options = nodes.index.values
 
-# take my list of root IDs
-# make sure I have the latest root ID for each, using `get_latest_roots`
-is_current_mask = client.chunkedgraph.is_latest_roots(root_options)
-outdated_roots = root_options[~is_current_mask]
-root_map = dict(zip(root_options[is_current_mask], root_options[is_current_mask]))
-for outdated_root in outdated_roots:
-    latest_roots = client.chunkedgraph.get_latest_roots(outdated_root)
-    sub_nucs = client.materialize.query_table(
-        "nucleus_detection_v0", filter_in_dict={"pt_root_id": latest_roots}
-    )
-    if len(sub_nucs) == 1:
-        root_map[outdated_root] = sub_nucs.iloc[0]["pt_root_id"]
-    else:
-        print(f"Multiple nuc roots for {outdated_root}")
+# # take my list of root IDs
+# # make sure I have the latest root ID for each, using `get_latest_roots`
+# is_current_mask = client.chunkedgraph.is_latest_roots(root_options)
+# outdated_roots = root_options[~is_current_mask]
+# root_map = dict(zip(root_options[is_current_mask], root_options[is_current_mask]))
+# for outdated_root in outdated_roots:
+#     latest_roots = client.chunkedgraph.get_latest_roots(outdated_root)
+#     sub_nucs = client.materialize.query_table(
+#         "nucleus_detection_v0", filter_in_dict={"pt_root_id": latest_roots}
+#     )
+#     if len(sub_nucs) == 1:
+#         root_map[outdated_root] = sub_nucs.iloc[0]["pt_root_id"]
+#     else:
+#         print(f"Multiple nuc roots for {outdated_root}")
 
-updated_root_options = np.array([root_map[root] for root in root_options])
-nodes["current_root_id"] = updated_root_options
+# updated_root_options = np.array([root_map[root] for root in root_options])
+# nodes["current_root_id"] = updated_root_options
 
-# map to nucleus IDs
-current_nucs = client.materialize.query_table(
-    "nucleus_detection_v0",
-    filter_in_dict={"pt_root_id": updated_root_options},
-    # select_columns=["id", "pt_root_id"],
-).set_index("pt_root_id")["id"]
-nodes["target_id"] = nodes["current_root_id"].map(current_nucs)
+# # map to nucleus IDs
+# current_nucs = client.materialize.query_table(
+#     "nucleus_detection_v0",
+#     filter_in_dict={"pt_root_id": updated_root_options},
+#     # select_columns=["id", "pt_root_id"],
+# ).set_index("pt_root_id")["id"]
+# nodes["target_id"] = nodes["current_root_id"].map(current_nucs)
 
 
 # %%
@@ -111,13 +114,13 @@ files_finished = files.query("root_id in @has_all")
 
 root_options = files_finished["root_id"].unique()
 
-# %%
-nodes["has_sequence"] = nodes["current_root_id"].isin(root_options)
-nodes["ctype"] = nodes["target_id"].map(
-    query_neurons.set_index("target_id")["cell_type"]
-)
-# %%
-root_options = nodes.query("has_sequence")["working_root_id"]
+# # %%
+# nodes["has_sequence"] = nodes["current_root_id"].isin(root_options)
+# nodes["ctype"] = nodes["target_id"].map(
+#     query_neurons.set_index("target_id")["cell_type"]
+# )
+# # %%
+# root_options = nodes.query("has_sequence")["working_root_id"]
 
 # %%
 # timestamps = pd.date_range("2022-07-01", "2024-01-01", freq="M", tz="UTC")
@@ -125,6 +128,9 @@ root_options = nodes.query("has_sequence")["working_root_id"]
 
 # loop over the entire set of nodes to consider and get the collection of pre
 # and post synapses for each, across time
+
+manifest.query("in_inhibitory_column & index.isin(@root_options)", inplace=True)
+root_options = manifest.index
 
 
 def get_pre_post_synapse_ids(root_id):
@@ -242,14 +248,14 @@ synapselist = synapselist_at_time(pd.to_datetime("2021-07-01 00:00:00", utc=True
 # nodes.index = root_options
 timestamps = pd.date_range("2020-04-01", "2024-03-01", freq="M", tz="UTC")
 
-used_nodes = nodes.query("working_root_id in @root_options")
+used_nodes = nodes.query("root_id in @root_options")
 nfs_by_time = {}
 for timestamp in timestamps:
     synapselist = synapselist_at_time(timestamp)
-    nf = NetworkFrame(
-        used_nodes.set_index("working_root_id").copy(), synapselist.copy()
-    )
+    nf = NetworkFrame(used_nodes.copy(), synapselist.copy())
+    nf.nodes["mtype"] = nf.nodes.index.map(manifest["mtype"])
     nfs_by_time[timestamp] = nf
+
 
 # %%
 
@@ -260,6 +266,7 @@ for timestamp in timestamps:
     n_edits_per_neuron = applied_edits.groupby("root_id").size()
     nf = nfs_by_time[timestamp]
     nf.nodes["n_edits"] = nf.nodes.index.map(n_edits_per_neuron)
+    nf.nodes["mtype"] = nf.nodes.index.map(manifest["mtype"])
 
 # %%
 timebins = pd.cut(all_edits["timestamp"], bins=timestamps, right=True)
@@ -270,7 +277,7 @@ final_nf = nfs_by_time[timestamps[-1]]
 
 ordering = {"PTC": 0, "DTC": 1, "STC": 2, "ITC": 3}
 final_nf.nodes["mtype_order"] = final_nf.nodes["mtype"].map(ordering)
-final_nf.nodes = final_nf.nodes.sort_values(["mtype_order", "ctype", "nuc_depth"])
+final_nf.nodes = final_nf.nodes.sort_values(["mtype_order"])
 
 n_nodes = final_nf.nodes.shape[0]
 write_variable(n_nodes, "induced_subgraph/n_nodes")
@@ -334,7 +341,7 @@ for i, timestamp in enumerate(timestamps[:15]):
 
 plt.tight_layout()
 
-savefig("adjacency_by_time", fig, folder="induced_subgraph", doc_save=True)
+# savefig("adjacency_by_time", fig, folder="induced_subgraph", doc_save=True)
 
 # %%
 diffs_by_time = pd.DataFrame(index=timestamps, columns=timestamps, dtype=float)
@@ -369,7 +376,7 @@ ax.set_xticklabels([])
 ax.set_xticks([])
 ax.set_title("Network dissimilarity (Frobenius norm)")
 
-savefig("network_dissimilarity", fig, folder="induced_subgraph", doc_save=True)
+# savefig("network_dissimilarity", fig, folder="induced_subgraph", doc_save=True)
 
 # %%
 
@@ -422,12 +429,12 @@ ax.set_ylabel("# edits")
 ax.set_xlabel("Time")
 
 ax = axs[1]
-sns.scatterplot(y=month_diffs, x=diffs_by_time.index[1:], ax=ax)
+sns.lineplot(y=month_diffs, x=diffs_by_time.index[1:], ax=ax)
 ax.get_xaxis().set_tick_params(rotation=45)
 ax.set_ylabel("Network dissimilarity (F-norm)")
 ax.set_xlabel("Time")
 
-savefig("n-edits-net-dissimilarity", fig, folder="induced_subgraph", doc_save=True)
+# savefig("n-edits-net-dissimilarity", fig, folder="induced_subgraph", doc_save=True)
 
 # %%
 
@@ -489,11 +496,72 @@ ax.set(ylabel="# synapses (groupwise)", xlabel="# operations")
 
 
 # %%
-from sklearn.model_selection import StratifiedShuffleSplit
+import networkx as nx
 
-sss = StratifiedShuffleSplit(n_splits=10, test_size=0.5, random_state=88)
+from pkg.metrics import MotifFinder
 
-nodes = final_nf.nodes
-for sub_ilocs, _ in sss.split(nodes.index, nodes["mtype"]):
-    subnodes = nodes.iloc[sub_ilocs]
-    subnodes.groupby("mtype").size()
+mc = MotifFinder(orders=[2, 3], backend="grandiso", ignore_isolates=True)
+# %%
+motif_matches_by_time = {}
+for i, (time_label, nf) in enumerate(nfs_by_time.items()):
+    if i < 15:
+        continue
+    adj = nf.to_sparse_adjacency(weight_col=None)
+    g = nx.from_scipy_sparse_array(adj, create_using=nx.DiGraph)
+    matches = mc.find_motif_monomorphisms(g)
+    motif_matches_by_time[time_label] = matches
+
+
+# %%
+last_motif_matches = motif_matches_by_time[timestamps[-1]]
+
+for time_label, matches_by_motif in motif_matches_by_time.items():
+    for motif_id, matches in enumerate(matches_by_motif):
+        last_matches = last_motif_matches[motif_id]
+        matches = pd.Index(matches)
+        last_matches = pd.Index(last_matches)
+        intersection_size = len(matches.intersection(last_matches))
+        union_size = len(matches.union(last_matches))
+        jaccard = intersection_size / union_size
+        print(jaccard)
+
+# %%
+motif_counts_by_time = pd.DataFrame(motif_counts_by_time).T
+# motif_counts_by_time /= motif_counts_by_time.min()
+# %%
+norm_motif_counts_by_time = motif_counts_by_time.copy()
+norm_motif_counts_by_time = (
+    norm_motif_counts_by_time / norm_motif_counts_by_time.iloc[-1]
+)
+
+# %%
+import numpy as np
+from matplotlib import pyplot as plt
+
+unique_subgraphs = mc.motifs
+scale = 0.75
+fig, axs = plt.subplots(
+    len(unique_subgraphs),
+    2,
+    figsize=(
+        10,
+        len(unique_subgraphs) * scale,
+    ),
+    constrained_layout=True,
+    gridspec_kw={"width_ratios": [scale, 10]},
+    sharex="col",
+)
+
+pos = {0: (-1, 0), 1: (1, 0), 2: (0, np.sqrt(2))}
+pad = 0.3
+for i, subgraph in enumerate(unique_subgraphs):
+    nx.draw(subgraph, ax=axs[i, 0], node_size=50, pos=pos, width=3)
+    axs[i, 0].set_axis_off()
+    axs[i, 0].set(xlim=(-1 - pad, 1 + pad), ylim=(-pad, np.sqrt(2) + pad))
+
+    ax = axs[i, 1]
+    data = motif_counts_by_time[i]
+    sns.lineplot(x=np.arange(len(data.values))[5:], y=data.values[5:], ax=ax)
+ax.set(xlabel="Month")
+
+# %%

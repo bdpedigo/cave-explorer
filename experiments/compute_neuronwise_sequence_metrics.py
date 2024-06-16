@@ -36,6 +36,7 @@ files.loc[files["order_by"].notna(), "scheme"] = "clean-and-merge"
 
 files_finished = files.query("root_id in @has_all")
 manifest = load_manifest()
+manifest = manifest.query("in_inhibitory_column")
 
 # %%
 
@@ -158,6 +159,35 @@ def apply_metadata(df, key):
 client = cc.CAVEclient("minnie65_phase3_v1")
 mtypes = load_mtypes(client)
 
+
+# %%
+
+
+root_id = 864691134886016762
+neuron = load_neuronframe(root_id, client)
+annotate_pre_synapses(neuron, mtypes)
+annotate_mtypes(neuron, mtypes)
+
+
+# %%
+def compute_partners(synapses_df: pd.DataFrame, by=None):
+    result = synapses_df["post_pt_root_id"].unique()
+    result = pd.Series(index=result, data=1)
+    return result
+    # result = result / result.sum()
+    # return result
+
+
+sequence = create_time_ordered_sequence(neuron, root_id)
+partner_sequence = sequence.apply_to_synapses_by_sample(compute_partners, which="pre")
+
+# %%
+X = partner_sequence.fillna(0).values
+
+from scipy.spatial.distance import cdist
+
+distances = cdist(X, X[-1, :].reshape(1, -1), metric="hamming")
+
 # %%
 
 recompute = True
@@ -222,6 +252,12 @@ def process_for_neuron(root_id, rows):
         spatial_props_by_mtype = apply_metadata(spatial_props_by_mtype, sequence_key)
         sequence_feature_dfs["spatial_props_by_mtype"] = spatial_props_by_mtype
 
+        partners = sequence.apply_to_synapses_by_sample(compute_partners, which="pre")
+        partners = partners.fillna(0)
+        partners = apply_metadata(partners, sequence_key)
+
+        sequence_feature_dfs["partners"] = partners
+
         neuron_sequence_features[sequence_key] = sequence_feature_dfs
 
         info = sequence.sequence_info
@@ -235,15 +271,6 @@ def process_for_neuron(root_id, rows):
 
     return neuron_sequence_features, neuron_infos
 
-
-# %%
-
-inputs = [
-    (root_id, rows)
-    for root_id, rows in files_finished.query("root_id.isin(@root_ids)").groupby(
-        "root_id"
-    )
-]
 
 # %%
 
@@ -278,3 +305,5 @@ if save:
         pickle.dump(all_infos_df, f)
     with open(OUT_PATH / "sequence_metrics" / "meta_features_df.pkl", "wb") as f:
         pickle.dump(meta_features_df, f)
+
+# %%

@@ -446,5 +446,5 @@ def resolve_neuron(unresolved_neuron, base_neuron, warn_on_missing=True):
             point_id, inplace=False, directed=False
         )
 
-    resolved_neuron.remove_unused_synapses(inplace=True)
+    resolved_neuron = resolved_neuron.remove_unused_synapses(inplace=False)
     return resolved_neuron

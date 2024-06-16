@@ -7,6 +7,7 @@ from .metrics import (
     compute_target_counts,
     compute_target_proportions,
 )
+from .motifs import MotifFinder
 
 __all__ = [
     "SPATIAL_BINS",
@@ -16,4 +17,5 @@ __all__ = [
     "compute_target_counts",
     "compute_target_proportions",
     "compute_counts",
+    "MotifFinder",
 ]

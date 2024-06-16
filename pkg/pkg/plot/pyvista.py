@@ -22,6 +22,7 @@ def set_up_camera(
     plotter: pv.Plotter,
     location: Union[np.ndarray, list, pd.Series, "NetworkFrame"],
     setback: Union[float, int] = -2_000_000,
+    shift: Union[float, int] = 100_000,
     elevation: Union[float, int] = 25,
     up: Literal["x", "y", "z", "-x", "-y", "-z"] = "-y",
 ):
@@ -30,7 +31,7 @@ def set_up_camera(
     else:
         nuc_loc = location.nodes.loc[location.nucleus_id, ["x", "y", "z"]].values
     plotter.camera_position = "zx"
-    plotter.camera.focal_point = nuc_loc
+    plotter.camera.focal_point = nuc_loc + np.array([0, -shift, 0])
     plotter.camera.position = nuc_loc + np.array([0, 0, setback])
     plotter.camera.up = UP_MAP[up]
     plotter.camera.elevation = elevation
@@ -45,6 +46,7 @@ def animate_neuron_edit_sequence(
     n_rotation_steps: int = 20,
     azimuth_step_size: Union[float, int] = 1,
     setback: Union[float, int] = -2_000_000,
+    shift: Union[float, int] = 100_000,
     highlight_last: int = 2,
     highlight_point_size: float = 4,
     highlight_merge_color: str = "blue",
@@ -63,10 +65,29 @@ def animate_neuron_edit_sequence(
     caption: str = "",
     group: Optional[str] = None,
     verbose: bool = False,
+    loop: int = 0,
+    chart_size = (0.9, 0.45),
+    chart_loc = (0.0, 0.55),
 ):
     path = FIG_PATH / folder / f"{name}.gif"
-    plotter = pv.Plotter(window_size=window_size, off_screen=True)
-    plotter.open_gif(str(path), fps=fps)
+
+    if fig is not None:
+        col_weights = [0.6, 0.4]
+        plotter = pv.Plotter(
+            window_size=window_size,
+            off_screen=True,
+            shape=(1, 2),
+            border_color="white",
+            col_weights=col_weights,
+        )
+    else:
+        plotter = pv.Plotter(
+            window_size=window_size,
+            off_screen=True,
+            border_color="white",
+        )
+    
+    plotter.open_gif(str(path), fps=fps, loop=loop)
 
     neurons = neuron_sequence.resolved_sequence
 
@@ -78,7 +99,14 @@ def animate_neuron_edit_sequence(
         skeleton_poly, color="black", line_width=line_width
     )
 
-    set_up_camera(plotter, last_neuron, setback, elevation, up)
+    set_up_camera(
+        plotter,
+        location=last_neuron,
+        setback=setback,
+        elevation=elevation,
+        up=up,
+        shift=shift,
+    )
 
     plotter.camera.zoom(1)
 
@@ -86,12 +114,15 @@ def animate_neuron_edit_sequence(
     plotter.remove_actor(skeleton_actor)
 
     if fig is not None:
-        chart = pv.ChartMPL(fig, size=(0.5, 0.3), loc=(0.0, 0.0))
+        chart = pv.ChartMPL(fig, size=chart_size, loc=chart_loc)
         chart.background_color = (1.0, 1.0, 1.0, 0.0)
         chart.border_width = 0
         chart.active_border_color = (0.0, 0.0, 0.0, 0.0)
         chart.border_color = (0.0, 0.0, 0.0, 0.0)
+        plotter.subplot(0, 1)
         plotter.add_chart(chart)
+
+    plotter.subplot(0, 0)
 
     font_size = font_size
     gap = 40
@@ -150,8 +181,10 @@ def animate_neuron_edit_sequence(
             plotter.add_actor(title)
 
         if update is not None:
+            plotter.subplot(0, 1)
             # if sample_id is not None:
             update(sample_id)
+            plotter.subplot(0, 0)
 
         # NOTE: there might be a smarter way to do this with masking, but this seems fast
         skeleton_actor = plotter.add_mesh(
@@ -200,9 +233,9 @@ def animate_neuron_edit_sequence(
             split_remove_queue.append(())
 
         if i == 0:
-            _n_rotation_steps = n_rotation_steps * 6
-        elif i == (len(neurons) - 1):
             _n_rotation_steps = n_rotation_steps * 10
+        elif i == (len(neurons) - 1):
+            _n_rotation_steps = n_rotation_steps * 50
         else:
             _n_rotation_steps = n_rotation_steps
         for _ in range(_n_rotation_steps):

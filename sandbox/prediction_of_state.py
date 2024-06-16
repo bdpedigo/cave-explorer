@@ -38,12 +38,16 @@ with open(OUT_PATH / "sequence_metrics" / "meta_features_df.pkl", "rb") as f:
     meta_features_df = pickle.load(f)
 
 manifest = load_manifest()
+manifest = manifest.query("in_inhibitory_column")
 
 all_infos["mtype"] = all_infos["root_id"].map(manifest["mtype"])
 
 all_infos = all_infos.set_index(
     ["root_id", "scheme", "order_by", "random_seed", "order"]
 )
+all_infos = all_infos.loc[
+    all_infos.index.get_level_values("root_id").intersection(manifest.index)
+]
 
 
 # %%
@@ -111,9 +115,8 @@ fig, axs = plt.subplots(
 )
 all_infos["dummy"] = 0
 scheme = "historical"
-for i, (mtype, group_info) in enumerate(
-    all_infos.query("mtype == 'PTC'").groupby("mtype")
-):
+# .query("mtype == 'PTC'")
+for i, (mtype, group_info) in enumerate(all_infos.groupby("mtype")):
     group_info = group_info.copy()
     group_root_ids = group_info.index.get_level_values("root_id").unique()
 
@@ -191,8 +194,9 @@ import seaborn as sns
 sns.histplot(x=group_info["n_pre_synapses"])
 
 # %%
-
-ptcs = mtypes.query("cell_type == 'PTC'").sample(100)
+mtype: pd.DataFrame
+ptcs = mtypes.query("cell_type == 'PTC'").sample(500)
+ptcs = ptcs[~ptcs.index.isin(manifest.index)]
 
 # %%
 
@@ -201,7 +205,7 @@ from tqdm.auto import tqdm
 
 chunk_size = 100
 
-ids_by_chunk = np.array_split(ptcs.index, len(ptcs) // chunk_size)
+ids_by_chunk = np.array_split(ptcs.index, len(ptcs) // chunk_size + 1)
 
 syns_by_chunk = []
 for chunk in tqdm(ids_by_chunk):
@@ -223,5 +227,99 @@ for chunk in tqdm(ids_by_chunk):
 # %%
 
 all_syns = pd.concat(syns_by_chunk, axis=0)
+outputs_per_cell = all_syns.groupby("pre_pt_root_id").size().rename("n_pre_synapses")
+
 # %%
-sns.histplot(all_syns.groupby("pre_pt_root_id").size())
+fig, ax = plt.subplots(figsize=(6, 6))
+sns.histplot(outputs_per_cell, cumulative=True, stat="percent", binwidth=100)
+ax.axvline(500, color="red")
+
+# %%
+
+quants = outputs_per_cell.quantile([0.1, 0.5, 0.9])
+
+outputs_per_cell[(outputs_per_cell > quants[0.9])].index[0]
+
+# %%
+trusted_cells = outputs_per_cell.to_frame().query("n_pre_synapses > 600").index
+
+# %%
+
+fig, axs = plt.subplots(
+    4, 6, figsize=(15, 12), sharex="col", sharey=True, constrained_layout=True
+)
+
+synapse_bins = np.linspace(0, 1000, 6).tolist()
+synapse_bins.append(1000000)
+
+for i, (mtype, group_info) in enumerate(all_infos.groupby("mtype")):
+    group_info = group_info.copy()
+    group_root_ids = group_info.index.get_level_values("root_id").unique()
+
+    idx = pd.IndexSlice
+    diffs = meta_diff_df.loc[idx[group_root_ids, scheme], :]["props_by_mtype"].values
+    diffs = pd.concat(diffs, axis=0).copy().reset_index()
+    group_info = group_info.query(f"scheme == '{scheme}'")
+    group_info = group_info.reset_index()
+    if scheme == "clean-and-merge":
+        group_info["random_seed"] = (
+            group_info["random_seed"].astype(
+                "str"
+            )  # replace({"None": np.nan}).astype(float)
+        )
+    group_info.set_index(["root_id", "random_seed", "order"], inplace=True)
+    diffs.set_index(["root_id", "random_seed", "order"], inplace=True)
+
+    diffs["n_pre_synapses"] = group_info["n_pre_synapses"]
+    diffs["path_length"] = group_info["path_length"]
+    diffs["n_post_synapses"] = group_info["n_post_synapses"]
+    diffs["n_nodes"] = group_info["n_nodes"]
+    diffs["cumulative_n_operations"] = group_info["cumulative_n_operations"]
+
+    diffs["synapse_count_bin"] = pd.cut(
+        diffs["n_pre_synapses"], synapse_bins, right=False
+    )
+    for j, (syn_bin, syn_group) in enumerate(diffs.groupby("synapse_count_bin")):
+        sns.histplot(data=syn_group, y="euclidean", ax=axs[i, j], stat="density")
+        axs[i, j].set_xticks([])
+        axs[0, j].set_title(f"# out synapses\n {syn_bin}")
+
+    ax = axs[i, 0]
+    ax.text(-1, 0.5, mtype, transform=ax.transAxes, fontsize="xx-large", va="center")
+    ax.set(ylabel="Euclidean distance \n to final output profile")
+
+# %%
+from sklearn.neighbors import NearestNeighbors
+
+features = ["n_pre_synapses"]
+
+for i in range(5):
+    train_root_ids, test_root_ids = train_test_split(group_root_ids, test_size=0.2)
+
+    train_diffs = diffs.loc[train_root_ids]
+    test_diffs = diffs.loc[test_root_ids]
+
+    X_train = train_diffs[features]
+    y_train = train_diffs["euclidean"]
+    X_test = test_diffs[features]
+    y_test = test_diffs["euclidean"]
+
+    neighbors = NearestNeighbors(n_neighbors=100, metric="euclidean")
+    neighbors.fit(X_train)
+    train_distances, train_indices = neighbors.kneighbors(X_train)
+    test_distances, test_indices = neighbors.kneighbors(X_test)
+
+    y_vals_by_neighbors = np.take(y_train.values, train_indices)
+    x_vals = np.squeeze(X_train.values)
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    for i, y_collection in enumerate(y_vals_by_neighbors):
+        mean = y_collection.mean()
+        std = y_collection.std()
+        x_val = x_vals[i]
+        ax.plot(
+            np.full(len(y_collection), x_val), y_collection, alpha=0.01, color="gray"
+        )
+        ax.plot([x_val], [mean], alpha=1, color="red", marker='_', markersize=10)
+
+# %%

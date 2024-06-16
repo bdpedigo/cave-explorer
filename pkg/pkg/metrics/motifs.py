@@ -39,7 +39,7 @@ def _generate_motifs_from_base(motif_base, ignore_isolates=False):
     return unique_subgraphs
 
 
-class MotifCounter:
+class MotifFinder:
     def __init__(
         self, orders=[2, 3], backend="auto", ignore_isolates=False, verbose=False
     ):
@@ -113,3 +113,18 @@ class MotifCounter:
             return self._count_motif_monomorphisms_networkx(graph)
         else:
             raise NotImplementedError
+
+    def find_motif_monomorphisms(self, graph):
+        if self.backend == "grandiso" or self.backend == "auto":
+            return self._find_motif_monomorphisms_grandiso(graph)
+        else:
+            raise NotImplementedError
+
+    def _find_motif_monomorphisms_grandiso(self, graph):
+        matches = []
+        for motif in tqdm(self.motifs, disable=not self.verbose):
+            if not nx.is_weakly_connected(motif):
+                matches.append(None)
+            else:
+                matches.append(find_motifs(motif, graph))
+        return matches

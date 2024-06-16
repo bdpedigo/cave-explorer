@@ -30,7 +30,7 @@ manifest = load_manifest()
 folder = "animations"
 verbose = False
 
-for root_id in manifest.query("is_sample").index[:]:
+for root_id in manifest.query("is_sample").index[3:4]:
     full_neuron = load_neuronframe(root_id, client)
 
     prefix = ""
@@ -104,64 +104,236 @@ for root_id in manifest.query("is_sample").index[:]:
         output_proportions_long["operation_id"]
     )
 
-    fig, ax = plt.subplots(tight_layout=True)
+# %%
+X = output_proportions.loc[relevant_edits].values
+from sklearn.metrics import pairwise_distances
 
-    sns.lineplot(
-        data=output_proportions_long,
-        x="cumulative_n_operations",
-        y="proportion",
-        hue="post_mtype",
-        ax=ax,
-        legend=False,
-        palette=ctype_hues,
-    )
-    ax.set_ylabel("Proportion of \noutputs")
-    ax.set_xlabel("Number of operations")
-    ax.spines[["top", "right"]].set_visible(False)
+dists = pairwise_distances(X, metric="cityblock")
+dists = dists[-1]
+dists = pd.Series(
+    dists, index=output_proportions.loc[relevant_edits].index, name="distance_to_final"
+).to_frame()
+dists["order"] = relevant_edits.get_indexer_for(dists.index)
+dists["cumulative_n_operations"] = dists.index.map(
+    neuron_sequence.sequence_info["cumulative_n_operations"]
+)
 
+# %%
+
+from matplotlib.animation import FuncAnimation
+
+fig, ax = plt.subplots(tight_layout=True)
+
+sns.lineplot(
+    data=output_proportions_long,
+    x="cumulative_n_operations",
+    y="proportion",
+    hue="post_mtype",
+    ax=ax,
+    legend=False,
+    palette=ctype_hues,
+)
+ax.set_ylabel("Proportion of \noutput synapses")
+ax.set_xlabel("Number of operations")
+ax.spines[["top", "right"]].set_visible(False)
+
+children = ax.get_children()
+xdata_by_line = {}
+ydata_by_line = {}
+for i, child in enumerate(children):
+    if isinstance(child, plt.Line2D):
+        xdata_by_line[i] = child.get_xdata()
+        ydata_by_line[i] = child.get_ydata()
+
+
+def update(sample_id):
     children = ax.get_children()
-    xdata_by_line = {}
-    ydata_by_line = {}
     for i, child in enumerate(children):
         if isinstance(child, plt.Line2D):
-            xdata_by_line[i] = child.get_xdata()
-            ydata_by_line[i] = child.get_ydata()
+            if sample_id is None:
+                child.set_xdata(xdata_by_line[i][:1])
+                child.set_ydata(ydata_by_line[i][:1])
+            else:
+                child.set_xdata(
+                    xdata_by_line[i][: relevant_edits.get_loc(sample_id) + 1]
+                )
+                child.set_ydata(
+                    ydata_by_line[i][: relevant_edits.get_loc(sample_id) + 1]
+                )
 
-    def update(sample_id):
-        children = ax.get_children()
-        for i, child in enumerate(children):
-            if isinstance(child, plt.Line2D):
-                if sample_id is None:
-                    child.set_xdata(xdata_by_line[i][:1])
-                    child.set_ydata(ydata_by_line[i][:1])
-                else:
-                    child.set_xdata(
-                        xdata_by_line[i][: relevant_edits.get_loc(sample_id) + 1]
-                    )
-                    child.set_ydata(
-                        ydata_by_line[i][: relevant_edits.get_loc(sample_id) + 1]
-                    )
 
-    animate_neuron_edit_sequence(
-        neuron_sequence,
-        folder=folder,
-        name=name,
-        window_size=(1536, 1152),
-        n_rotation_steps=8,
-        setback=-4 * max_dist,
-        azimuth_step_size=0.5,
-        line_width=1.5,
-        fps=20,
-        highlight_last=3,
-        highlight_decay=0.95,
-        fig=fig,
-        update=update,
-        doc_save=True,
-        caption=target_id,
-        group="all_edits_by_time_animation",
-        verbose=verbose,
-        # highlight_merge_color="#1b9e77",
-        # highlight_split_color="#d95f02",
-        # merge_color="#66c2a5",
-        # split_color="#fc8d62",
-    )
+from matplotlib import animation
+
+new_relevant_edits = relevant_edits.values.copy()
+new_relevant_edits = np.repeat(relevant_edits, 9)
+new_relevant_edits = pd.Index(new_relevant_edits)
+ani = FuncAnimation(fig, update, frames=new_relevant_edits, repeat=True, interval=1)
+writer = animation.PillowWriter(fps=20)
+# ani.save("../../../../talks/docs/slides/berlin-2024/images", writer=writer)
+ani.save("../../../talks/docs/slides/berlin-2024/images/scatter.gif", writer=writer)
+plt.show()
+
+# %%
+name = f"all_edits_by_time-target_id={target_id}"
+
+import pyvista as pv
+
+# plotter = pv.Plotter()
+pv.global_theme.transparent_background = False
+
+# plotter.background_color = pv.Color()
+
+animate_neuron_edit_sequence(
+    neuron_sequence,
+    # folder=folder,
+    # folder = "../../../talks/docs/slides/berlin-2024/images/",
+    # name=name,
+    # name =
+    window_size=(1152, 1152),
+    n_rotation_steps=4,
+    setback=-3 * max_dist,
+    azimuth_step_size=0.5,
+    line_width=1.5,
+    fps=20,
+    highlight_last=3,
+    highlight_decay=0.95,
+    highlight_point_size=4,
+    doc_save=True,
+    caption=target_id,
+    group="all_edits_by_time_animation",
+    verbose=verbose,
+    edit_point_size=1,
+    merge_color="black",
+    split_color="black",
+    loop=1,
+)
+
+
+# %%
+name = f"all_edits_by_time_with_plots-target_id={target_id}"
+animate_neuron_edit_sequence(
+    neuron_sequence,
+    folder=folder,
+    name=name,
+    window_size=(1600, 900),
+    n_rotation_steps=5,
+    setback=-4 * max_dist,
+    azimuth_step_size=0.5,
+    line_width=1.5,
+    fps=20,
+    highlight_last=3,
+    highlight_decay=0.95,
+    fig=fig,
+    update=update,
+    doc_save=True,
+    caption=target_id,
+    group="all_edits_by_time_animation_with_plots",
+    verbose=verbose,
+)
+
+# %%
+
+
+from matplotlib.animation import FuncAnimation
+
+fig, axs = plt.subplots(2, 1, tight_layout=True)
+
+ax = axs[0]
+sns.lineplot(
+    data=output_proportions_long,
+    x="cumulative_n_operations",
+    y="proportion",
+    hue="post_mtype",
+    ax=ax,
+    legend=False,
+    palette=ctype_hues,
+)
+ax.set_ylabel("Proportion of outputs")
+ax.set_xlabel("Number of operations")
+ax.spines[["top", "right"]].set_visible(False)
+
+children = ax.get_children()
+xdata_by_line = {}
+ydata_by_line = {}
+for i, child in enumerate(children):
+    if isinstance(child, plt.Line2D):
+        xdata_by_line[i] = child.get_xdata()
+        ydata_by_line[i] = child.get_ydata()
+
+ax = axs[1]
+sns.lineplot(dists, ax=ax, x="cumulative_n_operations", y="distance_to_final")
+ax.set_ylabel("Distance to final state")
+ax.set_xlabel("Number of operations")
+ax.spines[["top", "right"]].set_visible(False)
+
+children = ax.get_children()
+xdata2_by_line = {}
+ydata2_by_line = {}
+for i, child in enumerate(children):
+    if isinstance(child, plt.Line2D):
+        xdata2_by_line[i] = child.get_xdata()
+        ydata2_by_line[i] = child.get_ydata()
+
+
+def update(sample_id):
+    ax = axs[0]
+    children = ax.get_children()
+    for i, child in enumerate(children):
+        if isinstance(child, plt.Line2D):
+            if sample_id is None:
+                child.set_xdata(xdata_by_line[i][:1])
+                child.set_ydata(ydata_by_line[i][:1])
+            else:
+                child.set_xdata(
+                    xdata_by_line[i][: relevant_edits.get_loc(sample_id) + 1]
+                )
+                child.set_ydata(
+                    ydata_by_line[i][: relevant_edits.get_loc(sample_id) + 1]
+                )
+
+    ax = axs[1]
+    children = ax.get_children()
+    for i, child in enumerate(children):
+        if isinstance(child, plt.Line2D):
+            if sample_id is None:
+                child.set_xdata(xdata2_by_line[i][:1])
+                child.set_ydata(ydata2_by_line[i][:1])
+            else:
+                child.set_xdata(
+                    xdata2_by_line[i][: relevant_edits.get_loc(sample_id) + 1]
+                )
+                child.set_ydata(
+                    ydata2_by_line[i][: relevant_edits.get_loc(sample_id) + 1]
+                )
+
+theme = pv.global_theme
+theme.font.family = 'arial'
+name = f"all_edits_by_time_with_plots-target_id={target_id}"
+animate_neuron_edit_sequence(
+    neuron_sequence,
+    folder=folder,
+    # folder="../../../talks/docs/slides/berlin-2024/images/",
+    name=name,
+    window_size=(2400, 1350),
+    # window_size=(1600, 900),
+    # window_size=(800, 450),
+    # n_rotation_steps=2,
+    n_rotation_steps=2,
+    setback=-3 * max_dist,
+    azimuth_step_size=0.5,
+    line_width=1.5,
+    fps=20,
+    highlight_last=3,
+    highlight_decay=0.95,
+    fig=fig,
+    update=update,
+    doc_save=True,
+    caption=target_id,
+    # group="all_edits_by_time_animation_with_plots",
+    verbose=verbose,
+    chart_size=(0.9, 0.8),
+    chart_loc=(0.0, 0.05),
+    loop=0,
+)
+#%%
+adi

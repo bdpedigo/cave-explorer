@@ -254,14 +254,16 @@ edits["root_id"] = root_id
 
 # %%
 
-from tqdm.auto import tqdm
 
 from pkg.sequence import create_merge_and_clean_sequence
 
 working_nodes = nodes.query("has_sequence")
-rows = []
-for root_id in tqdm(working_nodes["working_root_id"].unique()[:]):
+
+
+def load_for_neuron(root_id):
+    client = cc.CAVEclient("minnie65_phase3_v1")
     neuron = load_neuronframe(root_id, client, cache_verbose=False)
+    rows = []
     # sequence = create_time_ordered_sequence(neuron, root_id)
     rng = np.random.default_rng(8888)
     for i in range(10):
@@ -270,7 +272,7 @@ for root_id in tqdm(working_nodes["working_root_id"].unique()[:]):
             neuron, root_id, order_by="random", random_seed=seed
         )
         # sequence = create_merge_and_clean_sequence(neuron, root_id, order_by='random', random_seed=)
-        for p_neuron_effort in [0, 0.5, 1.0]:
+        for p_neuron_effort in [0, 0.25, 0.5, 0.75, 1.0]:
             # n_total_edits = len(sequence) - 1
             # n_select_edits = np.floor(n_total_edits * p_neuron_effort).astype(int)
             # selected_state = sequence.sequence_info.iloc[n_select_edits]
@@ -298,6 +300,16 @@ for root_id in tqdm(working_nodes["working_root_id"].unique()[:]):
                 selected_synapses = np.intersect1d(selected_synapses, induced_synapses)
                 row[f"{which}_synapses"] = selected_synapses.tolist()
             rows.append(row)
+    return rows
+
+
+rows_by_neuron = Parallel(n_jobs=8, verbose=10)(
+    delayed(load_for_neuron)(root_id)
+    for root_id in working_nodes["working_root_id"].unique()
+)
+rows = []
+for rbn in rows_by_neuron:
+    rows.extend(rbn)
 
 # %%
 synapse_selection_df = pd.DataFrame(rows)
@@ -313,11 +325,11 @@ neuron_outputs = synapse_selection_df.groupby("root_id")["n_outputs"].first()
 
 nfs_by_strategy = {}
 stats = {}
-for p_neuron_effort in [0, 0.5, 1.0]:
+for p_neuron_effort in [0, 0.25, 0.5, 0.75, 1.0]:
     synapse_selections_at_effort = synapse_selection_df.query(
         "p_neuron_effort == @p_neuron_effort"
     )
-    for p_neurons in [0.5, 1.0]:
+    for p_neurons in [0.25, 0.5, 0.75, 1.0]:
         if p_neurons == 1.0:
             index_list = [(np.arange(len(working_nodes)), None)]
         else:
@@ -392,6 +404,7 @@ for key, nf in nfs_by_strategy.items():
     synapse_counts["split"] = key[2]
     synapse_counts["sequence"] = key[3]
     # synapse_counts.name = key
+    synapse_counts.index.set_names(["source_mtype", "target_mtype"], inplace=True)
     synapse_group_counts_by_strategy.append(synapse_counts)
     # synapse_group_counts_by_strategy.append(synapse_counts)
 
@@ -430,7 +443,7 @@ import seaborn as sns
 
 set_context()
 fig, axs = plt.subplots(
-    4, 4, figsize=(12, 10), sharex=True, sharey=False, constrained_layout=True
+    4, 4, figsize=(12, 10), sharex=True, sharey=False, constrained_layout=False
 )
 row_index = pd.Index(synapse_group_counts_by_strategy["source_mtype"].unique())
 col_index = pd.Index(synapse_group_counts_by_strategy["target_mtype"].unique())
@@ -484,16 +497,23 @@ for key, nf in nfs_by_strategy.items():
     ).unique()
 
     reciprocal_edges = edge_index.intersection(reverse_edge_index)
+    if len(reciprocal_edges) == 0:
+        reciprocal_ratio = 0
+        stat = np.nan
+        pvalue = np.nan
+    else:
+        edge_weights_forward = edges.set_index(["source", "target"]).loc[
+            reciprocal_edges
+        ]["weight"]
+        edge_weights_reverse = edges.set_index(["source", "target"]).loc[
+            reciprocal_edges.reorder_levels(["target", "source"])
+        ]["weight"]
+        stat, pvalue = pearsonr(
+            edge_weights_forward.values, edge_weights_reverse.values
+        )
 
-    edge_weights_forward = edges.set_index(["source", "target"]).loc[reciprocal_edges][
-        "weight"
-    ]
-    edge_weights_reverse = edges.set_index(["source", "target"]).loc[
-        reciprocal_edges.reorder_levels(["target", "source"])
-    ]["weight"]
-    stat, pvalue = pearsonr(edge_weights_forward.values, edge_weights_reverse.values)
+        reciprocal_ratio = len(reciprocal_edges) / len(edge_index)
 
-    reciprocal_ratio = len(reciprocal_edges) / len(edge_index)
     reciprocal_ratios_by_strategy.append(
         {
             "p_neurons": key[0],
@@ -567,6 +587,8 @@ sns.scatterplot(
     hue="p_neuron_effort",
     palette="tab10",
 )
+
+sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
 # %%
 
 for key, nf in nfs_by_strategy.items():
@@ -725,3 +747,5 @@ ax.set_ylabel("")
 plt.setp(ax.get_yticklabels(), rotation=0)
 
 # %%
+
+sns.clustermap(props_by_type_wide.T)

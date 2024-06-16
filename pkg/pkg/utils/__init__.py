@@ -1,3 +1,4 @@
+from .message import send_message
 from .wrangle import (
     find_closest_point,
     get_all_nodes_edges,
@@ -28,4 +29,5 @@ __all__ = [
     "load_casey_palette",
     "load_mtypes",
     "load_manifest",
+    "send_message",
 ]
