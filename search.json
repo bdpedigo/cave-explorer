@@ -1,75 +1,72 @@
 [
   {
-    "objectID": "importance.html",
-    "href": "importance.html",
-    "title": "Edit importance",
+    "objectID": "introduction.html",
+    "href": "introduction.html",
+    "title": "Introduction",
     "section": "",
-    "text": "264920\n\n\n\n\n\n\n\n298930\n\n\n\n\n\n\n\n\n\n291122\n\n\n\n\n\n\n\n271886\n\n\n\n\n\n\n\n\n\n307066\n\n\n\n\n\n\n\n262692\n\n\n\n\n\n\n\n\n\n262555\n\n\n\n\n\n\n\n267293\n\n\n\n\n\n\n\n\n\n298796\n\n\n\n\n\n\n\n255137\n\n\n\n\n\n\n\n\n\n265035\n\n\n\n\n\n\n\n292670\n\n\n\n\n\n\n\n\n\n260519\n\n\n\n\n\n\n\n301085\n\n\n\n\n\n\n\n\n\n267068\n\n\n\n\n\n\n\n260505\n\n\n\n\n\n\n\n\n\n258281\n\n\n\n\n\n\n\n301218\n\n\n\n\n\n\n\n\n\n258293\n\n\n\n\n\n\n\n307264\n\n\n\n\n\n\nFigure 1\n\n\n\n\n\n\n\n\n\n\n\n\n264920\n\n\n\n\n\n\n\n298930\n\n\n\n\n\n\n\n\n\n291122\n\n\n\n\n\n\n\n271886\n\n\n\n\n\n\n\n\n\n307066\n\n\n\n\n\n\n\n262692\n\n\n\n\n\n\n\n\n\n262555\n\n\n\n\n\n\n\n267293\n\n\n\n\n\n\n\n\n\n298796\n\n\n\n\n\n\n\n255137\n\n\n\n\n\n\n\n\n\n265035\n\n\n\n\n\n\n\n292670\n\n\n\n\n\n\n\n\n\n260519\n\n\n\n\n\n\n\n301085\n\n\n\n\n\n\n\n\n\n267068\n\n\n\n\n\n\n\n260505\n\n\n\n\n\n\n\n\n\n258281\n\n\n\n\n\n\n\n301218\n\n\n\n\n\n\n\n\n\n258293\n\n\n\n\n\n\n\n307264\n\n\n\n\n\n\nFigure 2\n\n\n\n\n\n\n264920\n298930\n291122\n271886\n307066\n262692\n262555\n267293\n298796\n255137\n265035\n292670\n260519\n301085\n267068\n260505\n258281\n301218\n258293\n307264\n264920\n298930\n291122\n271886\n307066\n262692\n262555\n267293\n298796\n255137\n265035\n292670\n260519\n301085\n267068\n260505\n258281\n301218\n258293\n307264",
+    "text": "In the effort to understand the brain and its function, connectomics has proven a useful tool, and thus has undergone rapid technological development.  Connectomes are now available for entire larval (Winding et al. 2023) and adult fly brains (Schlegel et al. 2023; Dorkenwald et al. 2023), large regions of mouse visual cortex (MICrONS Consortium et al. 2021), human cortex (Shapson-Coe et al. 2021), and many other areas and organisms. The largest of these connectome reconstructions now contain on the order of hundreds of thousands of neurons, and hundreds of millions of synapses. This unprecedented scale in connnectome reconstruction has been enabled by segmenting cells and annotating synapses with computer vision, followed by laborious human proofreading to correct false merges and extend incomplete pieces of neurons. This latter effort has been done, understandably, with the intent that we want to be able to trust the resulting reconstruction and believe that it is a true representation of the neuroanatomy and connectivity of the biological sample: thus, one should correct the results of an automated algorithm by this manual proofreading process.Connectome: a map of neural wiring diagrams in precise detail, often obtained via electron microscopy followed by manual or automated reconstruction of the neurons and other cells in that image volume.",
     "crumbs": [
-      "Results",
-      "Edit importance"
+      "Introduction"
     ]
   },
   {
-    "objectID": "importance.html#edit-importance",
-    "href": "importance.html#edit-importance",
-    "title": "Edit importance",
+    "objectID": "introduction.html#background",
+    "href": "introduction.html#background",
+    "title": "Introduction",
     "section": "",
-    "text": "264920\n\n\n\n\n\n\n\n298930\n\n\n\n\n\n\n\n\n\n291122\n\n\n\n\n\n\n\n271886\n\n\n\n\n\n\n\n\n\n307066\n\n\n\n\n\n\n\n262692\n\n\n\n\n\n\n\n\n\n262555\n\n\n\n\n\n\n\n267293\n\n\n\n\n\n\n\n\n\n298796\n\n\n\n\n\n\n\n255137\n\n\n\n\n\n\n\n\n\n265035\n\n\n\n\n\n\n\n292670\n\n\n\n\n\n\n\n\n\n260519\n\n\n\n\n\n\n\n301085\n\n\n\n\n\n\n\n\n\n267068\n\n\n\n\n\n\n\n260505\n\n\n\n\n\n\n\n\n\n258281\n\n\n\n\n\n\n\n301218\n\n\n\n\n\n\n\n\n\n258293\n\n\n\n\n\n\n\n307264\n\n\n\n\n\n\nFigure 1\n\n\n\n\n\n\n\n\n\n\n\n\n264920\n\n\n\n\n\n\n\n298930\n\n\n\n\n\n\n\n\n\n291122\n\n\n\n\n\n\n\n271886\n\n\n\n\n\n\n\n\n\n307066\n\n\n\n\n\n\n\n262692\n\n\n\n\n\n\n\n\n\n262555\n\n\n\n\n\n\n\n267293\n\n\n\n\n\n\n\n\n\n298796\n\n\n\n\n\n\n\n255137\n\n\n\n\n\n\n\n\n\n265035\n\n\n\n\n\n\n\n292670\n\n\n\n\n\n\n\n\n\n260519\n\n\n\n\n\n\n\n301085\n\n\n\n\n\n\n\n\n\n267068\n\n\n\n\n\n\n\n260505\n\n\n\n\n\n\n\n\n\n258281\n\n\n\n\n\n\n\n301218\n\n\n\n\n\n\n\n\n\n258293\n\n\n\n\n\n\n\n307264\n\n\n\n\n\n\nFigure 2\n\n\n\n\n\n\n264920\n298930\n291122\n271886\n307066\n262692\n262555\n267293\n298796\n255137\n265035\n292670\n260519\n301085\n267068\n260505\n258281\n301218\n258293\n307264\n264920\n298930\n291122\n271886\n307066\n262692\n262555\n267293\n298796\n255137\n265035\n292670\n260519\n301085\n267068\n260505\n258281\n301218\n258293\n307264",
+    "text": "In the effort to understand the brain and its function, connectomics has proven a useful tool, and thus has undergone rapid technological development.  Connectomes are now available for entire larval (Winding et al. 2023) and adult fly brains (Schlegel et al. 2023; Dorkenwald et al. 2023), large regions of mouse visual cortex (MICrONS Consortium et al. 2021), human cortex (Shapson-Coe et al. 2021), and many other areas and organisms. The largest of these connectome reconstructions now contain on the order of hundreds of thousands of neurons, and hundreds of millions of synapses. This unprecedented scale in connnectome reconstruction has been enabled by segmenting cells and annotating synapses with computer vision, followed by laborious human proofreading to correct false merges and extend incomplete pieces of neurons. This latter effort has been done, understandably, with the intent that we want to be able to trust the resulting reconstruction and believe that it is a true representation of the neuroanatomy and connectivity of the biological sample: thus, one should correct the results of an automated algorithm by this manual proofreading process.Connectome: a map of neural wiring diagrams in precise detail, often obtained via electron microscopy followed by manual or automated reconstruction of the neurons and other cells in that image volume.",
     "crumbs": [
-      "Results",
-      "Edit importance"
+      "Introduction"
     ]
   },
   {
-    "objectID": "methods.html",
-    "href": "methods.html",
-    "title": "Methods",
-    "section": "",
-    "text": "Below, we detail the different schemes used for replaying edits onto a neuron.\n\n\nThe simplest scheme is to simply apply the edits on the neuron in the same order in which those edits happened in reality. We denote this the historical ordering of edits.\nAlgorithm:\n\nInput: a state of a neuron/segmentation\n\nFrom all edits in the history of a given neuron, select the earliest which has not been applied\nApply the edit\nCompute the new connected component for this neuron from the nucleus\nCompute metrics\nRecord the number of operations applied (always 1 for this scheme)\nRecurse (go back to 1.)\n\n\n\n\n\nOften, proofreaders will follow what we’ll refer to as a “clean-and-merge” strategy. The idea is that one finds a segment which appears to be part of the current neuron, cleans up that segment by splitting off false-mergers, and then finally connects this (clean) Clean means that all split edits have been applied to the segment segment back to the neuron.\nBelow, we describe how we implement our idealized version of this strategy when applying edits on a neuron. There are two subtle variants of this idea which differ in the order in which merges are applied to the neuron; see 2a. and 2b. in the algorithm below. We denote these strategies clean-and-merge (historical) and clean-and-merge (random).\nAlgorithm:\n\nInput: a clean state of a neuron/segmentation\n\nFind all merge edits which are available Available means an edit which connects to the current connected component\nChoose one of these available merges to apply\n\nChoose the merge which is earliest in history (historical strategy)\nChoose at among these at random (random strategy)\n\nFind the segment which would be added if this merge is applied\nFor that segment, apply all available split edits\nApply the merge to connect this new segment to the current connected component\nCompute the new connected component for this neuron from the nucleus\nCompute metrics\nRecord the number of operations, equal to count of all operations needed for the clean (4.) and the merge (5.)\nRecurse (go back to 1.)\n\n\n\n\n\n\n\n\nNote\n\n\n\nI actually implement this as a merge-and-clean process since the recursion is a bit easier to implement; but I reorder the metrics/counts of edits appropriately to match the above process.",
+    "objectID": "introduction.html#questions",
+    "href": "introduction.html#questions",
+    "title": "Introduction",
+    "section": "Questions",
+    "text": "Questions\nHowever, since this manual proofreading is laborious (for instance, there were 2.7 million edits by 250 people in FlyWire over 4 years as of June 2023), it is worth reflecting on the scientific value of this effort. How consequential was this proofreading on the downstream measures we care about for analysis, such as connection probabilities between cell types? Are some connectivity features stable with proofreading, and others variable? Are certain edits more important than others, in terms of their impact on overal circuit structure? Next, we touch on how others have explored these and related questions in prior work, before motivating our own contributions here.",
     "crumbs": [
-      "Methods"
+      "Introduction"
     ]
   },
   {
-    "objectID": "methods.html#sec-schemes",
-    "href": "methods.html#sec-schemes",
-    "title": "Methods",
-    "section": "",
-    "text": "Below, we detail the different schemes used for replaying edits onto a neuron.\n\n\nThe simplest scheme is to simply apply the edits on the neuron in the same order in which those edits happened in reality. We denote this the historical ordering of edits.\nAlgorithm:\n\nInput: a state of a neuron/segmentation\n\nFrom all edits in the history of a given neuron, select the earliest which has not been applied\nApply the edit\nCompute the new connected component for this neuron from the nucleus\nCompute metrics\nRecord the number of operations applied (always 1 for this scheme)\nRecurse (go back to 1.)\n\n\n\n\n\nOften, proofreaders will follow what we’ll refer to as a “clean-and-merge” strategy. The idea is that one finds a segment which appears to be part of the current neuron, cleans up that segment by splitting off false-mergers, and then finally connects this (clean) Clean means that all split edits have been applied to the segment segment back to the neuron.\nBelow, we describe how we implement our idealized version of this strategy when applying edits on a neuron. There are two subtle variants of this idea which differ in the order in which merges are applied to the neuron; see 2a. and 2b. in the algorithm below. We denote these strategies clean-and-merge (historical) and clean-and-merge (random).\nAlgorithm:\n\nInput: a clean state of a neuron/segmentation\n\nFind all merge edits which are available Available means an edit which connects to the current connected component\nChoose one of these available merges to apply\n\nChoose the merge which is earliest in history (historical strategy)\nChoose at among these at random (random strategy)\n\nFind the segment which would be added if this merge is applied\nFor that segment, apply all available split edits\nApply the merge to connect this new segment to the current connected component\nCompute the new connected component for this neuron from the nucleus\nCompute metrics\nRecord the number of operations, equal to count of all operations needed for the clean (4.) and the merge (5.)\nRecurse (go back to 1.)\n\n\n\n\n\n\n\n\nNote\n\n\n\nI actually implement this as a merge-and-clean process since the recursion is a bit easier to implement; but I reorder the metrics/counts of edits appropriately to match the above process.",
+    "objectID": "introduction.html#prior-work",
+    "href": "introduction.html#prior-work",
+    "title": "Introduction",
+    "section": "Prior work",
+    "text": "Prior work\nIn Priebe, Vogelstein, and Bock (2013), the authors ask whether one should, under a fixed “budget,” desire a small amount of highly proofread data or a larger amount of partially proofread, noisy data. They frame this question from the perspective of statistical hypothesis testing, asking which approach has higher power for distinguishing network parameters under a toy model. This work is an illustrative case for why, at least in theory, it is possible to actually prefer lots of unproofread data to a smaller amount of curated data. This is a prospect worth considering, especially in light of costly proofreading endeavors. However, this work was done in a toy model which was set up such that unproofread data had no bias, but merely represented a noisier version of a ground truth network.  In reality, the unproofread networks we observe in connectomics likely have extreme bias in the way that errors are observed. For instance, one error in segmentation could lead to missing the entire primary axon of a neuron, effectively deleting all of that neurons outputs in one stroke. In our work, we will study similar questions using real connectome datasets and their edits rather than a toy model. This will allow us to examine similar questions but in this more realistic setting where proofreading likely changes the distribution of outputs from a neuron, say.Bias: the distance between an expected value of an estimator and the true value of the parameter it is trying to estimate.\n\n\n\nText describing the key result from Priebe, Vogelstein, and Bock (2013). In essence, power is greater in their toy example when tracing more edges with more errors.\n\n\nThis question of technical variability and proofreading tangentially arose in Schlegel et al. (2023) as the authors examined a comparison of two fly connectomes: FlyWire and Hemibrain. The authors were interested in quantitative comparisons of connectivity between cell types that were cross-matched between the left and right hemispheres of the FlyWire connectome and the single hemisphere Hemibrain connectome. They found a general agreement in cell-type-to-cell-type connections both within (FlyWire-left:FlyWire-right) and between (FlyWire:Hemibrain) datasets; still, they wondered how much technical differences in reconstruction between these reconstructions could explain the differences they saw. The authors created synthetic datasets by subsampling data to estimated completion rates (on the basis of how many synapses were attached to both somas for a given neuropil). They found that, on average, 65% of the observed differences in cell-type-to-cell-type edge weights fell within a range one would expect from this simple model of technical noise. In other words, for many of these connections, one can not rule out that a difference that large came from differences in the technical details of connectome reconstruction, highlighting the importance of understanding this variability for comparisons of connectivity.\n\n\n\n\n\n\n\nFigure 4H from Schlegel et al. (2023), credit to the authors of that work. Diagram depicts method for probabilistically scaling observed data by completion rates, an indicator of reconstruction completeness. Plot shows confidence regions for technical variability under said model.\n\n\nIn Schneider-Mizell et al. (2016), the authors studied how features of neuroanatomy in the organism being studied relates to the robustness of connectivity measures. In Drosophila, many synapses input onto a downstream neurons “twigs,” microtubule-free neurites. Though the authors found that the majority of errors in reconstruction were at twigs, most connected neurons make use of more than one twig. Thus even if some twigs are missed, one is likely to recover most connections. This is an illustrative example of how considering neuroanatomy (twigs), technical aspects of the reconstruction (twigs being small and easily missable), and statistics (somewhat independent errors at different twig sites) can be informative about a connectivity estimand (chance of missing a connection completely).\n\n\n\n\n\n\n\n\n\nFigure 10D from Schneider-Mizell et al. (2016). Most errors in reconstruction fall on twigs for this dataset.\n\n\n\n\n\n\n\nFigure3J from Schneider-Mizell et al. (2016). Most multisynaptically connected neuron pairs are also connected by more than one twig in this dataset.",
     "crumbs": [
-      "Methods"
+      "Introduction"
     ]
   },
   {
-    "objectID": "methods.html#metrics-to-evaluate",
-    "href": "methods.html#metrics-to-evaluate",
-    "title": "Methods",
-    "section": "Metrics to evaluate",
-    "text": "Metrics to evaluate\nHere, we describe the metrics that we evaluate for each neuron-state A neuron-state is just a version of a particular neuron with a particular set of edits applied to it, according to one of the schemes described in the schemes section.\n\nProportion of inputs/outputs onto classes\nAssume we have \\(K\\)-classes of neuron (e.g. morphological types). This metric associates each neuron-state with a \\(K\\)-length vector, \\(x\\), where \\(x_k\\) is the proportion of that neuron-state’s output synapses which target a neuron in class \\(k\\).\nThis metric could also be flipped in the definition above to consider the inputs to a cell.\n\n\n\n\n\n\nNote\n\n\n\nFor the categorization of target neurons, I am using aibs_metamodel_mtypes_v661_v2.\n\n\n\n\nConnectivity probability by distance\nImagine space is discretized into bins of an arbitrary size/shape, for instace, concentric cylinders centered on the soma of a neuron. This metric captures the probability that cell \\(i\\) targets a downstream neuron whose soma lives within a given bin, \\(l\\).",
+    "objectID": "introduction.html#significance",
+    "href": "introduction.html#significance",
+    "title": "Introduction",
+    "section": "Significance",
+    "text": "Significance\nThere are several reasons why understanding the variability of connectivity with respect to proofreading is worthwhile and timely to consider for modern connectomics:\nFirst, understanding the sensitivity of connectivity features to proofreading provides clues as to the technical variability associated with an imperfect reconstruction of an underlying biological network. This is worth knowing for its own sake, simply to understand how much to trust any particular aspect of a reconstruction. It is also important if one wanted to compare connectivity feature \\(Y\\) between two datasets. If \\(Y\\) varies drastically based on proofreading level, then it will be challenging to compare \\(Y\\) without ensuring proofreading was done in the exact same way for these two datasets or post-hoc correcting for any differences (see commentary above about Schlegel et al. (2023)).\nSecond, understanding this sensitivity is important for directing future proofreading efforts. Achieving a “perfect connectome” reconstruction is a comforting goal to strive for, but given finite time and resources, it is worthwhile to consider which efforts will actually affect downstream analysis we are interested in. Increasingly, a single connectomics datasets may be used for addressing many questions by directing proofreading toward particular sub-goals. It is worth understanding which questions can be answered “out-of-the-box” with no additional proofreading after the initial segmentation, and which will require further effort to get a trustworth answer.",
     "crumbs": [
-      "Methods"
+      "Introduction"
     ]
   },
   {
-    "objectID": "methods.html#tables-used",
-    "href": "methods.html#tables-used",
-    "title": "Methods",
-    "section": "Tables used",
-    "text": "Tables used\n\nallen_column_mtypes_v2: used to indicate the morphological types for the neurons of interest that I am examining in this work.\naibs_metamodel_mtypes_v661_v2: used to indicate the morphological types for the rest of the neurons in the dataset.\nnucleus_detection_v0: used to indicate the location of the nucleus for all neurons in the dataset. This also anchors each neuron to a target ID indicating the identity of the neuron by its soma, since the segmentation is dynamic.",
+    "objectID": "introduction.html#our-contribution",
+    "href": "introduction.html#our-contribution",
+    "title": "Introduction",
+    "section": "Our contribution",
+    "text": "Our contribution\nIn this work, we investigate these questions using large-scale reconstructions of mouse visual cortex as testbeds for these ideas. We do not aim to answer these questions holistically for all connectomics datasets and possible connectivity features; such an endeavor would be impossible since the answer is likely to depend greatly on the dataset and the question. Rather, we provide a set of guiding principles for which types of features are likely to be variable, and provide tools for other connectomicists to analyze these questions on their own data.",
     "crumbs": [
-      "Methods"
+      "Introduction"
     ]
   },
   {
-    "objectID": "animations.html",
-    "href": "animations.html",
-    "title": "Animations",
-    "section": "",
-    "text": "864691135082840567\n\n\n\n\n\n\n\n864691135132887456\n\n\n\n\n\n\n\n\n\n864691135135922201\n\n\n\n\n\n\n\n864691135213953920\n\n\n\n\n\n\n\n\n\n864691135292201142\n\n\n\n\n\n\n\n864691135359413848\n\n\n\n\n\n\n\n\n\n864691135502190941\n\n\n\n\n\n\n\n864691135503003997\n\n\n\n\n\n\n\n\n\n864691135518510218\n\n\n\n\n\n\n\n864691135561619681\n\n\n\n\n\n\n\n\n\n864691135564974423\n\n\n\n\n\n\n\n864691135586352764\n\n\n\n\n\n\n\n\n\n864691135660772080\n\n\n\n\n\n\n\n864691135697284250\n\n\n\n\n\n\n\n\n\n864691135808473885\n\n\n\n\n\n\n\n864691135919630768\n\n\n\n\n\n\n\n\n\n864691135995786154\n\n\n\n\n\n\n\n864691136066728600\n\n\n\n\n\n\n\n\n\n864691136618908301\n\n\n\n\n\n\n\n864691136903387826\n\n\n\n\n\n\nFigure 1\n\n\n\n\n\n\n864691135082840567\n864691135132887456\n864691135135922201\n864691135213953920\n864691135292201142\n864691135359413848\n864691135502190941\n864691135503003997\n864691135518510218\n864691135561619681\n864691135564974423\n864691135586352764\n864691135660772080\n864691135697284250\n864691135808473885\n864691135919630768\n864691135995786154\n864691136066728600\n864691136618908301\n864691136903387826",
+    "objectID": "introduction.html#outline",
+    "href": "introduction.html#outline",
+    "title": "Introduction",
+    "section": "Outline",
+    "text": "Outline\nWe start by clearly defining a set of connectivity features to consider for this work.\nThen, we extract the complete set of proofreading edits performed on a highly curated column of cortical connectivity in a mouse’s visual cortex. We also map each synapse between neurons in this column to the edits it depends on, in the sense that those edits had to happen for a statement about soma \\(i\\) to soma \\(j\\) connectivity to be made.\nUsing this information, we then construct various “sloppy” networks, instantiated by replaying particular edits over the network and omitting others. These networks vary in their degree of completeness (i.e. some measure of how many of the edits were used) from the original segmentation all the way to the final proofread dataset. We also vary the “proofreader model” used to assign edits to “ON” or “OFF” in some ordering (i.e. whether edits are replayed uniformly at random, in the order they happened, in order of euclidean distance from the soma, etc.).\nFor these sloppy networks, we study how connectivity metrics vary as a function of these (real and imagined) proofreading endeavors. We also explore a ranking of individual edits from most to least important from the perspective of a particular connectivity measure, creating a scoring that could be used in future work to predict the location of key edits.\n\n\n\nText describing the key result from Priebe, Vogelstein, and Bock (2013). In essence, power is greater in their toy example when tracing more edges with more errors.\nFigure 4H from Schlegel et al. (2023), credit to the authors of that work. Diagram depicts method for probabilistically scaling observed data by completion rates, an indicator of reconstruction completeness. Plot shows confidence regions for technical variability under said model.\nFigure 10D from Schneider-Mizell et al. (2016). Most errors in reconstruction fall on twigs for this dataset.\nFigure3J from Schneider-Mizell et al. (2016). Most multisynaptically connected neuron pairs are also connected by more than one twig in this dataset.",
     "crumbs": [
-      "Results",
-      "Animations"
+      "Introduction"
     ]
   },
   {
@@ -150,6 +147,68 @@
     ]
   },
   {
+    "objectID": "approach.html",
+    "href": "approach.html",
+    "title": "Approach",
+    "section": "",
+    "text": "Here, we study a connectome of a millimeter-cubed volume of mouse visual cortex (MICrONS Consortium et al. 2021). The dataset is stored in a CAVE database (Dorkenwald et al. 2023), which tracks the edits which are made over time to the segmentation.\nWe further focused on a subset of the data which received extensive proofreading, namely, a set of inhibitory neurons located in a column spanning the entire cortical depth (Schneider-Mizell et al. 2023).\n\n\n\n\nReferences\n\nDorkenwald, Sven, Casey M. Schneider-Mizell, Derrick Brittain, Akhilesh Halageri, Chris Jordan, Nico Kemnitz, Manual A. Castro, et al. 2023. “CAVE: Connectome Annotation Versioning Engine.” http://biorxiv.org/lookup/doi/10.1101/2023.07.26.550598.\n\n\nMICrONS Consortium, J. Alexander Bae, Mahaly Baptiste, Caitlyn A. Bishop, Agnes L. Bodor, Derrick Brittain, JoAnn Buchanan, et al. 2021. “Functional Connectomics Spanning Multiple Areas of Mouse Visual Cortex.” http://dx.doi.org/10.1101/2021.07.28.454025.\n\n\nSchneider-Mizell, Casey M, Agnes Bodor, Derrick Brittain, JoAnn Buchanan, Daniel J. Bumbarger, Leila Elabbady, Daniel Kapner, et al. 2023. “Cell-Type-Specific Inhibitory Circuitry from a Connectomic Census of Mouse Visual Cortex.” http://dx.doi.org/10.1101/2023.01.23.525290.",
+    "crumbs": [
+      "Results",
+      "Approach"
+    ]
+  },
+  {
+    "objectID": "methods.html",
+    "href": "methods.html",
+    "title": "Methods",
+    "section": "",
+    "text": "Below, we detail the different schemes used for replaying edits onto a neuron.\n\n\nThe simplest scheme is to simply apply the edits on the neuron in the same order in which those edits happened in reality. We denote this the historical ordering of edits.\nAlgorithm:\n\nInput: a state of a neuron/segmentation\n\nFrom all edits in the history of a given neuron, select the earliest which has not been applied\nApply the edit\nCompute the new connected component for this neuron from the nucleus\nCompute metrics\nRecord the number of operations applied (always 1 for this scheme)\nRecurse (go back to 1.)\n\n\n\n\n\nOften, proofreaders will follow what we’ll refer to as a “clean-and-merge” strategy. The idea is that one finds a segment which appears to be part of the current neuron, cleans up that segment by splitting off false-mergers, and then finally connects this (clean)  segment back to the neuron.Clean means that all split edits have been applied to the segment\nBelow, we describe how we implement our idealized version of this strategy when applying edits on a neuron. There are two subtle variants of this idea which differ in the order in which merges are applied to the neuron; see 2a. and 2b. in the algorithm below. We denote these strategies clean-and-merge (historical) and clean-and-merge (random).\nAlgorithm:\n\nInput: a clean state of a neuron/segmentation\n\nFind all merge edits which are available \nChoose one of these available merges to apply\n\nChoose the merge which is earliest in history (historical strategy)\nChoose at among these at random (random strategy)\n\nFind the segment which would be added if this merge is applied\nFor that segment, apply all available split edits\nApply the merge to connect this new segment to the current connected component\nCompute the new connected component for this neuron from the nucleus\nCompute metrics\nRecord the number of operations, equal to count of all operations needed for the clean (4.) and the merge (5.)\nRecurse (go back to 1.)\n\nAvailable means an edit which connects to the current connected component\n\n\n\n\n\n\nNote\n\n\n\nI actually implement this as a merge-and-clean process since the recursion is a bit easier to implement; but I reorder the metrics/counts of edits appropriately to match the above process.",
+    "crumbs": [
+      "Methods"
+    ]
+  },
+  {
+    "objectID": "methods.html#sec-schemes",
+    "href": "methods.html#sec-schemes",
+    "title": "Methods",
+    "section": "",
+    "text": "Below, we detail the different schemes used for replaying edits onto a neuron.\n\n\nThe simplest scheme is to simply apply the edits on the neuron in the same order in which those edits happened in reality. We denote this the historical ordering of edits.\nAlgorithm:\n\nInput: a state of a neuron/segmentation\n\nFrom all edits in the history of a given neuron, select the earliest which has not been applied\nApply the edit\nCompute the new connected component for this neuron from the nucleus\nCompute metrics\nRecord the number of operations applied (always 1 for this scheme)\nRecurse (go back to 1.)\n\n\n\n\n\nOften, proofreaders will follow what we’ll refer to as a “clean-and-merge” strategy. The idea is that one finds a segment which appears to be part of the current neuron, cleans up that segment by splitting off false-mergers, and then finally connects this (clean)  segment back to the neuron.Clean means that all split edits have been applied to the segment\nBelow, we describe how we implement our idealized version of this strategy when applying edits on a neuron. There are two subtle variants of this idea which differ in the order in which merges are applied to the neuron; see 2a. and 2b. in the algorithm below. We denote these strategies clean-and-merge (historical) and clean-and-merge (random).\nAlgorithm:\n\nInput: a clean state of a neuron/segmentation\n\nFind all merge edits which are available \nChoose one of these available merges to apply\n\nChoose the merge which is earliest in history (historical strategy)\nChoose at among these at random (random strategy)\n\nFind the segment which would be added if this merge is applied\nFor that segment, apply all available split edits\nApply the merge to connect this new segment to the current connected component\nCompute the new connected component for this neuron from the nucleus\nCompute metrics\nRecord the number of operations, equal to count of all operations needed for the clean (4.) and the merge (5.)\nRecurse (go back to 1.)\n\nAvailable means an edit which connects to the current connected component\n\n\n\n\n\n\nNote\n\n\n\nI actually implement this as a merge-and-clean process since the recursion is a bit easier to implement; but I reorder the metrics/counts of edits appropriately to match the above process.",
+    "crumbs": [
+      "Methods"
+    ]
+  },
+  {
+    "objectID": "methods.html#metrics-to-evaluate",
+    "href": "methods.html#metrics-to-evaluate",
+    "title": "Methods",
+    "section": "Metrics to evaluate",
+    "text": "Metrics to evaluate\nHere, we describe the metrics that we evaluate for each neuron-state .A neuron-state is just a version of a particular neuron with a particular set of edits applied to it, according to one of the schemes described in the schemes section\n\nProportion of inputs/outputs onto classes\nAssume we have \\(K\\)-classes of neuron (e.g. morphological types). This metric associates each neuron-state with a \\(K\\)-length vector, \\(x\\), where \\(x_k\\) is the proportion of that neuron-state’s output synapses which target a neuron in class \\(k\\).\nThis metric could also be flipped in the definition above to consider the inputs to a cell.\n\n\n\n\n\n\nNote\n\n\n\nFor the categorization of target neurons, I am using aibs_metamodel_mtypes_v661_v2.\n\n\n\n\nConnectivity probability by distance\nImagine space is discretized into bins of an arbitrary size/shape, for instace, concentric cylinders centered on the soma of a neuron. This metric captures the probability that cell \\(i\\) targets a downstream neuron whose soma lives within a given bin, \\(l\\).",
+    "crumbs": [
+      "Methods"
+    ]
+  },
+  {
+    "objectID": "methods.html#tables-used",
+    "href": "methods.html#tables-used",
+    "title": "Methods",
+    "section": "Tables used",
+    "text": "Tables used\n\nallen_column_mtypes_v2: used to indicate the morphological types for the neurons of interest that I am examining in this work.\naibs_metamodel_mtypes_v661_v2: used to indicate the morphological types for the rest of the neurons in the dataset.\nnucleus_detection_v0: used to indicate the location of the nucleus for all neurons in the dataset. This also anchors each neuron to a target ID indicating the identity of the neuron by its soma, since the segmentation is dynamic.",
+    "crumbs": [
+      "Methods"
+    ]
+  },
+  {
+    "objectID": "animations.html",
+    "href": "animations.html",
+    "title": "Animations",
+    "section": "",
+    "text": "864691135082840567\n\n\n\n\n\n\n\n864691135132887456\n\n\n\n\n\n\n\n\n\n864691135135922201\n\n\n\n\n\n\n\n864691135213953920\n\n\n\n\n\n\n\n\n\n864691135292201142\n\n\n\n\n\n\n\n864691135359413848\n\n\n\n\n\n\n\n\n\n864691135502190941\n\n\n\n\n\n\n\n864691135503003997\n\n\n\n\n\n\n\n\n\n864691135518510218\n\n\n\n\n\n\n\n864691135561619681\n\n\n\n\n\n\n\n\n\n864691135564974423\n\n\n\n\n\n\n\n864691135586352764\n\n\n\n\n\n\n\n\n\n864691135660772080\n\n\n\n\n\n\n\n864691135697284250\n\n\n\n\n\n\n\n\n\n864691135808473885\n\n\n\n\n\n\n\n864691135919630768\n\n\n\n\n\n\n\n\n\n864691135995786154\n\n\n\n\n\n\n\n864691136066728600\n\n\n\n\n\n\n\n\n\n864691136618908301\n\n\n\n\n\n\n\n864691136903387826\n\n\n\n\n\n\nFigure 1\n\n\n\n\n\n\n864691135082840567\n864691135132887456\n864691135135922201\n864691135213953920\n864691135292201142\n864691135359413848\n864691135502190941\n864691135503003997\n864691135518510218\n864691135561619681\n864691135564974423\n864691135586352764\n864691135660772080\n864691135697284250\n864691135808473885\n864691135919630768\n864691135995786154\n864691136066728600\n864691136618908301\n864691136903387826",
+    "crumbs": [
+      "Results",
+      "Animations"
+    ]
+  },
+  {
     "objectID": "index.html",
     "href": "index.html",
     "title": "Abstract",
@@ -160,84 +219,25 @@
     ]
   },
   {
-    "objectID": "introduction.html",
-    "href": "introduction.html",
-    "title": "Introduction",
+    "objectID": "importance.html",
+    "href": "importance.html",
+    "title": "Edit importance",
     "section": "",
-    "text": "In the effort to understand the brain and its function, connectomics has proven a useful tool, and thus has undergone rapid technological development. Connectome: a map of neural wiring diagrams in precise detail, often obtained via electron microscopy followed by manual or automated reconstruction of the neurons and other cells in that image volume. Connectomes are now available for entire larval (Winding et al. 2023) and adult fly brains (Schlegel et al. 2023; Dorkenwald et al. 2023), large regions of mouse visual cortex (MICrONS Consortium et al. 2021), human cortex (Shapson-Coe et al. 2021), and many other areas and organisms. The largest of these connectome reconstructions now contain on the order of hundreds of thousands of neurons, and hundreds of millions of synapses. This unprecedented scale in connnectome reconstruction has been enabled by segmenting cells and annotating synapses with computer vision, followed by laborious human proofreading to correct false merges and extend incomplete pieces of neurons. This latter effort has been done, understandably, with the intent that we want to be able to trust the resulting reconstruction and believe that it is a true representation of the neuroanatomy and connectivity of the biological sample: thus, one should correct the results of an automated algorithm by this manual proofreading process.",
-    "crumbs": [
-      "Introduction"
-    ]
-  },
-  {
-    "objectID": "introduction.html#background",
-    "href": "introduction.html#background",
-    "title": "Introduction",
-    "section": "",
-    "text": "In the effort to understand the brain and its function, connectomics has proven a useful tool, and thus has undergone rapid technological development. Connectome: a map of neural wiring diagrams in precise detail, often obtained via electron microscopy followed by manual or automated reconstruction of the neurons and other cells in that image volume. Connectomes are now available for entire larval (Winding et al. 2023) and adult fly brains (Schlegel et al. 2023; Dorkenwald et al. 2023), large regions of mouse visual cortex (MICrONS Consortium et al. 2021), human cortex (Shapson-Coe et al. 2021), and many other areas and organisms. The largest of these connectome reconstructions now contain on the order of hundreds of thousands of neurons, and hundreds of millions of synapses. This unprecedented scale in connnectome reconstruction has been enabled by segmenting cells and annotating synapses with computer vision, followed by laborious human proofreading to correct false merges and extend incomplete pieces of neurons. This latter effort has been done, understandably, with the intent that we want to be able to trust the resulting reconstruction and believe that it is a true representation of the neuroanatomy and connectivity of the biological sample: thus, one should correct the results of an automated algorithm by this manual proofreading process.",
-    "crumbs": [
-      "Introduction"
-    ]
-  },
-  {
-    "objectID": "introduction.html#questions",
-    "href": "introduction.html#questions",
-    "title": "Introduction",
-    "section": "Questions",
-    "text": "Questions\nHowever, since this manual proofreading is laborious (for instance, there were 2.7 million edits by 250 people in FlyWire over 4 years as of June 2023), it is worth reflecting on the scientific value of this effort. How consequential was this proofreading on the downstream measures we care about for analysis, such as connection probabilities between cell types? Are some connectivity features stable with proofreading, and others variable? Are certain edits more important than others, in terms of their impact on overal circuit structure? Next, we touch on how others have explored these and related questions in prior work, before motivating our own contributions here.",
-    "crumbs": [
-      "Introduction"
-    ]
-  },
-  {
-    "objectID": "introduction.html#prior-work",
-    "href": "introduction.html#prior-work",
-    "title": "Introduction",
-    "section": "Prior work",
-    "text": "Prior work\nIn Priebe, Vogelstein, and Bock (2013), the authors ask whether one should, under a fixed “budget,” desire a small amount of highly proofread data or a larger amount of partially proofread, noisy data. They frame this question from the perspective of statistical hypothesis testing, asking which approach has higher power for distinguishing network parameters under a toy model. This work is an illustrative case for why, at least in theory, it is possible to actually prefer lots of unproofread data to a smaller amount of curated data. This is a prospect worth considering, especially in light of costly proofreading endeavors. However, this work was done in a toy model which was set up such that unproofread data had no bias, but merely represented a noisier version of a ground truth network. Bias: the distance between an expected value of an estimator and the true value of the parameter it is trying to estimate. In reality, the unproofread networks we observe in connectomics likely have extreme bias in the way that errors are observed. For instance, one error in segmentation could lead to missing the entire primary axon of a neuron, effectively deleting all of that neurons outputs in one stroke. In our work, we will study similar questions using real connectome datasets and their edits rather than a toy model. This will allow us to examine similar questions but in this more realistic setting where proofreading likely changes the distribution of outputs from a neuron, say.\n\n\n\nText describing the key result from Priebe, Vogelstein, and Bock (2013). In essence, power is greater in their toy example when tracing more edges with more errors.\n\n\nThis question of technical variability and proofreading tangentially arose in Schlegel et al. (2023) as the authors examined a comparison of two fly connectomes: FlyWire and Hemibrain. The authors were interested in quantitative comparisons of connectivity between cell types that were cross-matched between the left and right hemispheres of the FlyWire connectome and the single hemisphere Hemibrain connectome. They found a general agreement in cell-type-to-cell-type connections both within (FlyWire-left:FlyWire-right) and between (FlyWire:Hemibrain) datasets; still, they wondered how much technical differences in reconstruction between these reconstructions could explain the differences they saw. The authors created synthetic datasets by subsampling data to estimated completion rates (on the basis of how many synapses were attached to both somas for a given neuropil). They found that, on average, 65% of the observed differences in cell-type-to-cell-type edge weights fell within a range one would expect from this simple model of technical noise. In other words, for many of these connections, one can not rule out that a difference that large came from differences in the technical details of connectome reconstruction, highlighting the importance of understanding this variability for comparisons of connectivity.\n\n\n\n\n\n\n\nFigure 4H from Schlegel et al. (2023), credit to the authors of that work. Diagram depicts method for probabilistically scaling observed data by completion rates, an indicator of reconstruction completeness. Plot shows confidence regions for technical variability under said model.\n\n\nIn Schneider-Mizell et al. (2016), the authors studied how features of neuroanatomy in the organism being studied relates to the robustness of connectivity measures. In Drosophila, many synapses input onto a downstream neurons “twigs,” microtubule-free neurites. Though the authors found that the majority of errors in reconstruction were at twigs, most connected neurons make use of more than one twig. Thus even if some twigs are missed, one is likely to recover most connections. This is an illustrative example of how considering neuroanatomy (twigs), technical aspects of the reconstruction (twigs being small and easily missable), and statistics (somewhat independent errors at different twig sites) can be informative about a connectivity estimand (chance of missing a connection completely).\n\n\n\n\n\n\n\n\n\nFigure 10D from Schneider-Mizell et al. (2016). Most errors in reconstruction fall on twigs for this dataset.\n\n\n\n\n\n\n\nFigure3J from Schneider-Mizell et al. (2016). Most multisynaptically connected neuron pairs are also connected by more than one twig in this dataset.",
-    "crumbs": [
-      "Introduction"
-    ]
-  },
-  {
-    "objectID": "introduction.html#significance",
-    "href": "introduction.html#significance",
-    "title": "Introduction",
-    "section": "Significance",
-    "text": "Significance\nThere are several reasons why understanding the variability of connectivity with respect to proofreading is worthwhile and timely to consider for modern connectomics:\nFirst, understanding the sensitivity of connectivity features to proofreading provides clues as to the technical variability associated with an imperfect reconstruction of an underlying biological network. This is worth knowing for its own sake, simply to understand how much to trust any particular aspect of a reconstruction. It is also important if one wanted to compare connectivity feature \\(Y\\) between two datasets. If \\(Y\\) varies drastically based on proofreading level, then it will be challenging to compare \\(Y\\) without ensuring proofreading was done in the exact same way for these two datasets or post-hoc correcting for any differences (see commentary above about Schlegel et al. (2023)).\nSecond, understanding this sensitivity is important for directing future proofreading efforts. Achieving a “perfect connectome” reconstruction is a comforting goal to strive for, but given finite time and resources, it is worthwhile to consider which efforts will actually affect downstream analysis we are interested in. Increasingly, a single connectomics datasets may be used for addressing many questions by directing proofreading toward particular sub-goals. It is worth understanding which questions can be answered “out-of-the-box” with no additional proofreading after the initial segmentation, and which will require further effort to get a trustworth answer.",
-    "crumbs": [
-      "Introduction"
-    ]
-  },
-  {
-    "objectID": "introduction.html#our-contribution",
-    "href": "introduction.html#our-contribution",
-    "title": "Introduction",
-    "section": "Our contribution",
-    "text": "Our contribution\nIn this work, we investigate these questions using large-scale reconstructions of mouse visual cortex as testbeds for these ideas. We do not aim to answer these questions holistically for all connectomics datasets and possible connectivity features; such an endeavor would be impossible since the answer is likely to depend greatly on the dataset and the question. Rather, we provide a set of guiding principles for which types of features are likely to be variable, and provide tools for other connectomicists to analyze these questions on their own data.",
-    "crumbs": [
-      "Introduction"
-    ]
-  },
-  {
-    "objectID": "introduction.html#outline",
-    "href": "introduction.html#outline",
-    "title": "Introduction",
-    "section": "Outline",
-    "text": "Outline\nWe start by clearly defining a set of connectivity features to consider for this work.\nThen, we extract the complete set of proofreading edits performed on a highly curated column of cortical connectivity in a mouse’s visual cortex. We also map each synapse between neurons in this column to the edits it depends on, in the sense that those edits had to happen for a statement about soma \\(i\\) to soma \\(j\\) connectivity to be made.\nUsing this information, we then construct various “sloppy” networks, instantiated by replaying particular edits over the network and omitting others. These networks vary in their degree of completeness (i.e. some measure of how many of the edits were used) from the original segmentation all the way to the final proofread dataset. We also vary the “proofreader model” used to assign edits to “ON” or “OFF” in some ordering (i.e. whether edits are replayed uniformly at random, in the order they happened, in order of euclidean distance from the soma, etc.).\nFor these sloppy networks, we study how connectivity metrics vary as a function of these (real and imagined) proofreading endeavors. We also explore a ranking of individual edits from most to least important from the perspective of a particular connectivity measure, creating a scoring that could be used in future work to predict the location of key edits.\n\n\n\nText describing the key result from Priebe, Vogelstein, and Bock (2013). In essence, power is greater in their toy example when tracing more edges with more errors.\nFigure 4H from Schlegel et al. (2023), credit to the authors of that work. Diagram depicts method for probabilistically scaling observed data by completion rates, an indicator of reconstruction completeness. Plot shows confidence regions for technical variability under said model.\nFigure 10D from Schneider-Mizell et al. (2016). Most errors in reconstruction fall on twigs for this dataset.\nFigure3J from Schneider-Mizell et al. (2016). Most multisynaptically connected neuron pairs are also connected by more than one twig in this dataset.",
-    "crumbs": [
-      "Introduction"
-    ]
-  },
-  {
-    "objectID": "approach.html",
-    "href": "approach.html",
-    "title": "Approach",
-    "section": "",
-    "text": "Here, we study a connectome of a millimeter-cubed volume of mouse visual cortex (MICrONS Consortium et al. 2021). The dataset is stored in a CAVE database (Dorkenwald et al. 2023), which tracks the edits which are made over time to the segmentation.\nWe further focused on a subset of the data which received extensive proofreading, namely, a set of inhibitory neurons located in a column spanning the entire cortical depth (Schneider-Mizell et al. 2023).\n\n\n\n\nReferences\n\nDorkenwald, Sven, Casey M. Schneider-Mizell, Derrick Brittain, Akhilesh Halageri, Chris Jordan, Nico Kemnitz, Manual A. Castro, et al. 2023. “CAVE: Connectome Annotation Versioning Engine.” http://biorxiv.org/lookup/doi/10.1101/2023.07.26.550598.\n\n\nMICrONS Consortium, J. Alexander Bae, Mahaly Baptiste, Caitlyn A. Bishop, Agnes L. Bodor, Derrick Brittain, JoAnn Buchanan, et al. 2021. “Functional Connectomics Spanning Multiple Areas of Mouse Visual Cortex.” http://dx.doi.org/10.1101/2021.07.28.454025.\n\n\nSchneider-Mizell, Casey M, Agnes Bodor, Derrick Brittain, JoAnn Buchanan, Daniel J. Bumbarger, Leila Elabbady, Daniel Kapner, et al. 2023. “Cell-Type-Specific Inhibitory Circuitry from a Connectomic Census of Mouse Visual Cortex.” http://dx.doi.org/10.1101/2023.01.23.525290.",
+    "text": "264920\n\n\n\n\n\n\n\n298930\n\n\n\n\n\n\n\n\n\n291122\n\n\n\n\n\n\n\n271886\n\n\n\n\n\n\n\n\n\n307066\n\n\n\n\n\n\n\n262692\n\n\n\n\n\n\n\n\n\n262555\n\n\n\n\n\n\n\n267293\n\n\n\n\n\n\n\n\n\n298796\n\n\n\n\n\n\n\n255137\n\n\n\n\n\n\n\n\n\n265035\n\n\n\n\n\n\n\n292670\n\n\n\n\n\n\n\n\n\n260519\n\n\n\n\n\n\n\n301085\n\n\n\n\n\n\n\n\n\n267068\n\n\n\n\n\n\n\n260505\n\n\n\n\n\n\n\n\n\n258281\n\n\n\n\n\n\n\n301218\n\n\n\n\n\n\n\n\n\n258293\n\n\n\n\n\n\n\n307264\n\n\n\n\n\n\nFigure 1\n\n\n\n\n\n\n\n\n\n\n\n\n264920\n\n\n\n\n\n\n\n298930\n\n\n\n\n\n\n\n\n\n291122\n\n\n\n\n\n\n\n271886\n\n\n\n\n\n\n\n\n\n307066\n\n\n\n\n\n\n\n262692\n\n\n\n\n\n\n\n\n\n262555\n\n\n\n\n\n\n\n267293\n\n\n\n\n\n\n\n\n\n298796\n\n\n\n\n\n\n\n255137\n\n\n\n\n\n\n\n\n\n265035\n\n\n\n\n\n\n\n292670\n\n\n\n\n\n\n\n\n\n260519\n\n\n\n\n\n\n\n301085\n\n\n\n\n\n\n\n\n\n267068\n\n\n\n\n\n\n\n260505\n\n\n\n\n\n\n\n\n\n258281\n\n\n\n\n\n\n\n301218\n\n\n\n\n\n\n\n\n\n258293\n\n\n\n\n\n\n\n307264\n\n\n\n\n\n\nFigure 2\n\n\n\n\n\n\n264920\n298930\n291122\n271886\n307066\n262692\n262555\n267293\n298796\n255137\n265035\n292670\n260519\n301085\n267068\n260505\n258281\n301218\n258293\n307264\n264920\n298930\n291122\n271886\n307066\n262692\n262555\n267293\n298796\n255137\n265035\n292670\n260519\n301085\n267068\n260505\n258281\n301218\n258293\n307264",
     "crumbs": [
       "Results",
-      "Approach"
+      "Edit importance"
+    ]
+  },
+  {
+    "objectID": "importance.html#edit-importance",
+    "href": "importance.html#edit-importance",
+    "title": "Edit importance",
+    "section": "",
+    "text": "264920\n\n\n\n\n\n\n\n298930\n\n\n\n\n\n\n\n\n\n291122\n\n\n\n\n\n\n\n271886\n\n\n\n\n\n\n\n\n\n307066\n\n\n\n\n\n\n\n262692\n\n\n\n\n\n\n\n\n\n262555\n\n\n\n\n\n\n\n267293\n\n\n\n\n\n\n\n\n\n298796\n\n\n\n\n\n\n\n255137\n\n\n\n\n\n\n\n\n\n265035\n\n\n\n\n\n\n\n292670\n\n\n\n\n\n\n\n\n\n260519\n\n\n\n\n\n\n\n301085\n\n\n\n\n\n\n\n\n\n267068\n\n\n\n\n\n\n\n260505\n\n\n\n\n\n\n\n\n\n258281\n\n\n\n\n\n\n\n301218\n\n\n\n\n\n\n\n\n\n258293\n\n\n\n\n\n\n\n307264\n\n\n\n\n\n\nFigure 1\n\n\n\n\n\n\n\n\n\n\n\n\n264920\n\n\n\n\n\n\n\n298930\n\n\n\n\n\n\n\n\n\n291122\n\n\n\n\n\n\n\n271886\n\n\n\n\n\n\n\n\n\n307066\n\n\n\n\n\n\n\n262692\n\n\n\n\n\n\n\n\n\n262555\n\n\n\n\n\n\n\n267293\n\n\n\n\n\n\n\n\n\n298796\n\n\n\n\n\n\n\n255137\n\n\n\n\n\n\n\n\n\n265035\n\n\n\n\n\n\n\n292670\n\n\n\n\n\n\n\n\n\n260519\n\n\n\n\n\n\n\n301085\n\n\n\n\n\n\n\n\n\n267068\n\n\n\n\n\n\n\n260505\n\n\n\n\n\n\n\n\n\n258281\n\n\n\n\n\n\n\n301218\n\n\n\n\n\n\n\n\n\n258293\n\n\n\n\n\n\n\n307264\n\n\n\n\n\n\nFigure 2\n\n\n\n\n\n\n264920\n298930\n291122\n271886\n307066\n262692\n262555\n267293\n298796\n255137\n265035\n292670\n260519\n301085\n267068\n260505\n258281\n301218\n258293\n307264\n264920\n298930\n291122\n271886\n307066\n262692\n262555\n267293\n298796\n255137\n265035\n292670\n260519\n301085\n267068\n260505\n258281\n301218\n258293\n307264",
+    "crumbs": [
+      "Results",
+      "Edit importance"
     ]
   }
 ]

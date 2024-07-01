@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.4.555">
+<meta name="generator" content="quarto-1.4.557">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -80,7 +80,7 @@ ul.task-list li input[type="checkbox"] {
   });
 </script>
 
-  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
   <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
 
 <script type="text/javascript">
@@ -116,7 +116,7 @@ window.Quarto = {
 <meta property="og:site_name" content="Proofreading retrospective">
 </head>
 
-<body class="nav-sidebar docked nav-fixed">
+<body class="nav-sidebar docked nav-fixed slimcontent">
 
 <div id="quarto-search-results"></div>
   <header id="quarto-header" class="headroom fixed-top">
@@ -248,7 +248,7 @@ window.Quarto = {
 <div class="toc-actions"><ul><li><a href="https://github.com/bdpedigo/skedits/edit/main/methods.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/bdpedigo/skedits/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
     </div>
 <!-- main -->
-<main class="content" id="quarto-document-content">
+<main class="content page-columns page-full" id="quarto-document-content">
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
@@ -269,7 +269,7 @@ window.Quarto = {
 </header>
 
 
-<section id="sec-schemes" class="level2">
+<section id="sec-schemes" class="level2 page-columns page-full">
 <h2 class="anchored" data-anchor-id="sec-schemes">Schemes for applying edits to a neuron</h2>
 <p>Below, we detail the different schemes used for replaying edits onto a neuron.</p>
 <section id="historical" class="level3">
@@ -288,15 +288,15 @@ window.Quarto = {
 </ol>
 <hr>
 </section>
-<section id="clean-and-merge" class="level3">
+<section id="clean-and-merge" class="level3 page-columns page-full">
 <h3 class="anchored" data-anchor-id="clean-and-merge">Clean-and-merge</h3>
-<p>Often, proofreaders will follow what we’ll refer to as a “clean-and-merge” strategy. The idea is that one finds a segment which appears to be part of the current neuron, cleans up that segment by splitting off false-mergers, and then finally connects this (<em>clean</em>) <span class="margin-aside"><em>Clean</em> means that all split edits have been applied to the segment</span> segment back to the neuron.</p>
+<div class="page-columns page-full"><p>Often, proofreaders will follow what we’ll refer to as a “clean-and-merge” strategy. The idea is that one finds a segment which appears to be part of the current neuron, cleans up that segment by splitting off false-mergers, and then finally connects this (<em>clean</em>)  segment back to the neuron.</p><div class="no-row-height column-margin column-container"><span class="margin-aside"><em>Clean</em> means that all split edits have been applied to the segment</span></div></div>
 <p>Below, we describe how we implement our idealized version of this strategy when applying edits on a neuron. There are two subtle variants of this idea which differ in the order in which merges are applied to the neuron; see 2a. and 2b. in the algorithm below. We denote these strategies <strong>clean-and-merge (historical)</strong> and <strong>clean-and-merge (random)</strong>.</p>
 <p><strong>Algorithm:</strong></p>
 <hr>
 <p>Input: a clean state of a neuron/segmentation</p>
 <ol type="1">
-<li>Find all merge edits which are <em>available</em> <span class="margin-aside"><em>Available</em> means an edit which connects to the current connected component</span></li>
+<li>Find all merge edits which are <em>available</em> </li>
 <li>Choose one of these available merges to apply
 <ol type="a">
 <li>Choose the merge which is earliest in history (historical strategy)</li>
@@ -310,7 +310,7 @@ window.Quarto = {
 <li>Record the number of operations, equal to count of all operations needed for the clean (4.) and the merge (5.)</li>
 <li>Recurse (go back to 1.)</li>
 </ol>
-<hr>
+<div class="no-row-height column-margin column-container"><span class="margin-aside"><em>Available</em> means an edit which connects to the current connected component</span></div><hr>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -326,9 +326,9 @@ Note
 </div>
 </section>
 </section>
-<section id="metrics-to-evaluate" class="level2">
+<section id="metrics-to-evaluate" class="level2 page-columns page-full">
 <h2 class="anchored" data-anchor-id="metrics-to-evaluate">Metrics to evaluate</h2>
-<p>Here, we describe the metrics that we evaluate for each <em>neuron-state</em> <span class="margin-aside">A <em>neuron-state</em> is just a version of a particular neuron with a particular set of edits applied to it, according to one of the schemes described in <a href="#sec-schemes">the schemes section</a></span>.</p>
+<div class="page-columns page-full"><p>Here, we describe the metrics that we evaluate for each <em>neuron-state</em> .</p><div class="no-row-height column-margin column-container"><span class="margin-aside">A <em>neuron-state</em> is just a version of a particular neuron with a particular set of edits applied to it, according to one of the schemes described in <a href="#sec-schemes">the schemes section</a></span></div></div>
 <section id="proportion-of-inputsoutputs-onto-classes" class="level3">
 <h3 class="anchored" data-anchor-id="proportion-of-inputsoutputs-onto-classes">Proportion of inputs/outputs onto classes</h3>
 <p>Assume we have <span class="math inline">\(K\)</span>-classes of neuron (e.g.&nbsp;morphological types). This metric associates each neuron-state with a <span class="math inline">\(K\)</span>-length vector, <span class="math inline">\(x\)</span>, where <span class="math inline">\(x_k\)</span> is the proportion of that neuron-state’s output synapses which target a neuron in class <span class="math inline">\(k\)</span>.</p>
