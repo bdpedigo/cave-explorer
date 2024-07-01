@@ -236,8 +236,11 @@ animate_neuron_edit_sequence(
 
 from matplotlib.animation import FuncAnimation
 
-fig, axs = plt.subplots(2, 1, tight_layout=True)
+from pkg.plot import set_context
 
+fig, axs = plt.subplots(2, 1, tight_layout=True, figsize=(5, 8))
+
+set_context(font_scale=2.5)
 ax = axs[0]
 sns.lineplot(
     data=output_proportions_long,
@@ -247,6 +250,7 @@ sns.lineplot(
     ax=ax,
     legend=False,
     palette=ctype_hues,
+    linewidth=3,
 )
 ax.set_ylabel("Proportion of outputs")
 ax.set_xlabel("Number of operations")
@@ -261,7 +265,14 @@ for i, child in enumerate(children):
         ydata_by_line[i] = child.get_ydata()
 
 ax = axs[1]
-sns.lineplot(dists, ax=ax, x="cumulative_n_operations", y="distance_to_final")
+sns.lineplot(
+    dists,
+    ax=ax,
+    x="cumulative_n_operations",
+    y="distance_to_final",
+    linewidth=3,
+    color="black",
+)
 ax.set_ylabel("Distance to final state")
 ax.set_xlabel("Number of operations")
 ax.spines[["top", "right"]].set_visible(False)
@@ -306,8 +317,9 @@ def update(sample_id):
                     ydata2_by_line[i][: relevant_edits.get_loc(sample_id) + 1]
                 )
 
+
 theme = pv.global_theme
-theme.font.family = 'arial'
+theme.font.family = "arial"
 name = f"all_edits_by_time_with_plots-target_id={target_id}"
 animate_neuron_edit_sequence(
     neuron_sequence,
@@ -335,5 +347,4 @@ animate_neuron_edit_sequence(
     chart_loc=(0.0, 0.05),
     loop=0,
 )
-#%%
-adi
+# %%

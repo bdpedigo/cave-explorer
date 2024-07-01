@@ -288,8 +288,7 @@ sns.lineplot(
     zorder=-10,
 )
 
-ax.set(xlabel="Proportion of merge edits", ylabel="Cityblock distance to final")
-
+ax.set(xlabel="Proportion of merge edits", ylabel="Distance to final state")
 
 lines = ax.get_lines()[1:]
 for line in lines:
@@ -320,7 +319,7 @@ def update(i):
 from matplotlib import animation
 
 ani = animation.FuncAnimation(
-    fig, update, frames=range(0, 80), interval=100, repeat=False
+    fig, update, frames=range(0, 400), interval=100, repeat=False
 )
 
 writer = animation.PillowWriter(fps=5)
@@ -489,14 +488,14 @@ for target_p in np.linspace(0, 1, 21):
 
     Z = linkage(X, method="average", metric="cityblock")
 
-    labels = fcluster(Z, 18, criterion="maxclust")
+    labels = fcluster(Z, 15, criterion="maxclust")
     labels = pd.Series(labels, index=query_output_props_wide.index, name="cluster")
 
     labels_by_p[target_p] = labels
     n_ops_by_p.append(n_ops)
 
 
-from sklearn.metrics import adjusted_rand_score
+from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
 
 fig, ax = plt.subplots(1, 1, figsize=(6, 5))
 aris_by_p = []
@@ -517,9 +516,13 @@ ax.set(xlabel="Number of merge operations", ylabel="ARI to final clustering")
 rows_by_trial = {}
 labels_by_trial = {}
 n_samples = 5
+method = "ward"
+metric = "euclidean"
+k = 18
 
 mats_by_target_p = {}
 for target_p in np.linspace(0, 1, 11):
+    target_p = np.round(target_p, 1)
     output_proportions = output_proportions.reset_index().set_index(
         ["root_id", "cumulative_n_operations"]
     )
@@ -555,6 +558,7 @@ for target_p in np.linspace(0, 1, 11):
     )
     mats_by_target_p[target_p] = query_output_props_wide
     for p_neurons in np.linspace(0.1, 1, 10):
+        p_neurons = np.round(p_neurons, 1)
         for i in range(n_samples):
             choice_roots = np.random.choice(
                 query_output_props_wide.index.get_level_values("root_id").unique(),
@@ -572,9 +576,9 @@ for target_p in np.linspace(0, 1, 11):
 
             from scipy.cluster.hierarchy import fcluster, linkage
 
-            Z = linkage(X.values, method="average", metric="cityblock")
+            Z = linkage(X.values, method=method)
 
-            labels = fcluster(Z, 18, criterion="maxclust")
+            labels = fcluster(Z, k, criterion="maxclust")
             labels = pd.Series(
                 labels, index=X.index.get_level_values("root_id"), name="cluster"
             )
@@ -588,64 +592,51 @@ for target_p in np.linspace(0, 1, 11):
             }
 
 
-# %%
 aris_by_trial = []
 
 for (target_p, p_neurons, i), labels in labels_by_trial.items():
     info = rows_by_trial[(target_p, p_neurons, i)]
     ari = adjusted_rand_score(labels, labels_by_trial[(1, 1, 0)].loc[labels.index])
+    nmi = normalized_mutual_info_score(
+        labels, labels_by_trial[(1, 1, 0)].loc[labels.index]
+    )
     aris_by_trial.append(
         {
             "target_p": target_p,
             "p_neurons": p_neurons,
             "ari": ari,
+            "nmi": nmi,
             "n_ops": info["n_ops"],
         }
     )
 
 
-# %%
 aris_df = pd.DataFrame(aris_by_trial)
 
 
-# %%
 aris_square = aris_df.pivot_table(index="target_p", columns="p_neurons", values="ari")
 
+fig, ax = plt.subplots(1, 1, figsize=(6, 5))
 sns.heatmap(aris_square, cmap="coolwarm", center=0, annot=True)
 
 
-# %%
-from sklearn.metrics import adjusted_rand_score
+# from sklearn.metrics import adjusted_rand_score
+
+# fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+# aris_by_p = []
+# for p, labels in labels_by_p.items():
+#     ari = adjusted_rand_score(labels, labels_by_p[1])
+#     ax.plot(p, ari, "o", color="black")
+#     aris_by_p.append(ari)
+
 
 fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-aris_by_p = []
-for p, labels in labels_by_p.items():
-    ari = adjusted_rand_score(labels, labels_by_p[1])
-    ax.plot(p, ari, "o", color="black")
-    aris_by_p.append(ari)
-
-# %%
-
-sns.clustermap(
-    mats_by_target_p[0.5].T,
-    xticklabels=False,
-    yticklabels=False,
-    row_cluster=False,
-)
-sns.clustermap(
-    mats_by_target_p[1].T,
-    xticklabels=False,
-    yticklabels=False,
-    row_cluster=False,
-)
-
-# %%
 full_neurons_aris = aris_df.query("p_neurons == 1.0")
 some_neurons_aris = aris_df.query("target_p == 1.0")
-sns.scatterplot(data=full_neurons_aris, x="n_ops", y="ari")
-sns.scatterplot(data=some_neurons_aris, x="n_ops", y="ari")
+sns.scatterplot(data=full_neurons_aris, x="n_ops", y="ari", ax=ax)
+sns.scatterplot(data=some_neurons_aris, x="n_ops", y="ari", ax=ax)
 
-# %%
+
 full_neurons_aris = aris_df.query("p_neurons == 1.0")
 
 fig, ax = plt.subplots(1, 1, figsize=(6, 5))
@@ -656,13 +647,150 @@ sns.scatterplot(data=full_neurons_aris, x="target_p", y="ari", ax=ax, s=40)
 
 ax.set(xlabel="Proportion of merge edits", ylabel="ARI to final clustering")
 
-#%%
+fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+
+set_context()
+
+sns.scatterplot(data=full_neurons_aris, x="target_p", y="nmi", ax=ax, s=40)
+
+ax.set(xlabel="Proportion of merge edits", ylabel="NMI to final clustering")
 
 
+for target_p in [0.7, 1.0]:
+    props_by_mtype = (
+        mats_by_target_p[target_p]
+        .copy()
+        .droplevel(["operation_id", "is_exemplar", "cumulative_n_operations"])
+    )
+    label_order = [
+        "L2a",
+        "L2b",
+        "L2c",
+        "L3a",
+        "L3b",
+        "L4a",
+        "L4b",
+        "L4c",
+        "L5a",
+        "L5b",
+        "L5ET",
+        "L5NP",
+        "L6short-a",
+        "L6short-b",
+        "L6tall-a",
+        "L6tall-b",
+        "L6tall-c",
+        # 'DTC',
+        # 'ITC',
+        # 'PTC',
+        # 'STC',
+    ]
+
+    props_by_mtype = props_by_mtype.loc[:, label_order]
+
+    from scipy.cluster.hierarchy import leaves_list
+
+    linkage_matrix = linkage(props_by_mtype, method=method, metric=metric)
+
+    leaves = leaves_list(linkage_matrix)
+
+    props_by_mtype = props_by_mtype.iloc[leaves]
+
+    linkage_matrix = linkage(props_by_mtype, method=method, metric=metric)
+    labels = pd.Series(
+        fcluster(linkage_matrix, k, criterion="maxclust"), index=props_by_mtype.index
+    )
+
+    weighting = props_by_mtype.copy()
+    weighting.columns = np.arange(len(weighting.columns))
+    weighting["label"] = labels
+
+    means = weighting.groupby("label").mean()
+    label_ranking = means.mul(means.columns).sum(axis=1).sort_values()
+
+    new_label_map = dict(zip(labels, label_ranking.index.get_indexer_for(labels)))
+
+    # props_by_mtype["label"] = labels.map(new_label_map)
+    # props_by_mtype = props_by_mtype.sort_values("label")
+
+    import matplotlib.pyplot as plt
+
+    # linkage_matrix = linkage_matrix[leaves]
+    set_context(font_scale=2)
+
+    colors = sns.color_palette("tab20", n_colors=k)
+    palette = dict(zip(np.arange(1, k + 1), colors))
+    color_labels = labels.map(palette)
+
+    # cgrid = sns.clustermap(
+    #     props_by_mtype.T,
+    #     cmap="Reds",
+    #     figsize=(20, 10),
+    #     row_cluster=False,
+    #     col_colors=color_labels,
+    #     col_linkage=linkage_matrix,
+    #     xticklabels=False,
+    # )
+    # ax = cgrid.ax_heatmap
+
+    # # move the y-axis labels to the left
+    # ax.yaxis.tick_left()
+    # ax.set(ylabel="Excitatory Neuron Class", xlabel="Inhibitory Neuron")
+    # ax.yaxis.set_label_position("left")
+
+    # props_by_mtype["label"] = labels.map(new_label_map)
+    # shifts = props_by_mtype["label"] != props_by_mtype["label"].shift()
+    # shifts.iloc[0] = False
+    # shifts = shifts[shifts].index
+    # shift_ilocs = props_by_mtype.index.get_indexer_for(shifts)
+    # # for shift in shift_ilocs:
+    # #     ax.axvline(shift, color="black", lw=1)
+    # # ax.set(xlabel="Inhibitory Neuron", ylabel="Excitatory Neuron Class")
+
+    # props_by_mtype.drop("label", axis=1, inplace=True)
+
+    # y_borders = [3, 5, 8, 12, 14]
+    # for y_border in y_borders:
+    #     ax.axhline(y_border, color="black", lw=1)
+
+    from giskard.plot import MatrixGrid
+
+    props_by_mtype["label"] = labels.map(new_label_map)
+    props_by_mtype = props_by_mtype.sort_values("label")
+    props_by_mtype.drop("label", axis=1, inplace=True)
+    # fig, ax = plt.subplots(figsize=(25, 10))
+    mg = MatrixGrid(figsize=(15, 7.5))
+    ax = mg.ax
+    sns.heatmap(props_by_mtype.T, cmap="Reds", xticklabels=False, ax=ax, cbar=False)
+
+    props_by_mtype["label"] = labels.map(new_label_map)
+    shifts = props_by_mtype["label"] != props_by_mtype["label"].shift()
+    shifts.iloc[0] = False
+    shifts = shifts[shifts].index
+    shift_ilocs = props_by_mtype.index.get_indexer_for(shifts)
+    for shift in shift_ilocs:
+        ax.axvline(shift, color="black", lw=1)
+    
+    for i in range(len(shift_ilocs)):
+        ax.text(
+            shift_ilocs[i] + 0.5,
+            -1,
+            i + 1,
+            ha="center",
+            va="center",
+            fontsize=10,
+        )
 
 
+    ax.set(xlabel="Inhibitory Neuron", ylabel="Excitatory Neuron Class")
+    props_by_mtype.drop("label", axis=1, inplace=True)
 
-#%%
+    y_borders = [3, 5, 8, 12, 14]
+    for y_border in y_borders:
+        ax.axhline(y_border, color="black", lw=1)
+
+    # plt.savefig(f"clustering-target_p={target_p}.png", bbox_inches="tight")
+
 
 # %%
 
@@ -703,9 +831,32 @@ subgraph_synapse_table = (
 )
 
 # %%
-
-# %%
 from pkg.metrics import MotifFinder
 
 mf = MotifFinder()
 mf.find_motif_monomorphisms()
+
+# %%
+sequence_infos
+# %%
+clean_distances
+# %%
+n_pre_syns = clean_distances.set_index(
+    ["root_id", "cumulative_n_operations", "order"]
+).index.map(sequence_infos["n_pre_synapses"])
+clean_distances["n_pre_synapses"] = n_pre_syns
+
+# %%
+fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+sns.scatterplot(
+    data=clean_distances.query("n_pre_synapses > 00"),
+    x="n_pre_synapses",
+    y="cityblock",
+    # units="root_id",
+    # color="black",
+    # alpha=0.1,
+    # estimator=None,
+    s=10,
+    alpha=0.1,
+    ax=ax,
+)

@@ -180,3 +180,7 @@ local_labels_root_id=864691136903144370.csv
 feature_dump.csv
 label_dump.csv
 local_features_root_id=864691136903144370.csv
+pkg/pkg/utils/hook.txt
+data/synapse_pull
+data/Proofreading Strategy Review.xlsx
+sandbox/l2_ml/clean_cells.csv

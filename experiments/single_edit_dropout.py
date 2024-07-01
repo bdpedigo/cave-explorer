@@ -355,13 +355,15 @@ sns.histplot(
 
 # %%
 metaedits["log_count_delta"] = np.log10(metaedits["count_delta"])
-sns.jointplot(
+out = sns.jointplot(
     data=metaedits.query("has_merge").reset_index(),
     x="centroid_distance_to_nuc_um",
     y="log_count_delta",
-    alpha=0.5, 
+    alpha=0.5,
     s=5,
 )
+ax = out.ax_joint
+ax.set(xlabel="Distance to nucleus (um)", ylabel="Log10 count delta")
 
 
 # %%
