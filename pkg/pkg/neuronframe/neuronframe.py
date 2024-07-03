@@ -528,11 +528,19 @@ class NeuronFrame(NetworkFrame):
 
         return merge_poly
 
-    def to_split_polydata(self, draw_edges=False, prefix="") -> pv.PolyData:
+    def to_split_polydata(
+        self, draw_edges=False, filter=None, prefix=""
+    ) -> pv.PolyData:
         if prefix == "meta":
-            split_ids = self.metaedits.query("~has_merge").index
+            edits = self.metaedits.query("~has_merge")
         else:
-            split_ids = self.edits.query("~is_merge").index
+            edits = self.edits.query("~is_merge")
+
+        if filter is not None:
+            edits = edits.query(filter)
+
+        split_ids = edits.index
+
         split_nodes = self.nodes.query(
             f"({prefix}operation_removed in @split_ids) and ({prefix}operation_removed != -1)"
         )
@@ -561,7 +569,7 @@ class NeuronFrame(NetworkFrame):
         show_edits=False,
         show=True,
         scalar=None,
-        cmap=None
+        cmap=None,
     ):
         if plotter is None:
             plotter = pv.Plotter()
@@ -571,7 +579,7 @@ class NeuronFrame(NetworkFrame):
             color=color,
             line_width=line_width,
             scalars=scalar,
-            cmap=cmap
+            cmap=cmap,
         )
 
         if self.has_edits and show_edits:
