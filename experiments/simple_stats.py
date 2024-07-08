@@ -1,5 +1,4 @@
 # %%
-import pickle
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -77,17 +76,17 @@ sns.histplot(summary_info["n_merges"], ax=ax, label="Merges")
 sns.histplot(summary_info["n_splits"], ax=ax, label="Splits")
 ax.set_ylabel("Number of edits")
 
-#%%
+# %%
 print
-print(summary_info['n_merges'].mean())
-summary_info['n_merges'].mean()
+print(summary_info["n_merges"].mean())
+summary_info["n_merges"].mean()
 # summary_info['n_merges'].median()
 
-#%%
+# %%
 # summary_info['n_splits'].median()
 
-#%%
-summary_info['n_splits'].mean()
+# %%
+summary_info["n_splits"].mean()
 
 # %%
 counts_df = summary_info.melt(
@@ -99,22 +98,27 @@ sns.histplot(data=counts_df, x="count", hue="edit_type", ax=ax, element="step", 
 ax.set_xlabel("Number of edits")
 sns.move_legend(ax, "upper right", title="Edit type")
 
-savefig('edit_count_histogram', fig, folder='simple_stats', doc_save=True)
+savefig("edit_count_histogram", fig, folder="simple_stats", doc_save=True)
 
 # %%
 
 
 def extract_skeleton_nf_for_root(root_id, client):
     try:
-        neuron = load_neuronframe(root_id, client)
+        neuron = load_neuronframe(root_id, client, only_load=True)
+        if neuron is None:
+            return None
         edited_neuron = neuron.set_edits(neuron.edits.index)
         edited_neuron.select_nucleus_component(inplace=True)
         edited_neuron.apply_edge_lengths(inplace=True)
+        splits = edited_neuron.edits.query("~is_merge")
+        merges = edited_neuron.edits.query("is_merge")
 
-        # get radius info
+        # get skeleton/radius info
         meshwork = pcg_skel.coord_space_meshwork(root_id, client=client)
         pcg_skel.features.add_volumetric_properties(meshwork, client)
         pcg_skel.features.add_segment_properties(meshwork)
+        meshwork.anchor_annotations("segment_properties")
         radius_by_level2 = meshwork.anno.segment_properties["r_eff"].to_frame()
         mesh_to_level2_ids = meshwork.anno.lvl2_ids.df.set_index("mesh_ind_filt")[
             "lvl2_id"
@@ -122,9 +126,6 @@ def extract_skeleton_nf_for_root(root_id, client):
         radius_by_level2["level2_id"] = radius_by_level2.index.map(mesh_to_level2_ids)
         radius_by_level2 = radius_by_level2.set_index("level2_id")["r_eff"]
         edited_neuron.nodes["radius"] = edited_neuron.nodes.index.map(radius_by_level2)
-        modified_nodes = edited_neuron.nodes.query(
-            "(operation_added != -1) | (operation_removed != -1)"
-        )
 
         skeleton_to_level2, level2_to_skeleton = extract_meshwork_node_mappings(
             meshwork
@@ -152,6 +153,13 @@ def extract_skeleton_nf_for_root(root_id, client):
         skeleton_nf.nodes["operations"] = skeleton_nf.nodes.index.map(
             operations_by_skeleton_node
         )
+        skeleton_nf.nodes["splits"] = skeleton_nf.nodes["operations"].apply(
+            lambda x: [op for op in x if op in splits.index]
+        )
+        skeleton_nf.nodes["merges"] = skeleton_nf.nodes["operations"].apply(
+            lambda x: [op for op in x if op in merges.index]
+        )
+
         # HACK sure this info is somewhere in the meshwork
         skeleton_nf.nodes["radius"] = edited_neuron.nodes.groupby("skeleton_index")[
             "radius"
@@ -173,8 +181,6 @@ skeleton_nfs = {
 }
 
 # %%
-bins = np.linspace(100, 500, 51)
-
 for root_id, skeleton_nf in skeleton_nfs.items():
     skeleton_nf.apply_node_features(["x", "y", "z", "radius"], inplace=True)
     skeleton_nf.edges["radius"] = (
@@ -185,11 +191,6 @@ for root_id, skeleton_nf in skeleton_nfs.items():
         - skeleton_nf.edges[["target_x", "target_y", "target_z"]].values,
         axis=1,
     )
-    skeleton_nf.nodes["radius_bin"] = pd.cut(skeleton_nf.nodes["radius"], bins=bins)
-    skeleton_nf.edges["radius_bin"] = pd.cut(skeleton_nf.edges["radius"], bins=bins)
-
-with open(OUT_PATH / "simple_stats" / "skeleton_nfs.pkl", "wb") as f:
-    pickle.dump(skeleton_nfs, f)
 
 # %%
 skeleton_nodes = pd.concat([nf.nodes for nf in skeleton_nfs.values()])
@@ -198,31 +199,116 @@ skeleton_edges = pd.concat(
 )
 
 # %%
+from statsmodels.stats.weightstats import DescrStatsW
 
-fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-sns.histplot(skeleton_edges["radius"])
-ax.set_xlim(0, 1000)
+ds = DescrStatsW(data=skeleton_edges["radius"], weights=skeleton_edges["length"])
+
+adaptive_bins = True
+if adaptive_bins:
+    bins = ds.quantile(np.linspace(0.0, 1.0, 21))
+else:
+    bins = np.linspace(100, 500, 31)
+    bins = list(bins)
+    bins = [0] + bins
+    bins = bins + [np.inf]
 
 # %%
+for root_id, skeleton_nf in skeleton_nfs.items():
+    skeleton_nf.nodes["radius_bin"] = pd.cut(
+        skeleton_nf.nodes["radius"], bins=bins, include_lowest=True
+    )
+    skeleton_nf.edges["radius_bin"] = pd.cut(
+        skeleton_nf.edges["radius"], bins=bins, include_lowest=True
+    )
+    skeleton_nf.nodes["root_id"] = root_id
+    skeleton_nf.edges["root_id"] = root_id
 
-# bins = np.histogram_bin_edges(skeleton_nf.nodes["radius"], bins=100)
-fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-sns.histplot(
-    skeleton_edges["radius"], bins=bins, element="step", ax=ax, stat="proportion"
+root_index = pd.Index(skeleton_nfs.keys())
+
+skeleton_nodes = pd.concat([nf.nodes for nf in skeleton_nfs.values()])
+skeleton_edges = pd.concat(
+    [nf.edges for nf in skeleton_nfs.values()], ignore_index=True
 )
+skeleton_nodes["n_merges"] = skeleton_nodes["merges"].apply(len)
+skeleton_nodes["n_splits"] = skeleton_nodes["splits"].apply(len)
+
+# %%
+import pickle
+
+with open(OUT_PATH / "simple_stats" / "skeleton_nfs.pkl", "wb") as f:
+    pickle.dump(skeleton_nfs, f)
 
 # %%
 
-ops_per_bin = {}
-for idx, group_data in skeleton_nodes.groupby("radius_bin", dropna=True)["operations"]:
-    group_data = np.unique(group_data.explode().dropna())
-    ops_per_bin[idx] = len(group_data)
-ops_per_bin = pd.Series(ops_per_bin)
-n_in_bin = skeleton_nodes.groupby("radius_bin").size()
-length_in_bin = skeleton_edges.groupby("radius_bin")["length"].sum()
 
-# %%
-rate_per_bin = (ops_per_bin / length_in_bin).fillna(0)
+def compute_edit_morphology_stats(skeleton_nodes, skeleton_edges, units="um"):
+    item_counts = []
+    for item in ["operations", "splits", "merges"]:
+        bin_ops = skeleton_nodes.explode(item).groupby([item, "radius_bin"]).size()
+
+        bin_ops = bin_ops[bin_ops > 0]
+        # TODO first or last here?
+        unique_bin_ops = bin_ops.reset_index().drop(columns=0).groupby(item).last()
+        assert unique_bin_ops.index.is_unique
+
+        counts_by_bin = unique_bin_ops.groupby("radius_bin").size()
+        counts_by_bin.name = f"n_{item}"
+        item_counts.append(counts_by_bin)
+
+    results_df = pd.concat(item_counts, axis=1)
+    results_df.reset_index(inplace=True)
+    results_df["radius_bin_mid"] = results_df["radius_bin"].apply(lambda x: x.mid)
+    results_df.set_index("radius_bin", inplace=True)
+    print(results_df)
+    # print(skeleton_edges.groupby("radius_bin")["length"].sum())
+    bin_lengths = skeleton_edges.groupby("radius_bin")["length"].sum()
+    print(bin_lengths)
+
+    results_df[f"length_in_bin_{units}"] = bin_lengths
+    # print(results_df[f"length_in_bin_{units}"].hasnans)
+    # print(results_df[results_df[f"length_in_bin_{units}"].isna()])
+    if units == "um":
+        results_df[f"length_in_bin_{units}"] /= 1000
+
+    results_df[f"operations_per_{units}"] = (
+        results_df["n_operations"] / results_df[f"length_in_bin_{units}"]
+    )
+    results_df[f"splits_per_{units}"] = (
+        results_df["n_splits"] / results_df[f"length_in_bin_{units}"]
+    )
+    results_df[f"merges_per_{units}"] = (
+        results_df["n_merges"] / results_df[f"length_in_bin_{units}"]
+    )
+
+    results_df[f"{units}_per_operation"] = 1 / results_df[f"operations_per_{units}"]
+    results_df[f"{units}_per_split"] = 1 / results_df[f"splits_per_{units}"]
+    results_df[f"{units}_per_merge"] = 1 / results_df[f"merges_per_{units}"]
+
+    results_df.reset_index(inplace=True)
+    return results_df
+
+
+units = "um"
+
+results_df = compute_edit_morphology_stats(skeleton_nodes, skeleton_edges, units=units)
+value_vars = [
+    "n_operations",
+    "n_splits",
+    "n_merges",
+    f"operations_per_{units}",
+    f"splits_per_{units}",
+    f"merges_per_{units}",
+    f"{units}_per_operation",
+    f"{units}_per_split",
+    f"{units}_per_merge",
+]
+id_vars = results_df.columns.difference(value_vars)
+results_df_long = results_df.melt(
+    id_vars=id_vars,
+    value_vars=value_vars,
+    var_name="metric",
+    value_name="value",
+)
 
 # %%
 
@@ -236,62 +322,51 @@ fig, axs = plt.subplots(
     sharex=True,
 )
 
-
+ax = axs[0]
 sns.histplot(
     x=skeleton_edges["radius"],
     weights=skeleton_edges["length"],
-    ax=axs[0],
+    ax=ax,
     binwidth=10,
     stat="proportion",
 )
+ax.set_ylabel("Proportion\nof arbor")
 
 ax = axs[1]
-sns.scatterplot(x=rate_per_bin.index.mid, y=rate_per_bin.values * 1000, ax=ax)
+
+inverse = True
+if inverse:
+    query = f"metric.isin(['{units}_per_operation', '{units}_per_split', '{units}_per_merge'])"
+else:
+    query = f"metric.isin(['operations_per_{units}', 'splits_per_{units}', 'merges_per_{units}'])"
+
+sns.lineplot(
+    data=results_df_long.query(query),
+    x="radius_bin_mid",
+    y="value",
+    hue="metric",
+    ax=ax,
+    markers=True,
+    style="metric",
+)
 ax.set_xlabel("Radius estimate (nm)")
-ax.set_ylabel("Error rate (edits / um)")
-ax.set_xlim(100, 500)
+if inverse:
+    ax.set_ylabel(f"Inverse error rate ({units} / edit)")
+else:
+    ax.set_ylabel(f"Detected error rate\n(edits / {units})")
+ax.set_xlim(0, 500)
+ax.set_ylim(0, ax.get_ylim()[1])
+label_texts = ax.get_legend().texts
+for text in label_texts:
+    if "operation" in text.get_text():
+        text.set_text("All")
+    elif "split" in text.get_text():
+        text.set_text("False merge")
+    elif "merge" in text.get_text():
+        text.set_text("False split")
 
+ax.get_legend().set_title("Error type")
 
-savefig("error_rate_vs_radius", fig, folder="simple_stats", doc_save=True)
-
-# %%
-fig, axs = plt.subplots(
-    2,
-    1,
-    figsize=(6, 6),
-    gridspec_kw=dict(height_ratios=[2, 5]),
-    constrained_layout=True,
-    sharex=True,
+savefig(
+    f"error_rate_vs_radius_inverse={inverse}", fig, folder="simple_stats", doc_save=True
 )
-
-sns.histplot(
-    x=skeleton_edges["radius"],
-    weights=skeleton_edges["length"],
-    ax=axs[0],
-    binwidth=10,
-    stat="proportion",
-)
-
-ax = axs[1]
-distance_expected_errors = 1 / (rate_per_bin.values * 1000)
-sns.scatterplot(x=rate_per_bin.index.mid, y=distance_expected_errors, ax=ax)
-ax.set_xlabel("Radius estimate (nm)")
-ax.set_ylabel("Inverse error rate (um/edit)")
-ax.set_xlim(100, 500)
-
-savefig("inverse_error_rate_vs_radius", fig, folder="simple_stats", doc_save=True)
-
-
-# %%
-first_skeleton_nf = skeleton_nfs[root_ids[0]]
-
-first_skeleton_nf.edges["length"].sum() / 1000
-
-rate_per_edge = (
-    first_skeleton_nf.edges["radius_bin"].map(rate_per_bin).astype(float).fillna(0)
-)
-(rate_per_edge * first_skeleton_nf.edges["length"]).sum()
-
-# %%
-
-first_skeleton_nf.edges["radius_bin"] * first_skeleton_nf.edges["length"]
