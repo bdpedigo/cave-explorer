@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from caveclient import CAVEclient
+
 RESULTS_PATH = Path(__file__).parent.parent.parent.parent
 RESULTS_PATH = RESULTS_PATH / "results"
 
@@ -19,3 +21,10 @@ MTYPES_TABLE = "aibs_metamodel_mtypes_v661_v2"
 NUCLEUS_TABLE = "nucleus_detection_v0"
 INHIBITORY_CTYPES_TABLE = "connectivity_groups_v795"
 PROOFREADING_TABLE = "proofreading_status_public_release"
+
+MATERIALIZATION_VERSION = 1078
+
+DATASTACK_NAME = "minnie65_phase3_v1"
+
+client = CAVEclient(DATASTACK_NAME)
+TIMESTAMP = client.materialize.get_timestamp(MATERIALIZATION_VERSION)

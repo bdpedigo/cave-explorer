@@ -1,6 +1,5 @@
 # %%
 
-import caveclient as cc
 import numpy as np
 import pandas as pd
 from cloudfiles import CloudFiles
@@ -12,13 +11,15 @@ from pkg.constants import (
     NUCLEUS_TABLE,
     OUT_PATH,
     PROOFREADING_TABLE,
+    TIMESTAMP,
 )
 from pkg.io import write_variable
-from pkg.utils import load_manifest
+from pkg.utils import load_manifest, start_client
+
+client = start_client()
 
 # %%
 
-client = cc.CAVEclient("minnie65_phase3_v1")
 proofreading_df = client.materialize.query_table(PROOFREADING_TABLE)
 inhibitory_column_df = client.materialize.query_table(INHIBITORY_CTYPES_TABLE)
 mtypes_df = client.materialize.query_table(MTYPES_TABLE)
@@ -34,13 +35,14 @@ nuc_df.drop_duplicates("pt_root_id", inplace=True)
 
 # %%
 nuc_lookup = nuc_df.set_index("pt_root_id")["id"]
-# %%
 
-inhibitory_column_df[
-    ~inhibitory_column_df["target_id"].isin(
-        proofreading_df["pt_root_id"].map(nuc_lookup)
-    )
-]
+# # %%
+
+# inhibitory_column_df[
+#     ~inhibitory_column_df["target_id"].isin(
+#         proofreading_df["pt_root_id"].map(nuc_lookup)
+#     )
+# ]
 
 # %%
 roots = (
@@ -114,13 +116,17 @@ neuron_manifest.loc[
 
 # %%
 
-is_current_mask = client.chunkedgraph.is_latest_roots(roots.tolist())
+is_current_mask = client.chunkedgraph.is_latest_roots(
+    roots.tolist(), timestamp=TIMESTAMP
+)
 neuron_manifest["is_current"] = is_current_mask
 
 outdated_roots = roots[~is_current_mask]
 root_map = dict(zip(roots[is_current_mask], roots[is_current_mask]))
 for outdated_root in outdated_roots:
-    latest_roots = client.chunkedgraph.get_latest_roots(outdated_root)
+    latest_roots = client.chunkedgraph.get_latest_roots(
+        outdated_root, timestamp=TIMESTAMP
+    )
     possible_nucs = client.materialize.query_table(
         NUCLEUS_TABLE, filter_in_dict={"pt_root_id": latest_roots}
     )
@@ -223,5 +229,3 @@ loaded_manifest = load_manifest()
 
 # %%
 assert loaded_manifest.equals(neuron_manifest)
-
-# %%

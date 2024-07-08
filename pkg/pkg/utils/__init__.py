@@ -1,3 +1,4 @@
+from .client import start_client
 from .message import send_message
 from .wrangle import (
     find_closest_point,
@@ -30,4 +31,5 @@ __all__ = [
     "load_mtypes",
     "load_manifest",
     "send_message",
+    "start_client",
 ]

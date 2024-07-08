@@ -277,7 +277,6 @@ skel_poly = to_line_polydata(skel.vertices, skel.edges)
 
 plotter = pv.Plotter()
 
-
 plotter.add_mesh(skel_poly, color="black", line_width=2)
 
 center_camera(plotter, root_point, distance=1_000_000)

@@ -3,5 +3,5 @@ MTYPES_TABLE: aibs_metamodel_mtypes_v661_v2
 NUCLEUS_TABLE: nucleus_detection_v0
 induced_subgraph-n_nodes: 163
 induced_subgraph/n_nodes: 156
-manifest-n_finished: 172
+manifest-n_finished: 219
 manifest-n_samples: 20

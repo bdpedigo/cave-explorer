@@ -1,5 +1,4 @@
 # %%
-import caveclient as cc
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -10,11 +9,11 @@ from tqdm.auto import tqdm
 
 from pkg.neuronframe import load_neuronframe
 from pkg.skeleton import extract_meshwork_node_mappings
-from pkg.utils import load_manifest
+from pkg.utils import load_manifest, start_client
+from pkg.constants import TIMESTAMP
 
 manifest = load_manifest()
-
-client = cc.CAVEclient("minnie65_phase3_v1")
+client = start_client()
 
 # %%
 manifest.query("in_inhibitory_column & is_current", inplace=True)
@@ -270,4 +269,4 @@ sns.histplot(summary_info["n_metaedits"], ax=ax)
 fig, ax = plt.subplots(1, 1, figsize=(6, 5))
 sns.scatterplot(data=summary_info, x="n_nodes_unedited", y="n_edits", ax=ax)
 
-#%%
+# %%
