@@ -1,49 +1,105 @@
 # %%
+import pickle
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pcg_skel
 import seaborn as sns
+from joblib import Parallel, delayed
 from networkframe import NetworkFrame
-from tqdm.auto import tqdm
+from tqdm_joblib import tqdm_joblib
 
+from pkg.constants import OUT_PATH
 from pkg.neuronframe import load_neuronframe
+from pkg.plot import savefig, set_context
 from pkg.skeleton import extract_meshwork_node_mappings
 from pkg.utils import load_manifest, start_client
-from pkg.constants import TIMESTAMP
 
+set_context()
 manifest = load_manifest()
 client = start_client()
 
 # %%
-manifest.query("in_inhibitory_column & is_current", inplace=True)
+manifest.query("in_inhibitory_column & is_current & has_all_sequences", inplace=True)
 
-all_edits = []
-all_metaedits = []
-rows = []
-for root_id in tqdm(manifest.index[:]):
+
+def load_info(root_id):
+    client = start_client()
     neuron = load_neuronframe(root_id, client)
     edited_neuron = neuron.set_edits(neuron.edits.index)
     edited_neuron.select_nucleus_component(inplace=True)
     edited_neuron.apply_edge_lengths(inplace=True)
-    all_edits.append(neuron.edits)
-    all_metaedits.append(neuron.metaedits)
-    rows.append(
-        {
-            "root_id": root_id,
-            "n_edges_unedited": len(neuron.edges),
-            "n_nodes_unedited": len(neuron.nodes),
-            "n_edits": len(neuron.edits),
-            "n_metaedits": len(neuron.metaedits),
-            "n_merges": len(neuron.edits.query("is_merge")),
-            "n_splits": len(neuron.edits.query("~is_merge")),
-            "edge_length_sum": edited_neuron.edges["length"].sum(),
-            "n_nodes": len(edited_neuron.nodes),
-            "n_edges": len(edited_neuron.edges),
-        }
-    )
+    row = {
+        "root_id": root_id,
+        "n_edges_unedited": len(neuron.edges),
+        "n_nodes_unedited": len(neuron.nodes),
+        "n_edits": len(neuron.edits),
+        "n_metaedits": len(neuron.metaedits),
+        "n_merges": len(neuron.edits.query("is_merge")),
+        "n_splits": len(neuron.edits.query("~is_merge")),
+        "edge_length_sum": edited_neuron.edges["length"].sum(),
+        "n_nodes": len(edited_neuron.nodes),
+        "n_edges": len(edited_neuron.edges),
+    }
+    return row
+
+
+with tqdm_joblib(total=len(manifest)) as progress_bar:
+    rows = Parallel(n_jobs=8)(delayed(load_info)(root_id) for root_id in manifest.index)
+
 summary_info = pd.DataFrame(rows).set_index("root_id")
 
+summary_info.to_csv(OUT_PATH / "simple_stats" / "summary_info.csv")
+
+# %%
+
+fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+sns.histplot(summary_info["n_edits"], ax=ax)
+
+fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+sns.histplot(summary_info["n_merges"], ax=ax)
+ax.set_ylabel("Number of merge edits")
+
+fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+sns.histplot(summary_info["n_splits"], ax=ax)
+ax.set_xlabel("Number of split edits")
+
+fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+sns.histplot(summary_info["n_metaedits"], ax=ax)
+
+fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+sns.scatterplot(data=summary_info, x="n_nodes_unedited", y="n_edits", ax=ax)
+
+# %%
+fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+sns.histplot(summary_info["n_merges"], ax=ax, label="Merges")
+sns.histplot(summary_info["n_splits"], ax=ax, label="Splits")
+ax.set_ylabel("Number of edits")
+
+#%%
+print
+print(summary_info['n_merges'].mean())
+summary_info['n_merges'].mean()
+# summary_info['n_merges'].median()
+
+#%%
+# summary_info['n_splits'].median()
+
+#%%
+summary_info['n_splits'].mean()
+
+# %%
+counts_df = summary_info.melt(
+    value_vars=["n_merges", "n_splits"], var_name="edit_type", value_name="count"
+)
+counts_df["edit_type"] = counts_df["edit_type"].str.replace("n_", "").str.capitalize()
+fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+sns.histplot(data=counts_df, x="count", hue="edit_type", ax=ax, element="step", bins=20)
+ax.set_xlabel("Number of edits")
+sns.move_legend(ax, "upper right", title="Edit type")
+
+savefig('edit_count_histogram', fig, folder='simple_stats', doc_save=True)
 
 # %%
 
@@ -105,9 +161,6 @@ def extract_skeleton_nf_for_root(root_id, client):
         return None
 
 
-from joblib import Parallel, delayed
-from tqdm_joblib import tqdm_joblib
-
 root_ids = manifest.index
 with tqdm_joblib(total=len(root_ids)) as progress_bar:
     all_skeleton_nfs = Parallel(n_jobs=8)(
@@ -134,10 +187,6 @@ for root_id, skeleton_nf in skeleton_nfs.items():
     )
     skeleton_nf.nodes["radius_bin"] = pd.cut(skeleton_nf.nodes["radius"], bins=bins)
     skeleton_nf.edges["radius_bin"] = pd.cut(skeleton_nf.edges["radius"], bins=bins)
-
-import pickle
-
-from pkg.constants import OUT_PATH
 
 with open(OUT_PATH / "simple_stats" / "skeleton_nfs.pkl", "wb") as f:
     pickle.dump(skeleton_nfs, f)
@@ -176,9 +225,7 @@ length_in_bin = skeleton_edges.groupby("radius_bin")["length"].sum()
 rate_per_bin = (ops_per_bin / length_in_bin).fillna(0)
 
 # %%
-from pkg.plot import set_context
 
-set_context()
 
 fig, axs = plt.subplots(
     2,
@@ -204,7 +251,6 @@ ax.set_xlabel("Radius estimate (nm)")
 ax.set_ylabel("Error rate (edits / um)")
 ax.set_xlim(100, 500)
 
-from pkg.plot import savefig
 
 savefig("error_rate_vs_radius", fig, folder="simple_stats", doc_save=True)
 
@@ -249,24 +295,3 @@ rate_per_edge = (
 # %%
 
 first_skeleton_nf.edges["radius_bin"] * first_skeleton_nf.edges["length"]
-
-
-# %%
-
-fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-sns.histplot(summary_info["n_edits"], ax=ax)
-
-fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-sns.histplot(summary_info["n_merges"], ax=ax)
-
-fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-sns.histplot(summary_info["n_splits"], ax=ax)
-
-fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-sns.histplot(summary_info["n_metaedits"], ax=ax)
-
-# %%
-fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-sns.scatterplot(data=summary_info, x="n_nodes_unedited", y="n_edits", ax=ax)
-
-# %%
