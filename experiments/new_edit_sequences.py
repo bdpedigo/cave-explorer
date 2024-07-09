@@ -1,15 +1,23 @@
 # %%
+from pathlib import Path
+
+import matplotlib.pyplot as plt
 import numpy as np
-from caveclient import CAVEclient
+import pandas as pd
+import seaborn as sns
+from joblib import Parallel, delayed
+from sklearn.metrics import pairwise_distances
 from tqdm.auto import tqdm
 
 from pkg.metrics import compute_target_proportions
 from pkg.neuronframe import NeuronFrameSequence, load_neuronframe
-from pkg.utils import load_manifest, load_mtypes
+from pkg.plot import savefig, set_context
+from pkg.utils import load_casey_palette, load_manifest, load_mtypes, start_client
 
-client = CAVEclient("minnie65_phase3_v1")
+set_context()
+client = start_client()
 manifest = load_manifest()
-manifest = manifest.query("in_inhibitory_column")
+manifest = manifest.query("in_inhibitory_column & has_all_sequences")
 
 # %%
 
@@ -18,130 +26,125 @@ prefix = ""
 
 mtypes = load_mtypes(client)
 
-from pathlib import Path
-
-from pkg.utils import load_casey_palette
-
 palette = load_casey_palette()
 
 out_path = Path("results/outs/new_edit_sequences")
 
+reextract = False
+if reextract:
+    # for root_id in manifest.query("is_sample").index[:5]:
+    def run_for_neuron(root_id):
+        full_neuron = load_neuronframe(root_id, client, only_load=True)
+        if full_neuron is None:
+            return None
 
-# for root_id in manifest.query("is_sample").index[:5]:
-def run_for_neuron(root_id):
-    full_neuron = load_neuronframe(root_id, client, only_load=True)
-    if full_neuron is None:
-        return None
+        full_neuron.pre_synapses["post_mtype"] = full_neuron.pre_synapses[
+            "post_pt_root_id"
+        ].map(mtypes["cell_type"])
 
-    full_neuron.pre_synapses["post_mtype"] = full_neuron.pre_synapses[
-        "post_pt_root_id"
-    ].map(mtypes["cell_type"])
+        full_neuron.pre_synapses.to_csv(
+            out_path / f"pre_synapses-root_id={root_id}.csv"
+        )
+        full_neuron.post_synapses.to_csv(
+            out_path / f"post_synapses-root_id={root_id}.csv"
+        )
+        return
+        # simple time-ordered case
+        neuron_sequence = NeuronFrameSequence(
+            full_neuron,
+            prefix=prefix,
+            edit_label_name=f"{prefix}operation_id",
+            warn_on_missing=verbose,
+        )
 
-    full_neuron.pre_synapses.to_csv(out_path / f"pre_synapses-root_id={root_id}.csv")
-    full_neuron.post_synapses.to_csv(out_path / f"post_synapses-root_id={root_id}.csv")
-    return
-    # simple time-ordered case
-    neuron_sequence = NeuronFrameSequence(
-        full_neuron,
-        prefix=prefix,
-        edit_label_name=f"{prefix}operation_id",
-        warn_on_missing=verbose,
-    )
+        order_by = "time"
+        if order_by == "time":
+            neuron_sequence.edits.sort_values(["is_merge", "time"], inplace=True)
+        elif order_by == "random":
+            rng = np.random.default_rng()
+            neuron_sequence.edits["random"] = rng.random(len(neuron_sequence.edits))
+            neuron_sequence.edits.sort_values(["is_merge", "random"], inplace=True)
 
-    order_by = "time"
-    if order_by == "time":
-        neuron_sequence.edits.sort_values(["is_merge", "time"], inplace=True)
-    elif order_by == "random":
-        rng = np.random.default_rng()
-        neuron_sequence.edits["random"] = rng.random(len(neuron_sequence.edits))
-        neuron_sequence.edits.sort_values(["is_merge", "random"], inplace=True)
+        i = 0
+        next_operation = True
+        pbar = tqdm(
+            total=len(neuron_sequence.edits), desc="Applying edits...", disable=True
+        )
+        while next_operation is not None:
+            possible_edit_ids = neuron_sequence.find_incident_edits()
+            if len(possible_edit_ids) == 0:
+                next_operation = None
+            else:
+                next_operation = possible_edit_ids[0]
+                neuron_sequence.apply_edits(next_operation, only_additions=False)
+            i += 1
+            pbar.update(1)
+        pbar.close()
 
-    i = 0
-    next_operation = True
-    pbar = tqdm(
-        total=len(neuron_sequence.edits), desc="Applying edits...", disable=True
-    )
-    while next_operation is not None:
-        possible_edit_ids = neuron_sequence.find_incident_edits()
-        if len(possible_edit_ids) == 0:
-            next_operation = None
+        neuron_sequence.sequence_info.to_csv(
+            out_path / f"merge-clean-by-time-sequence_info-root_id={root_id}.csv"
+        )
+
+        if not neuron_sequence.is_completed:
+            print("Neuron is not completed.")
+
+        output_proportions = neuron_sequence.apply_to_synapses_by_sample(
+            compute_target_proportions, which="pre", by="post_mtype"
+        )
+
+        output_proportions_long = (
+            output_proportions.fillna(0)
+            .reset_index()
+            .melt(value_name="proportion", id_vars="operation_id")
+        )
+        output_proportions_long["cumulative_n_operations"] = output_proportions_long[
+            "operation_id"
+        ].map(neuron_sequence.sequence_info["cumulative_n_operations"])
+
+        by = "is_merge"
+        keep = "last"
+        bouts = neuron_sequence.sequence_info[by].fillna(False).cumsum()
+        bouts.name = "bout"
+        if keep == "first":
+            keep_ind = 0
         else:
-            next_operation = possible_edit_ids[0]
-            neuron_sequence.apply_edits(next_operation, only_additions=False)
-        i += 1
-        pbar.update(1)
-    pbar.close()
+            keep_ind = -1
+        bout_exemplars = (
+            neuron_sequence.sequence_info.index.to_series()
+            .groupby(bouts, sort=False)
+            .apply(lambda x: x.iloc[keep_ind])
+        ).values
+        # bout_exemplars = pd.Index(bout_exemplars, name='metaoperation_id')
+        # bout_exemplars = neuron_sequence.sequence_info.index
 
-    neuron_sequence.sequence_info.to_csv(
-        out_path / f"merge-clean-by-time-sequence_info-root_id={root_id}.csv"
+        # output_proportions_long = output_proportions_long.query(
+        #     "operation_id in @bout_exemplars"
+        # )
+
+        output_proportions_long["is_exemplar"] = False
+        output_proportions_long.loc[
+            output_proportions_long["operation_id"].isin(bout_exemplars), "is_exemplar"
+        ] = True
+
+        output_proportions_long.to_csv(
+            out_path / f"merge-clean-by-time-output_proportions-root_id={root_id}.csv"
+        )
+
+        # fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+        # sns.lineplot(
+        #     data=output_proportions_long,
+        #     x="cumulative_n_operations",
+        #     y="proportion",
+        #     hue="post_mtype",
+        #     palette=palette,
+        #     ax=ax,
+        # )
+
+    Parallel(n_jobs=6, verbose=10)(
+        delayed(run_for_neuron)(root_id) for root_id in manifest.index
     )
-
-    if not neuron_sequence.is_completed:
-        print("Neuron is not completed.")
-
-    output_proportions = neuron_sequence.apply_to_synapses_by_sample(
-        compute_target_proportions, which="pre", by="post_mtype"
-    )
-
-    output_proportions_long = (
-        output_proportions.fillna(0)
-        .reset_index()
-        .melt(value_name="proportion", id_vars="operation_id")
-    )
-    output_proportions_long["cumulative_n_operations"] = output_proportions_long[
-        "operation_id"
-    ].map(neuron_sequence.sequence_info["cumulative_n_operations"])
-
-    by = "is_merge"
-    keep = "last"
-    bouts = neuron_sequence.sequence_info[by].fillna(False).cumsum()
-    bouts.name = "bout"
-    if keep == "first":
-        keep_ind = 0
-    else:
-        keep_ind = -1
-    bout_exemplars = (
-        neuron_sequence.sequence_info.index.to_series()
-        .groupby(bouts, sort=False)
-        .apply(lambda x: x.iloc[keep_ind])
-    ).values
-    # bout_exemplars = pd.Index(bout_exemplars, name='metaoperation_id')
-    # bout_exemplars = neuron_sequence.sequence_info.index
-
-    # output_proportions_long = output_proportions_long.query(
-    #     "operation_id in @bout_exemplars"
-    # )
-
-    output_proportions_long["is_exemplar"] = False
-    output_proportions_long.loc[
-        output_proportions_long["operation_id"].isin(bout_exemplars), "is_exemplar"
-    ] = True
-
-    output_proportions_long.to_csv(
-        out_path / f"merge-clean-by-time-output_proportions-root_id={root_id}.csv"
-    )
-
-    # fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-    # sns.lineplot(
-    #     data=output_proportions_long,
-    #     x="cumulative_n_operations",
-    #     y="proportion",
-    #     hue="post_mtype",
-    #     palette=palette,
-    #     ax=ax,
-    # )
-
-
-from joblib import Parallel, delayed
-
-Parallel(n_jobs=6, verbose=10)(
-    delayed(run_for_neuron)(root_id) for root_id in manifest.index
-)
 
 # %%
-
-import pandas as pd
-from sklearn.metrics import pairwise_distances
 
 output_proportions_by_root = []
 sequence_info_by_root = []
@@ -149,7 +152,6 @@ distances_by_root = []
 distances_to_next_by_root = []
 
 for file in out_path.glob("*.csv"):
-    # print(.head())
     root_id = int(file.name.split("root_id=")[1].split(".")[0])
     df = pd.read_csv(file, index_col=0)
     df["root_id"] = root_id
@@ -169,9 +171,7 @@ for file in out_path.glob("*.csv"):
         distances_by_root.append(dists_df)
 
         square_dists_df = pd.DataFrame(data=dists, index=df.index, columns=df.index)
-        # square_dists_df.values
         offdiag_dists = dists[np.arange(1, len(dists)), np.arange(len(dists) - 1)]
-
     else:
         sequence_info_by_root.append(df)
 
@@ -183,31 +183,6 @@ distances = distances.sort_values(["root_id", "cumulative_n_operations"])
 orders = [np.arange(n) for n in distances.groupby("root_id").size()]
 orders = np.concatenate(orders)
 distances["order"] = orders
-# %%
-out_clean = output_proportions.query("is_exemplar")
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-
-sns.lineplot(
-    out_clean, x="cumulative_n_operations", y="proportion", hue="post_mtype", ax=ax
-)
-
-# %%
-fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-sns.lineplot(
-    distances.query("is_exemplar"),
-    # x="cumulative_n_operations",
-    x="order",
-    y="cityblock",
-    units="root_id",
-    color="black",
-    alpha=0.2,
-    ax=ax,
-    estimator=None,
-)
-ax.set(xlim=(0, 400))
 
 
 # %%
@@ -247,14 +222,14 @@ sns.lineplot(
     ax=ax,
     color="red",
 )
-ax.set(xlim=(0, 200), xlabel="Number of merge edits")
+ax.set(xlim=(0, 200), xlabel="Number of merge edits", ylabel="Distance to final state")
+
+savefig("distance-by-n_merges", fig, "new_edit_sequences")
 
 # %%
 clean_distances["p_merges"] = clean_distances["order"] / clean_distances.groupby(
     "root_id"
 )["order"].transform("max")
-
-# %%
 
 clean_distances["p_merges_bin"] = pd.cut(clean_distances["p_merges"], bins=20)
 clean_distances["p_merges_bin_mid"] = clean_distances["p_merges_bin"].apply(
@@ -290,6 +265,10 @@ sns.lineplot(
 
 ax.set(xlabel="Proportion of merge edits", ylabel="Distance to final state")
 
+savefig("distance-by-p_merges", fig, "new_edit_sequences")
+
+
+# %%
 lines = ax.get_lines()[1:]
 for line in lines:
     line.set_visible(False)
@@ -372,7 +351,8 @@ sns.lineplot(
     ax=ax,
     estimator=None,
 )
-ax.set(xlim=(0, 200))
+ax.set(xlim=(0, 200), ylabel="Distance to next", xlabel="Number of edits")
+savefig("distance-to-next-by-n_merges", fig, "new_edit_sequences")
 
 # %%
 fig, ax = plt.subplots(1, 1, figsize=(6, 5))
@@ -386,7 +366,8 @@ sns.lineplot(
     ax=ax,
     estimator=None,
 )
-# ax.set(xlim=(0, 200))
+ax.set(ylabel="Distance to next", xlabel="Proportion of merges")
+savefig("distance-to-next-by-p_merges", fig, "new_edit_sequences")
 
 # %%
 sequence_infos
@@ -770,7 +751,7 @@ for target_p in [0.7, 1.0]:
     shift_ilocs = props_by_mtype.index.get_indexer_for(shifts)
     for shift in shift_ilocs:
         ax.axvline(shift, color="black", lw=1)
-    
+
     for i in range(len(shift_ilocs)):
         ax.text(
             shift_ilocs[i] + 0.5,
@@ -780,7 +761,6 @@ for target_p in [0.7, 1.0]:
             va="center",
             fontsize=10,
         )
-
 
     ax.set(xlabel="Inhibitory Neuron", ylabel="Excitatory Neuron Class")
     props_by_mtype.drop("label", axis=1, inplace=True)

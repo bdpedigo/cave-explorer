@@ -1,5 +1,7 @@
 # %%
 
+import pickle
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -7,6 +9,7 @@ import pcg_skel
 import seaborn as sns
 from joblib import Parallel, delayed
 from networkframe import NetworkFrame
+from statsmodels.stats.weightstats import DescrStatsW
 from tqdm_joblib import tqdm_joblib
 
 from pkg.constants import OUT_PATH
@@ -77,7 +80,6 @@ sns.histplot(summary_info["n_splits"], ax=ax, label="Splits")
 ax.set_ylabel("Number of edits")
 
 # %%
-print
 print(summary_info["n_merges"].mean())
 summary_info["n_merges"].mean()
 # summary_info['n_merges'].median()
@@ -102,83 +104,94 @@ savefig("edit_count_histogram", fig, folder="simple_stats", doc_save=True)
 
 # %%
 
+recompute_skeletons = False
 
-def extract_skeleton_nf_for_root(root_id, client):
-    try:
-        neuron = load_neuronframe(root_id, client, only_load=True)
-        if neuron is None:
+if recompute_skeletons:
+
+    def extract_skeleton_nf_for_root(root_id, client):
+        try:
+            neuron = load_neuronframe(root_id, client, only_load=True)
+            if neuron is None:
+                return None
+            edited_neuron = neuron.set_edits(neuron.edits.index)
+            edited_neuron.select_nucleus_component(inplace=True)
+            edited_neuron.apply_edge_lengths(inplace=True)
+            splits = edited_neuron.edits.query("~is_merge")
+            merges = edited_neuron.edits.query("is_merge")
+
+            # get skeleton/radius info
+            meshwork = pcg_skel.coord_space_meshwork(root_id, client=client)
+            pcg_skel.features.add_volumetric_properties(meshwork, client)
+            pcg_skel.features.add_segment_properties(meshwork)
+            meshwork.anchor_annotations("segment_properties")
+            radius_by_level2 = meshwork.anno.segment_properties["r_eff"].to_frame()
+            mesh_to_level2_ids = meshwork.anno.lvl2_ids.df.set_index("mesh_ind_filt")[
+                "lvl2_id"
+            ]
+            radius_by_level2["level2_id"] = radius_by_level2.index.map(
+                mesh_to_level2_ids
+            )
+            radius_by_level2 = radius_by_level2.set_index("level2_id")["r_eff"]
+            edited_neuron.nodes["radius"] = edited_neuron.nodes.index.map(
+                radius_by_level2
+            )
+
+            skeleton_to_level2, level2_to_skeleton = extract_meshwork_node_mappings(
+                meshwork
+            )
+            edited_neuron.nodes["skeleton_index"] = edited_neuron.nodes.index.map(
+                level2_to_skeleton
+            )
+            operations_by_skeleton_node = edited_neuron.nodes.groupby("skeleton_index")[
+                "operation_added"
+            ].unique()
+            for idx, operations in operations_by_skeleton_node.items():
+                operations = operations.tolist()
+                if -1 in operations:
+                    operations.remove(-1)
+                operations_by_skeleton_node[idx] = operations
+            # all_modified_nodes.append(modified_nodes)
+
+            skeleton_nodes = pd.DataFrame(
+                meshwork.skeleton.vertices, columns=["x", "y", "z"]
+            )
+            skeleton_edges = pd.DataFrame(
+                meshwork.skeleton.edges, columns=["source", "target"]
+            )
+            skeleton_nf = NetworkFrame(skeleton_nodes, skeleton_edges)
+            skeleton_nf.nodes["operations"] = skeleton_nf.nodes.index.map(
+                operations_by_skeleton_node
+            )
+            skeleton_nf.nodes["splits"] = skeleton_nf.nodes["operations"].apply(
+                lambda x: [op for op in x if op in splits.index]
+            )
+            skeleton_nf.nodes["merges"] = skeleton_nf.nodes["operations"].apply(
+                lambda x: [op for op in x if op in merges.index]
+            )
+
+            # HACK sure this info is somewhere in the meshwork
+            skeleton_nf.nodes["radius"] = edited_neuron.nodes.groupby("skeleton_index")[
+                "radius"
+            ].mean()
+            return skeleton_nf
+        except:
             return None
-        edited_neuron = neuron.set_edits(neuron.edits.index)
-        edited_neuron.select_nucleus_component(inplace=True)
-        edited_neuron.apply_edge_lengths(inplace=True)
-        splits = edited_neuron.edits.query("~is_merge")
-        merges = edited_neuron.edits.query("is_merge")
 
-        # get skeleton/radius info
-        meshwork = pcg_skel.coord_space_meshwork(root_id, client=client)
-        pcg_skel.features.add_volumetric_properties(meshwork, client)
-        pcg_skel.features.add_segment_properties(meshwork)
-        meshwork.anchor_annotations("segment_properties")
-        radius_by_level2 = meshwork.anno.segment_properties["r_eff"].to_frame()
-        mesh_to_level2_ids = meshwork.anno.lvl2_ids.df.set_index("mesh_ind_filt")[
-            "lvl2_id"
-        ]
-        radius_by_level2["level2_id"] = radius_by_level2.index.map(mesh_to_level2_ids)
-        radius_by_level2 = radius_by_level2.set_index("level2_id")["r_eff"]
-        edited_neuron.nodes["radius"] = edited_neuron.nodes.index.map(radius_by_level2)
-
-        skeleton_to_level2, level2_to_skeleton = extract_meshwork_node_mappings(
-            meshwork
-        )
-        edited_neuron.nodes["skeleton_index"] = edited_neuron.nodes.index.map(
-            level2_to_skeleton
-        )
-        operations_by_skeleton_node = edited_neuron.nodes.groupby("skeleton_index")[
-            "operation_added"
-        ].unique()
-        for idx, operations in operations_by_skeleton_node.items():
-            operations = operations.tolist()
-            if -1 in operations:
-                operations.remove(-1)
-            operations_by_skeleton_node[idx] = operations
-        # all_modified_nodes.append(modified_nodes)
-
-        skeleton_nodes = pd.DataFrame(
-            meshwork.skeleton.vertices, columns=["x", "y", "z"]
-        )
-        skeleton_edges = pd.DataFrame(
-            meshwork.skeleton.edges, columns=["source", "target"]
-        )
-        skeleton_nf = NetworkFrame(skeleton_nodes, skeleton_edges)
-        skeleton_nf.nodes["operations"] = skeleton_nf.nodes.index.map(
-            operations_by_skeleton_node
-        )
-        skeleton_nf.nodes["splits"] = skeleton_nf.nodes["operations"].apply(
-            lambda x: [op for op in x if op in splits.index]
-        )
-        skeleton_nf.nodes["merges"] = skeleton_nf.nodes["operations"].apply(
-            lambda x: [op for op in x if op in merges.index]
+    root_ids = manifest.index
+    with tqdm_joblib(total=len(root_ids)) as progress_bar:
+        all_skeleton_nfs = Parallel(n_jobs=8)(
+            delayed(extract_skeleton_nf_for_root)(root_id, client)
+            for root_id in root_ids
         )
 
-        # HACK sure this info is somewhere in the meshwork
-        skeleton_nf.nodes["radius"] = edited_neuron.nodes.groupby("skeleton_index")[
-            "radius"
-        ].mean()
-        return skeleton_nf
-    except:
-        return None
-
-
-root_ids = manifest.index
-with tqdm_joblib(total=len(root_ids)) as progress_bar:
-    all_skeleton_nfs = Parallel(n_jobs=8)(
-        delayed(extract_skeleton_nf_for_root)(root_id, client) for root_id in root_ids
-    )
-
-# %%
-skeleton_nfs = {
-    root_id: nf for root_id, nf in zip(root_ids, all_skeleton_nfs) if nf is not None
-}
+    skeleton_nfs = {
+        root_id: nf for root_id, nf in zip(root_ids, all_skeleton_nfs) if nf is not None
+    }
+    with open(OUT_PATH / "simple_stats" / "skeleton_nfs.pkl", "wb") as f:
+        pickle.dump(skeleton_nfs, f)
+else:
+    with open(OUT_PATH / "simple_stats" / "skeleton_nfs.pkl", "rb") as f:
+        skeleton_nfs = pickle.load(f)
 
 # %%
 for root_id, skeleton_nf in skeleton_nfs.items():
@@ -199,7 +212,6 @@ skeleton_edges = pd.concat(
 )
 
 # %%
-from statsmodels.stats.weightstats import DescrStatsW
 
 ds = DescrStatsW(data=skeleton_edges["radius"], weights=skeleton_edges["length"])
 
@@ -232,11 +244,6 @@ skeleton_edges = pd.concat(
 skeleton_nodes["n_merges"] = skeleton_nodes["merges"].apply(len)
 skeleton_nodes["n_splits"] = skeleton_nodes["splits"].apply(len)
 
-# %%
-import pickle
-
-with open(OUT_PATH / "simple_stats" / "skeleton_nfs.pkl", "wb") as f:
-    pickle.dump(skeleton_nfs, f)
 
 # %%
 
