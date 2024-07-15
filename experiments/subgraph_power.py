@@ -5,13 +5,13 @@ import time
 import caveclient as cc
 import numpy as np
 import pandas as pd
-from cloudfiles import CloudFiles
 from joblib import Parallel, delayed
 from networkframe import NetworkFrame
 
 from pkg.neuronframe import load_neuronframe
 from pkg.plot import set_context
 from pkg.sequence import create_time_ordered_sequence
+from pkg.utils import load_manifest
 
 # %%
 
@@ -23,95 +23,96 @@ query_neurons = client.materialize.query_table("connectivity_groups_v795")
 
 root_options = query_neurons["pt_root_id"].values
 
+manifest = load_manifest()
 
 # %%
 
-nodes = pd.DataFrame()
-nodes["working_root_id"] = root_options
+# nodes = pd.DataFrame()
+# nodes["working_root_id"] = root_options
 
-# take my list of root IDs
-# make sure I have the latest root ID for each, using `get_latest_roots`
-is_current_mask = client.chunkedgraph.is_latest_roots(root_options)
-outdated_roots = root_options[~is_current_mask]
-root_map = dict(zip(root_options[is_current_mask], root_options[is_current_mask]))
-for outdated_root in outdated_roots:
-    latest_roots = client.chunkedgraph.get_latest_roots(outdated_root)
-    sub_nucs = client.materialize.query_table(
-        "nucleus_detection_v0", filter_in_dict={"pt_root_id": latest_roots}
-    )
-    if len(sub_nucs) == 1:
-        root_map[outdated_root] = sub_nucs.iloc[0]["pt_root_id"]
-    else:
-        print(f"Multiple nuc roots for {outdated_root}")
+# # take my list of root IDs
+# # make sure I have the latest root ID for each, using `get_latest_roots`
+# is_current_mask = client.chunkedgraph.is_latest_roots(root_options)
+# outdated_roots = root_options[~is_current_mask]
+# root_map = dict(zip(root_options[is_current_mask], root_options[is_current_mask]))
+# for outdated_root in outdated_roots:
+#     latest_roots = client.chunkedgraph.get_latest_roots(outdated_root)
+#     sub_nucs = client.materialize.query_table(
+#         "nucleus_detection_v0", filter_in_dict={"pt_root_id": latest_roots}
+#     )
+#     if len(sub_nucs) == 1:
+#         root_map[outdated_root] = sub_nucs.iloc[0]["pt_root_id"]
+#     else:
+#         print(f"Multiple nuc roots for {outdated_root}")
 
-updated_root_options = np.array([root_map[root] for root in root_options])
-nodes["current_root_id"] = updated_root_options
+# updated_root_options = np.array([root_map[root] for root in root_options])
+# nodes["current_root_id"] = updated_root_options
 
-# map to nucleus IDs
-current_nucs = client.materialize.query_table(
-    "nucleus_detection_v0",
-    filter_in_dict={"pt_root_id": updated_root_options},
-    # select_columns=["id", "pt_root_id"],
-).set_index("pt_root_id")["id"]
-nodes["target_id"] = nodes["current_root_id"].map(current_nucs)
+# # map to nucleus IDs
+# current_nucs = client.materialize.query_table(
+#     "nucleus_detection_v0",
+#     filter_in_dict={"pt_root_id": updated_root_options},
+#     # select_columns=["id", "pt_root_id"],
+# ).set_index("pt_root_id")["id"]
+# nodes["target_id"] = nodes["current_root_id"].map(current_nucs)
 
 
 # %%
-timestamp = pd.to_datetime("2021-07-01 00:00:00", utc=True)
+# timestamp = pd.to_datetime("2021-07-01 00:00:00", utc=True)
 
-nucs = client.materialize.query_table(
-    "nucleus_detection_v0",
-    filter_in_dict={"id": nodes["target_id"].to_list()},
-).set_index("id")
-nodes["pt_supervoxel_id"] = nodes["target_id"].map(nucs["pt_supervoxel_id"])
-nodes["timestamp_root_from_chunkedgraph"] = client.chunkedgraph.get_roots(
-    nodes["pt_supervoxel_id"], timestamp=timestamp
-)
-nodes["nuc_depth"] = nodes["target_id"].map(nucs["pt_position"].apply(lambda x: x[1]))
+# nucs = client.materialize.query_table(
+#     "nucleus_detection_v0",
+#     filter_in_dict={"id": nodes["target_id"].to_list()},
+# ).set_index("id")
+# nodes["pt_supervoxel_id"] = nodes["target_id"].map(nucs["pt_supervoxel_id"])
+# nodes["timestamp_root_from_chunkedgraph"] = client.chunkedgraph.get_roots(
+#     nodes["pt_supervoxel_id"], timestamp=timestamp
+# )
+# nodes["nuc_depth"] = nodes["target_id"].map(nucs["pt_position"].apply(lambda x: x[1]))
 
-past_nucs = client.materialize.query_table(
-    "nucleus_detection_v0",
-    filter_in_dict={"id": nodes["target_id"].to_list()},
-    # select_columns=["id", "pt_root_id"],
-    timestamp=timestamp,
-).set_index("id")["pt_root_id"]
-nodes["timestamp_root_from_table"] = nodes["target_id"].map(past_nucs)
+# past_nucs = client.materialize.query_table(
+#     "nucleus_detection_v0",
+#     filter_in_dict={"id": nodes["target_id"].to_list()},
+#     # select_columns=["id", "pt_root_id"],
+#     timestamp=timestamp,
+# ).set_index("id")["pt_root_id"]
+# nodes["timestamp_root_from_table"] = nodes["target_id"].map(past_nucs)
 
-mtypes = client.materialize.query_table(
-    "allen_column_mtypes_v2", filter_in_dict={"target_id": nodes["target_id"].to_list()}
-)
-nodes["mtype"] = nodes["target_id"].map(mtypes.set_index("target_id")["cell_type"])
+# mtypes = client.materialize.query_table(
+#     "allen_column_mtypes_v2", filter_in_dict={"target_id": nodes["target_id"].to_list()}
+# )
+# nodes["mtype"] = nodes["target_id"].map(mtypes.set_index("target_id")["cell_type"])
+
+# # %%
+# cloud_bucket = "allen-minnie-phase3"
+# folder = "edit_sequences"
+
+# cf = CloudFiles(f"gs://{cloud_bucket}/{folder}")
+
+# files = list(cf.list())
+# files = pd.DataFrame(files, columns=["file"])
+
+# # pattern is root_id=number as the beginning of the file name
+# # extract the number from the file name and store it in a new column
+# files["root_id"] = files["file"].str.split("=").str[1].str.split("-").str[0].astype(int)
+# files["order_by"] = files["file"].str.split("=").str[2].str.split("-").str[0]
+# files["random_seed"] = files["file"].str.split("=").str[3].str.split("-").str[0]
+
+
+# file_counts = files.groupby("root_id").size()
+# has_all = file_counts[file_counts == 12].index
+
+# files_finished = files.query("root_id in @has_all")
+
+# root_options = files_finished["root_id"].unique()
 
 # %%
-cloud_bucket = "allen-minnie-phase3"
-folder = "edit_sequences"
 
-cf = CloudFiles(f"gs://{cloud_bucket}/{folder}")
-
-files = list(cf.list())
-files = pd.DataFrame(files, columns=["file"])
-
-# pattern is root_id=number as the beginning of the file name
-# extract the number from the file name and store it in a new column
-files["root_id"] = files["file"].str.split("=").str[1].str.split("-").str[0].astype(int)
-files["order_by"] = files["file"].str.split("=").str[2].str.split("-").str[0]
-files["random_seed"] = files["file"].str.split("=").str[3].str.split("-").str[0]
-
-
-file_counts = files.groupby("root_id").size()
-has_all = file_counts[file_counts == 12].index
-
-files_finished = files.query("root_id in @has_all")
-
-root_options = files_finished["root_id"].unique()
-
-# %%
-nodes["has_sequence"] = nodes["current_root_id"].isin(root_options)
 nodes["ctype"] = nodes["target_id"].map(
     query_neurons.set_index("target_id")["cell_type"]
 )
-# %%
-root_options = nodes.query("has_sequence")["working_root_id"]
+# # %%
+# root_options = nodes.query("has_sequence")["working_root_id"]
 
 # %%
 # timestamps = pd.date_range("2022-07-01", "2024-01-01", freq="M", tz="UTC")
@@ -205,6 +206,15 @@ post_synapses = pd.concat(post_synapselist)
 all_edits = pd.concat(all_edit_tables)
 
 # %%
+import cloudvolume as cv
+from caveclient import CAVEclient
+
+client = CAVEclient("minnie65_public")
+release = 1078
+mip_level = 5
+cloudvolume = client.info.segmentation_cloudvolume()
+
+cloudvolume.download()
 
 
 # %%

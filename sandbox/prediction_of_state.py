@@ -3,9 +3,14 @@
 import pickle
 
 import caveclient as cc
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import seaborn as sns
 from scipy.spatial.distance import cdist
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
+from tqdm.auto import tqdm
 
 from pkg.constants import OUT_PATH
 from pkg.plot import set_context
@@ -94,13 +99,159 @@ meta_diff_df.index.names = ["root_id", "scheme", "order_by", "random_seed"]
 
 meta_diff_df
 
+# %%
+scheme = "historical"
+
+fig, axs = plt.subplots(
+    4, 6, figsize=(15, 12), sharex="col", sharey=True, constrained_layout=True
+)
+
+synapse_bins = np.linspace(0, 1000, 6).tolist()
+synapse_bins.append(1000000)
+
+for i, (mtype, group_info) in enumerate(all_infos.groupby("mtype")):
+    group_info = group_info.copy()
+    group_root_ids = group_info.index.get_level_values("root_id").unique()
+
+    idx = pd.IndexSlice
+    diffs = meta_diff_df.loc[idx[group_root_ids, scheme], :]["props_by_mtype"].values
+    diffs = pd.concat(diffs, axis=0).copy().reset_index()
+    group_info = group_info.query(f"scheme == '{scheme}'")
+    group_info = group_info.reset_index()
+    if scheme == "clean-and-merge":
+        group_info["random_seed"] = (
+            group_info["random_seed"].astype(
+                "str"
+            )  # replace({"None": np.nan}).astype(float)
+        )
+    group_info.set_index(["root_id", "random_seed", "order"], inplace=True)
+    diffs.set_index(["root_id", "random_seed", "order"], inplace=True)
+
+    diffs["n_pre_synapses"] = group_info["n_pre_synapses"]
+    diffs["path_length"] = group_info["path_length"]
+    diffs["n_post_synapses"] = group_info["n_post_synapses"]
+    diffs["n_nodes"] = group_info["n_nodes"]
+    diffs["cumulative_n_operations"] = group_info["cumulative_n_operations"]
+
+    diffs["synapse_count_bin"] = pd.cut(
+        diffs["n_pre_synapses"], synapse_bins, right=False
+    )
+    for j, (syn_bin, syn_group) in enumerate(diffs.groupby("synapse_count_bin")):
+        sns.histplot(data=syn_group, y="euclidean", ax=axs[i, j], stat="density")
+        axs[i, j].set_xticks([])
+        axs[0, j].set_title(f"# out synapses\n {syn_bin}")
+
+    ax = axs[i, 0]
+    ax.text(-1, 0.5, mtype, transform=ax.transAxes, fontsize="xx-large", va="center")
+    ax.set(ylabel="Euclidean distance \n to final output profile")
 
 # %%
-import matplotlib.pyplot as plt
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
 
-from pkg.plot import set_context
+scheme = "historical"
+group_info = all_infos.copy()
+
+idx = pd.IndexSlice
+diffs = meta_diff_df.loc[idx[:, scheme], :]["props_by_mtype"].values
+diffs = pd.concat(diffs, axis=0).copy().reset_index()
+
+group_info = group_info.copy()
+group_root_ids = group_info.index.get_level_values("root_id").unique()
+group_info = group_info.query(f"scheme == '{scheme}'")
+group_info = group_info.reset_index()
+
+group_info.set_index(["root_id", "random_seed", "order"], inplace=True)
+diffs.set_index(["root_id", "random_seed", "order"], inplace=True)
+
+diffs = diffs.join(
+    group_info[
+        [
+            "n_pre_synapses",
+            "path_length",
+            "n_post_synapses",
+            "n_nodes",
+            "cumulative_n_operations",
+        ]
+    ]
+)
+
+diffs["synapse_count_bin"] = pd.cut(diffs["n_pre_synapses"], synapse_bins, right=False)
+
+# %%
+fig, ax = plt.subplots(figsize=(6, 6))
+
+sns.histplot(
+    data=diffs.query("n_pre_synapses < 1000"),
+    x="n_pre_synapses",
+    y="euclidean",
+    ax=ax,
+    stat="density",
+    bins=100,
+)
+
+# %%
+fig, ax = plt.subplots(figsize=(6, 6))
+
+sns.histplot(
+    data=diffs.query("n_pre_synapses > 1000"),
+    x="n_pre_synapses",
+    y="euclidean",
+    ax=ax,
+    stat="density",
+    bins=100,
+)
+# %%
+
+fig, ax = plt.subplots(figsize=(6, 6))
+
+sns.histplot(
+    data=diffs.query("n_pre_synapses > 1000"),
+    x="euclidean",
+    ax=ax,
+    stat="density",
+    bins=100,
+)
+# %%
+
+sample = diffs.query("n_pre_synapses >= 1000")
+(sample["euclidean"] < 0.2).mean()
+
+
+# %%
+
+fine_synapse_bins = np.linspace(0, 1000, 101)
+
+
+objects = "neurons"
+thresh = 0.2
+metric = "euclidean"
+rows = []
+for bin in fine_synapse_bins:
+    sub_diffs = diffs.query(f"n_pre_synapses >= {bin}")
+    if objects == "neurons":
+        idx = sub_diffs.groupby("root_id")["cumulative_n_operations"].idxmin()
+        sub_diffs = sub_diffs.loc[idx]
+    prop = (sub_diffs[metric] < thresh).mean()
+    rows.append({"n_pre_synapses": bin, "prop": prop})
+
+prop_df = pd.DataFrame(rows)
+
+fig, ax = plt.subplots(figsize=(6, 6))
+sns.lineplot(data=prop_df, x="n_pre_synapses", y="prop", ax=ax)
+ax.set(
+    ylabel=f"Proportion of {objects} with\n{metric} < {thresh}",
+    xlabel="Number of pre-synapses",
+)
+
+from pkg.plot import savefig
+
+savefig(
+    f"prop_{objects}_below_threshold_metric={metric}_thresh={thresh}",
+    fig,
+    "prediction_of_state",
+    doc_save=True,
+)
+
+# %%
 
 features = [
     "n_pre_synapses",
@@ -189,7 +340,6 @@ sns.scatterplot(x=X_test["n_pre_synapses"], y=y_pred, ax=ax)
 
 
 # %%
-import seaborn as sns
 
 sns.histplot(x=group_info["n_pre_synapses"])
 
@@ -200,8 +350,6 @@ ptcs = ptcs[~ptcs.index.isin(manifest.index)]
 
 # %%
 
-import numpy as np
-from tqdm.auto import tqdm
 
 chunk_size = 100
 
@@ -243,50 +391,6 @@ outputs_per_cell[(outputs_per_cell > quants[0.9])].index[0]
 # %%
 trusted_cells = outputs_per_cell.to_frame().query("n_pre_synapses > 600").index
 
-# %%
-
-fig, axs = plt.subplots(
-    4, 6, figsize=(15, 12), sharex="col", sharey=True, constrained_layout=True
-)
-
-synapse_bins = np.linspace(0, 1000, 6).tolist()
-synapse_bins.append(1000000)
-
-for i, (mtype, group_info) in enumerate(all_infos.groupby("mtype")):
-    group_info = group_info.copy()
-    group_root_ids = group_info.index.get_level_values("root_id").unique()
-
-    idx = pd.IndexSlice
-    diffs = meta_diff_df.loc[idx[group_root_ids, scheme], :]["props_by_mtype"].values
-    diffs = pd.concat(diffs, axis=0).copy().reset_index()
-    group_info = group_info.query(f"scheme == '{scheme}'")
-    group_info = group_info.reset_index()
-    if scheme == "clean-and-merge":
-        group_info["random_seed"] = (
-            group_info["random_seed"].astype(
-                "str"
-            )  # replace({"None": np.nan}).astype(float)
-        )
-    group_info.set_index(["root_id", "random_seed", "order"], inplace=True)
-    diffs.set_index(["root_id", "random_seed", "order"], inplace=True)
-
-    diffs["n_pre_synapses"] = group_info["n_pre_synapses"]
-    diffs["path_length"] = group_info["path_length"]
-    diffs["n_post_synapses"] = group_info["n_post_synapses"]
-    diffs["n_nodes"] = group_info["n_nodes"]
-    diffs["cumulative_n_operations"] = group_info["cumulative_n_operations"]
-
-    diffs["synapse_count_bin"] = pd.cut(
-        diffs["n_pre_synapses"], synapse_bins, right=False
-    )
-    for j, (syn_bin, syn_group) in enumerate(diffs.groupby("synapse_count_bin")):
-        sns.histplot(data=syn_group, y="euclidean", ax=axs[i, j], stat="density")
-        axs[i, j].set_xticks([])
-        axs[0, j].set_title(f"# out synapses\n {syn_bin}")
-
-    ax = axs[i, 0]
-    ax.text(-1, 0.5, mtype, transform=ax.transAxes, fontsize="xx-large", va="center")
-    ax.set(ylabel="Euclidean distance \n to final output profile")
 
 # %%
 from sklearn.neighbors import NearestNeighbors
@@ -320,6 +424,6 @@ for i in range(5):
         ax.plot(
             np.full(len(y_collection), x_val), y_collection, alpha=0.01, color="gray"
         )
-        ax.plot([x_val], [mean], alpha=1, color="red", marker='_', markersize=10)
+        ax.plot([x_val], [mean], alpha=1, color="red", marker="_", markersize=10)
 
 # %%

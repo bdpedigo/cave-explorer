@@ -106,7 +106,6 @@ files["root_id"] = files["file"].str.split("=").str[1].str.split("-").str[0].ast
 files["order_by"] = files["file"].str.split("=").str[2].str.split("-").str[0]
 files["random_seed"] = files["file"].str.split("=").str[3].str.split("-").str[0]
 
-
 file_counts = files.groupby("root_id").size()
 has_all = file_counts[file_counts == 12].index
 

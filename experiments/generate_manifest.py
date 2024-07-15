@@ -21,7 +21,10 @@ client = start_client()
 # %%
 
 proofreading_df = client.materialize.query_table(PROOFREADING_TABLE)
+
 inhibitory_column_df = client.materialize.query_table(INHIBITORY_CTYPES_TABLE)
+inhibitory_column_lookup = inhibitory_column_df.set_index("pt_root_id")["cell_type"]
+
 mtypes_df = client.materialize.query_table(MTYPES_TABLE)
 mtypes_lookup = mtypes_df.drop_duplicates("pt_root_id").set_index("pt_root_id")[
     "cell_type"
@@ -73,6 +76,8 @@ assert (
 # %%
 neuron_manifest["mtype"] = joined_mtypes_lookup
 
+neuron_manifest["ctype"] = inhibitory_column_lookup
+neuron_manifest["ctype"] = neuron_manifest["ctype"].astype("Int64")
 
 # %%
 cloud_bucket = "allen-minnie-phase3"
@@ -147,14 +152,32 @@ current_nucs = client.materialize.query_table(
     NUCLEUS_TABLE,
     filter_in_dict={"pt_root_id": updated_root_options},
     # select_columns=["id", "pt_root_id"],
-).set_index("pt_root_id")["id"]
+)
+current_nucs_lookup = current_nucs.set_index("pt_root_id")["id"]
 neuron_manifest["target_id"] = (
-    neuron_manifest["current_root_id"].map(current_nucs).astype("Int64")
+    neuron_manifest["current_root_id"].map(current_nucs_lookup).astype("Int64")
 )
 neuron_manifest.dropna(subset=["target_id"], inplace=True)
 
 neuron_manifest["current_root_id"] = neuron_manifest["current_root_id"].astype(int)
 neuron_manifest["target_id"] = neuron_manifest["target_id"].astype(int)
+
+neuron_manifest["nuc_position"] = neuron_manifest.index.map(
+    current_nucs.set_index("pt_root_id")["pt_position"]
+)
+res = np.array([4, 4, 40])
+neuron_manifest["nuc_position"] = neuron_manifest["nuc_position"].apply(
+    lambda x: np.array(x) * res if x is not None else None
+)
+neuron_manifest["nuc_x"] = neuron_manifest["nuc_position"].apply(
+    lambda x: x[0] if x is not None else None
+)
+neuron_manifest["nuc_y"] = neuron_manifest["nuc_position"].apply(
+    lambda x: x[1] if x is not None else None
+)
+neuron_manifest["nuc_z"] = neuron_manifest["nuc_position"].apply(
+    lambda x: x[2] if x is not None else None
+)
 
 # %%
 
@@ -229,3 +252,11 @@ loaded_manifest = load_manifest()
 
 # %%
 assert loaded_manifest.equals(neuron_manifest)
+
+# %%
+neuron_manifest
+# %%
+for col in neuron_manifest.columns:
+    print((neuron_manifest[col] == neuron_manifest[col]).all())
+
+# %%

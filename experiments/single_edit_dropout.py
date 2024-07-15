@@ -168,39 +168,52 @@ metaedits_by_neuron.index.set_names(["root_id", "metaoperation_id"], inplace=Tru
 
 # %%
 
+metric = "cityblock"
 
-for root_id in example_root_ids:
+for root_id in example_root_ids[:5]:
     diffs = feature_diffs_by_neuron.loc[root_id]
     metaedits = metaedits_by_neuron.loc[root_id]
-    sorted_diff_index = diffs["counts"].sort_values("euclidean", ascending=False).index
+    sorted_diff_index = diffs["counts"].sort_values(metric, ascending=False).index
 
-    fig, axs = plt.subplots(2, 5, figsize=(16, 10), constrained_layout=True)
+    fig, axs = plt.subplots(1, 5, figsize=(15, 5), constrained_layout=True)
     for i, (feature_name, diffs) in enumerate(diffs.items()):
         diffs = diffs.loc[sorted_diff_index]
         has_merge = diffs.index.map(metaedits["has_merge"]).rename("has_merge")
-        ax = axs[0, i]
-        sns.scatterplot(
-            x=np.arange(len(diffs)), y=diffs["euclidean"], hue=has_merge, ax=ax
-        )
+        ax = axs[i]
+        sns.scatterplot(x=np.arange(len(diffs)), y=diffs[metric], hue=has_merge, ax=ax)
         ax.set_title(feature_name)
         if not i == 0:
             ax.get_legend().remove()
 
-        ax = axs[1, i]
-        sns.scatterplot(
-            x=np.arange(len(diffs)),
-            y=diffs["euclidean"],
-            hue=has_merge,
-            ax=ax,
-            legend=False,
-        )
-        ax.set_yscale("log")
+        ax.set_ylabel("Distance without edit")
 
-    axs[1, 2].set_xlabel("Operation rank")
+        # ax = axs[1, i]
+        # sns.scatterplot(
+        #     x=np.arange(len(diffs)),
+        #     y=diffs[metric],
+        #     hue=has_merge,
+        #     ax=ax,
+        #     legend=False,
+        # )
+        # ax.set_yscale("log")
+
+    axs[2].set_xlabel("Operation rank (by count distance)")
 
     target_id = manifest.loc[root_id, "target_id"]
     savefig(
         f"edit_dropout_importance_target_id={target_id}",
+        fig,
+        folder="single_edit_dropout",
+        doc_save=True,
+        group="dropout_importance",
+        caption=target_id,
+    )
+
+    for ax in axs:
+        ax.set_yscale("log")
+
+    savefig(
+        f"edit_dropout_importance_log_target_id={target_id}",
         fig,
         folder="single_edit_dropout",
         doc_save=True,
@@ -225,6 +238,9 @@ results = results.query('feature != "counts"')
 fig, ax = plt.subplots(1, 1, figsize=(8, 6))
 sns.stripplot(data=results, x="feature", y="corr", jitter=0.2)
 
+ax.set(ylabel="Spearman's rank correlation\nto count distance", xlabel="Feature")
+plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
+
 savefig(
     "corr_vs_counts",
     fig,
@@ -232,6 +248,41 @@ savefig(
     doc_save=True,
     group="corr_vs_counts",
 )
+
+# %%
+metric = "cityblock"
+fig, axs = plt.subplots(1, len(feature_diffs_by_neuron.columns), figsize=(20, 6))
+for i, feature in enumerate(feature_diffs_by_neuron.columns):
+    col = feature_diffs_by_neuron[feature].copy()
+    all_diffs = pd.concat(col.to_list(), ignore_index=True)
+    ax = axs[i]
+    sns.histplot(all_diffs[metric], ax=ax, bins=100)
+    ax.set(title=feature, xlabel="Dropout impact (cityblock)")
+
+savefig(
+    f"all_dropout_hist_metric={metric}",
+    fig,
+    folder="single_edit_dropout",
+    doc_save=True,
+)
+
+# %%
+metric = "cityblock"
+fig, axs = plt.subplots(1, len(feature_diffs_by_neuron.columns), figsize=(20, 6))
+for i, feature in enumerate(feature_diffs_by_neuron.columns):
+    col = feature_diffs_by_neuron[feature].copy()
+    all_diffs = pd.concat(col.to_list(), ignore_index=True)
+    ax = axs[i]
+    sns.histplot(all_diffs[metric], ax=ax, bins=100, log_scale=True)
+    ax.set(title=feature, xlabel="Dropout impact (cityblock)")
+
+savefig(
+    f"all_dropout_hist_log_metric={metric}",
+    fig,
+    folder="single_edit_dropout",
+    doc_save=True,
+)
+
 
 # %%
 

@@ -2,122 +2,37 @@
 
 import time
 
-import caveclient as cc
 import matplotlib.pyplot as plt
+import networkx as nx
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from cloudfiles import CloudFiles
 from giskard.plot import MatrixGrid
 from graspologic.embed import ClassicalMDS
 from graspologic.utils import pass_to_ranks
 from joblib import Parallel, delayed
+from matplotlib import pyplot as plt
 from networkframe import NetworkFrame
+from tqdm.auto import tqdm
 
 from pkg.io import write_variable
+from pkg.metrics import MotifFinder
 from pkg.neuronframe import load_neuronframe
 from pkg.plot import savefig, set_context
 from pkg.sequence import create_time_ordered_sequence
+from pkg.utils import load_manifest, start_client
 
 # %%
 
 set_context("paper", font_scale=1.5)
 
-client = cc.CAVEclient("minnie65_phase3_v1")
+client = start_client()
 
-query_neurons = client.materialize.query_table("connectivity_groups_v795")
+manifest = load_manifest()
 
-root_options = query_neurons["pt_root_id"].values
+nodes = manifest.query("in_inhibitory_column & has_all_sequences").copy()
 
-
-# %%
-
-nodes = pd.DataFrame()
-nodes["working_root_id"] = root_options
-
-# take my list of root IDs
-# make sure I have the latest root ID for each, using `get_latest_roots`
-is_current_mask = client.chunkedgraph.is_latest_roots(root_options)
-outdated_roots = root_options[~is_current_mask]
-root_map = dict(zip(root_options[is_current_mask], root_options[is_current_mask]))
-for outdated_root in outdated_roots:
-    latest_roots = client.chunkedgraph.get_latest_roots(outdated_root)
-    sub_nucs = client.materialize.query_table(
-        "nucleus_detection_v0", filter_in_dict={"pt_root_id": latest_roots}
-    )
-    if len(sub_nucs) == 1:
-        root_map[outdated_root] = sub_nucs.iloc[0]["pt_root_id"]
-    else:
-        print(f"Multiple nuc roots for {outdated_root}")
-
-updated_root_options = np.array([root_map[root] for root in root_options])
-nodes["current_root_id"] = updated_root_options
-
-# map to nucleus IDs
-current_nucs = client.materialize.query_table(
-    "nucleus_detection_v0",
-    filter_in_dict={"pt_root_id": updated_root_options},
-    # select_columns=["id", "pt_root_id"],
-).set_index("pt_root_id")["id"]
-nodes["target_id"] = nodes["current_root_id"].map(current_nucs)
-
-
-# %%
-timestamp = pd.to_datetime("2021-07-01 00:00:00", utc=True)
-
-nucs = client.materialize.query_table(
-    "nucleus_detection_v0",
-    filter_in_dict={"id": nodes["target_id"].to_list()},
-).set_index("id")
-nodes["pt_supervoxel_id"] = nodes["target_id"].map(nucs["pt_supervoxel_id"])
-nodes["timestamp_root_from_chunkedgraph"] = client.chunkedgraph.get_roots(
-    nodes["pt_supervoxel_id"], timestamp=timestamp
-)
-nodes["nuc_depth"] = nodes["target_id"].map(nucs["pt_position"].apply(lambda x: x[1]))
-
-past_nucs = client.materialize.query_table(
-    "nucleus_detection_v0",
-    filter_in_dict={"id": nodes["target_id"].to_list()},
-    # select_columns=["id", "pt_root_id"],
-    timestamp=timestamp,
-).set_index("id")["pt_root_id"]
-nodes["timestamp_root_from_table"] = nodes["target_id"].map(past_nucs)
-
-mtypes = client.materialize.query_table(
-    "allen_column_mtypes_v2", filter_in_dict={"target_id": nodes["target_id"].to_list()}
-)
-nodes["mtype"] = nodes["target_id"].map(mtypes.set_index("target_id")["cell_type"])
-
-# %%
-cloud_bucket = "allen-minnie-phase3"
-folder = "edit_sequences"
-
-cf = CloudFiles(f"gs://{cloud_bucket}/{folder}")
-
-files = list(cf.list())
-files = pd.DataFrame(files, columns=["file"])
-
-# pattern is root_id=number as the beginning of the file name
-# extract the number from the file name and store it in a new column
-files["root_id"] = files["file"].str.split("=").str[1].str.split("-").str[0].astype(int)
-files["order_by"] = files["file"].str.split("=").str[2].str.split("-").str[0]
-files["random_seed"] = files["file"].str.split("=").str[3].str.split("-").str[0]
-
-
-file_counts = files.groupby("root_id").size()
-has_all = file_counts[file_counts == 12].index
-
-files_finished = files.query("root_id in @has_all")
-
-root_options = files_finished["root_id"].unique()
-
-# %%
-nodes["has_sequence"] = nodes["current_root_id"].isin(root_options)
-nodes["ctype"] = nodes["target_id"].map(
-    query_neurons.set_index("target_id")["cell_type"]
-)
-# %%
-root_options = nodes.query("has_sequence")["working_root_id"]
+root_options = nodes.index
 
 # %%
 # timestamps = pd.date_range("2022-07-01", "2024-01-01", freq="M", tz="UTC")
@@ -240,26 +155,37 @@ synapselist = synapselist_at_time(pd.to_datetime("2021-07-01 00:00:00", utc=True
 
 # nodes = pd.DataFrame()
 # nodes.index = root_options
-timestamps = pd.date_range("2020-04-01", "2024-03-01", freq="M", tz="UTC")
+timestamps = pd.date_range("2020-04-01", "2024-07-01", freq="M", tz="UTC")
 
-used_nodes = nodes.query("working_root_id in @root_options")
+used_nodes = nodes.query("index in @root_options")
 nfs_by_time = {}
 for timestamp in timestamps:
     synapselist = synapselist_at_time(timestamp)
-    nf = NetworkFrame(
-        used_nodes.set_index("working_root_id").copy(), synapselist.copy()
-    )
+    nf = NetworkFrame(used_nodes.copy(), synapselist.copy())
     nfs_by_time[timestamp] = nf
 
 # %%
+nf.nodes
 
+# %%
 
+rows = []
 all_edits["timestamp"] = pd.to_datetime(all_edits["time"], utc=True)
 for timestamp in timestamps:
     applied_edits = all_edits.query("timestamp <= @timestamp")
+    n_appled_edits = applied_edits.shape[0]
+    rows.append({"timestamp": timestamp, "n_edits": n_appled_edits})
     n_edits_per_neuron = applied_edits.groupby("root_id").size()
     nf = nfs_by_time[timestamp]
     nf.nodes["n_edits"] = nf.nodes.index.map(n_edits_per_neuron)
+    # nf.nodes['ctype'] = nf.nodes.index.map(nodes['ctype'÷])
+
+time_df = pd.DataFrame(rows)
+
+# %%
+
+fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+sns.lineplot(data=time_df, x="timestamp", y="n_edits", ax=ax)
 
 # %%
 timebins = pd.cut(all_edits["timestamp"], bins=timestamps, right=True)
@@ -270,7 +196,7 @@ final_nf = nfs_by_time[timestamps[-1]]
 
 ordering = {"PTC": 0, "DTC": 1, "STC": 2, "ITC": 3}
 final_nf.nodes["mtype_order"] = final_nf.nodes["mtype"].map(ordering)
-final_nf.nodes = final_nf.nodes.sort_values(["mtype_order", "ctype", "nuc_depth"])
+final_nf.nodes = final_nf.nodes.sort_values(["mtype_order", "ctype", "nuc_y"])
 
 n_nodes = final_nf.nodes.shape[0]
 write_variable(n_nodes, "induced_subgraph/n_nodes")
@@ -336,6 +262,7 @@ plt.tight_layout()
 
 savefig("adjacency_by_time", fig, folder="induced_subgraph", doc_save=True)
 
+
 # %%
 diffs_by_time = pd.DataFrame(index=timestamps, columns=timestamps, dtype=float)
 for i, timestamp1 in enumerate(timestamps):
@@ -354,6 +281,7 @@ for i, timestamp1 in enumerate(timestamps):
         diffs_by_time.loc[timestamps[j], timestamps[i]] = diff
 
 diffs_by_time.fillna(0.0, inplace=True)
+
 
 # %%
 
@@ -444,6 +372,7 @@ for timestamp in timestamps:
     possible_edges = pd.DataFrame(
         possible_edges, index=node_counts.index, columns=node_counts.index
     )
+
 # %%
 synapse_counts_by_time = pd.concat(synapse_counts_by_time, axis=1)
 
@@ -489,13 +418,253 @@ ax.set(ylabel="# synapses (groupwise)", xlabel="# operations")
 
 
 # %%
-from sklearn.model_selection import StratifiedShuffleSplit
+# %%
 
-sss = StratifiedShuffleSplit(n_splits=10, test_size=0.5, random_state=88)
+mc = MotifFinder(orders=[2, 3], backend="grandiso", ignore_isolates=True)
+# %%
 
-nodes = final_nf.nodes
-for sub_ilocs, _ in sss.split(nodes.index, nodes["mtype"]):
-    subnodes = nodes.iloc[sub_ilocs]
-    subnodes.groupby("mtype").size()
+motif_matches_by_time = {}
+motif_counts_by_time = {}
+for i, (time_label, nf) in tqdm(enumerate(nfs_by_time.items()), total=len(timestamps)):
+    # if i < 15:
+    #     continue
+    adj = nf.to_sparse_adjacency(weight_col=None)
+    g = nx.from_scipy_sparse_array(adj, create_using=nx.DiGraph)
+    matches = mc.find_motif_monomorphisms(g)
+    motif_matches_by_time[time_label] = matches
+    motif_counts_by_time[time_label] = [
+        len(matches_by_motif) for matches_by_motif in matches
+    ]
 
 
+# %%
+last_motif_matches = motif_matches_by_time[timestamps[-1]]
+
+
+def matches_to_index(matches):
+    matches = pd.DataFrame(matches)
+    matches = matches.set_index(matches.columns.to_list()).index
+    return matches
+
+
+rows = []
+pbar = tqdm(total=len(timestamps))
+for time_label, matches_by_motif in motif_matches_by_time.items():
+    for motif_id, matches in enumerate(matches_by_motif):
+        matches = matches_to_index(matches)
+
+        last_matches = last_motif_matches[motif_id]
+        last_matches = matches_to_index(last_matches)
+
+        recall = len(last_matches.intersection(matches)) / len(last_matches)
+
+        precision = len(matches.intersection(last_matches)) / len(matches)
+
+        rows.append(
+            {
+                "timestamp": time_label,
+                "motif_id": motif_id,
+                "recall": recall,
+                "precision": precision,
+            }
+        )
+    pbar.update(1)
+
+# %%
+motif_recall_precision = pd.DataFrame(rows)
+time_map = dict(zip(timestamps, np.arange(len(timestamps))))
+motif_recall_precision["time_order"] = motif_recall_precision["timestamp"].map(time_map)
+motif_recall_precision["n_edits"] = (
+    motif_recall_precision["timestamp"].map(n_edits_by_time).fillna(0)
+)
+# %%
+motif_counts_by_time = pd.DataFrame(motif_counts_by_time).T
+# motif_counts_by_time /= motif_counts_by_time.min()
+norm_motif_counts_by_time = motif_counts_by_time.copy()
+norm_motif_counts_by_time = (
+    norm_motif_counts_by_time / norm_motif_counts_by_time.iloc[-1]
+)
+
+
+unique_subgraphs = mc.motifs
+scale = 0.75
+fig, axs = plt.subplots(
+    len(unique_subgraphs),
+    2,
+    figsize=(
+        10,
+        len(unique_subgraphs) * scale,
+    ),
+    constrained_layout=True,
+    gridspec_kw={"width_ratios": [scale, 10]},
+    sharex="col",
+)
+
+pos = {0: (-1, 0), 1: (1, 0), 2: (0, np.sqrt(2))}
+pad = 0.3
+for i, subgraph in enumerate(unique_subgraphs):
+    nx.draw(subgraph, ax=axs[i, 0], node_size=50, pos=pos, width=3)
+    axs[i, 0].set_axis_off()
+    axs[i, 0].set(xlim=(-1 - pad, 1 + pad), ylim=(-pad, np.sqrt(2) + pad))
+
+    ax = axs[i, 1]
+    data = motif_counts_by_time[i]
+    sns.lineplot(x=np.arange(len(data.values))[5:], y=data.values[5:], ax=ax)
+ax.set(xlabel="Month")
+
+# %%
+
+
+unique_subgraphs = mc.motifs
+scale = 0.75
+fig, axs = plt.subplots(
+    len(unique_subgraphs),
+    2,
+    figsize=(
+        10,
+        len(unique_subgraphs) * scale,
+    ),
+    constrained_layout=True,
+    gridspec_kw={"width_ratios": [scale, 10]},
+    sharex="col",
+)
+
+pos = {0: (-1, 0), 1: (1, 0), 2: (0, np.sqrt(2))}
+pad = 0.3
+for i, subgraph in enumerate(unique_subgraphs):
+    nx.draw(subgraph, ax=axs[i, 0], node_size=50, pos=pos, width=3)
+    axs[i, 0].set_axis_off()
+    axs[i, 0].set(xlim=(-1 - pad, 1 + pad), ylim=(-pad, np.sqrt(2) + pad))
+
+    ax = axs[i, 1]
+
+    # data = motif_counts_by_time[i]
+    # sns.lineplot(x=np.arange(len(data.values))[5:], y=data.values[5:], ax=ax)
+ax.set(xlabel="Month")
+
+# %%
+
+set_context(font_scale=2)
+n_motifs = len(mc.motifs)
+fig, axs = plt.subplots(
+    3, 5, figsize=(25, 15), sharex=True, sharey=True, constrained_layout=True
+)
+
+pos = {0: (-1, 0), 1: (1, 0), 2: (0, np.sqrt(2))}
+pad = 0.3
+hue = "n_edits"
+for i, subgraph in enumerate(unique_subgraphs):
+    ax = axs.flatten()[i]
+    data = motif_recall_precision.query("motif_id == @i")
+
+    sns.scatterplot(
+        data=data,
+        x="recall",
+        y="precision",
+        hue=hue,
+        legend=False if i != 0 else "brief",
+        ax=ax,
+        palette="coolwarm",
+        s=50,
+    )
+    sns.lineplot(
+        data=data,
+        x="recall",
+        y="precision",
+        ax=ax,
+    )
+    ax.set_title(f"Motif {i}")
+    ax.set_xlabel("Recall")
+    ax.set_ylabel("Precision")
+
+    if i == 0:
+        sns.move_legend(ax, "upper left", title="# edits")
+
+    sub_ax = ax.inset_axes([0.6, 0, 0.4, 0.4])
+    nx.draw(
+        subgraph,
+        ax=sub_ax,
+        node_size=300,
+        pos=pos,
+        width=5,
+        arrowsize=20,
+        node_color="black",
+        edge_color="grey",
+    )
+    # sub_ax.set_axis_off()
+    sub_ax.set(xlim=(-1 - pad, 1 + pad), ylim=(-pad, np.sqrt(2) + pad))
+
+    ax.set_xticks(np.linspace(0, 1, 5))
+    # ax.axis("on")
+    # ax.axison = True
+    # ax.set_xticklabels(xticklabels)
+    # ax.set_yticklabels(yticklabels)
+
+savefig("motif_recall_precision", fig, folder="induced_subgraph", doc_save=True)
+
+# %%
+
+mc = MotifFinder(orders=[2, 3, 4], backend="grandiso", ignore_isolates=True)
+# %%
+
+motif_matches_by_time = {}
+motif_counts_by_time = {}
+for i, (time_label, nf) in tqdm(enumerate(nfs_by_time.items()), total=len(timestamps)):
+    # if i < 15:
+    #     continue
+    adj = nf.to_sparse_adjacency(weight_col=None)
+    g = nx.from_scipy_sparse_array(adj, create_using=nx.DiGraph)
+    matches = mc.find_motif_monomorphisms(g)
+    motif_matches_by_time[time_label] = matches
+    motif_counts_by_time[time_label] = [
+        len(matches_by_motif) for matches_by_motif in matches
+    ]
+
+
+# %%
+last_motif_matches = motif_matches_by_time[timestamps[-1]]
+
+
+def matches_to_index(matches):
+    matches = pd.DataFrame(matches)
+    matches = matches.set_index(matches.columns.to_list()).index
+    return matches
+
+
+rows = []
+pbar = tqdm(total=len(timestamps))
+for time_label, matches_by_motif in motif_matches_by_time.items():
+    for motif_id, matches in enumerate(matches_by_motif):
+        matches = matches_to_index(matches)
+
+        last_matches = last_motif_matches[motif_id]
+        last_matches = matches_to_index(last_matches)
+
+        recall = len(last_matches.intersection(matches)) / len(last_matches)
+
+        precision = len(matches.intersection(last_matches)) / len(matches)
+
+        rows.append(
+            {
+                "timestamp": time_label,
+                "motif_id": motif_id,
+                "recall": recall,
+                "precision": precision,
+            }
+        )
+    pbar.update(1)
+
+# %%
+motif_recall_precision = pd.DataFrame(rows)
+time_map = dict(zip(timestamps, np.arange(len(timestamps))))
+motif_recall_precision["time_order"] = motif_recall_precision["timestamp"].map(time_map)
+motif_recall_precision["n_edits"] = (
+    motif_recall_precision["timestamp"].map(n_edits_by_time).fillna(0)
+)
+# %%
+motif_counts_by_time = pd.DataFrame(motif_counts_by_time).T
+# motif_counts_by_time /= motif_counts_by_time.min()
+norm_motif_counts_by_time = motif_counts_by_time.copy()
+norm_motif_counts_by_time = (
+    norm_motif_counts_by_time / norm_motif_counts_by_time.iloc[-1]
+)

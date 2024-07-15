@@ -1,4 +1,5 @@
 import pickle
+import re
 from time import sleep
 
 import numpy as np
@@ -261,7 +262,19 @@ def load_mtypes(client: CAVEclient):
     return mtypes
 
 
+def evaler(x):
+    x = x.strip("[]").strip(" ")
+    x = re.sub(r"\s+", ",", x)
+    x = eval(x)
+    x = np.array(x)
+    return x
+
+
 def load_manifest():
     path = OUT_PATH / "manifest" / "neuron_manifest.csv"
     manifest = pd.read_csv(path, index_col=0)
+    if "ctype" in manifest.columns:
+        manifest["ctype"] = manifest["ctype"].astype("Int64")
+    if "nuc_position" in manifest.columns:
+        manifest["nuc_position"] = manifest["nuc_position"].apply(evaler)
     return manifest
