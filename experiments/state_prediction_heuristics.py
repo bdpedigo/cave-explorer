@@ -783,18 +783,99 @@ print(f"Custom score: {custom_score(y_test, tuned_classifier.predict(X_test)):.2
 
 # %%
 
-from pkg.constants import MTYPES_TABLE
 from pkg.utils import start_client
 
 client = start_client()
 
-# %%
-mtypes = client.materialize.query_table(MTYPES_TABLE)
-mtypes = mtypes.query("classification_system == 'inhibitory_neuron'")
-
 
 # %%
 
-degrees = client.materialize.query_view(
-    "synapses_pni_2_in_out_degree", random_sample=10
+# degrees = client.materialize.query_view(
+#     "synapses_pni_2_in_out_degree", random_sample=10
+# )
+
+import os
+from pathlib import Path
+
+from tqdm import tqdm
+
+from pkg.utils import load_mtypes
+
+mtypes = load_mtypes(client)
+inhib_mtypes = mtypes.query("classification_system == 'inhibitory_neuron'")
+all_inhib_roots = inhib_mtypes.index
+
+out_path = Path("data/synapse_pull")
+
+
+files = os.listdir(out_path)
+
+pre_synapses = []
+for file in tqdm(files):
+    if "pre_synapses" in file:
+        chunk_pre_synapses = pd.read_csv(out_path / file)
+        pre_synapses.append(chunk_pre_synapses)
+pre_synapses = pd.concat(pre_synapses)
+
+post_synapses = []
+for file in tqdm(files):
+    if "post_synapses" in file:
+        chunk_post_synapses = pd.read_csv(out_path / file)
+        post_synapses.append(chunk_post_synapses)
+post_synapses = pd.concat(post_synapses)
+
+# %%
+pre_synapses["post_mtype"] = pre_synapses["post_pt_root_id"].map(mtypes["cell_type"])
+
+# %%
+
+pre_synapses = pre_synapses.query("pre_pt_root_id != post_pt_root_id")
+post_synapses = post_synapses.query("pre_pt_root_id != post_pt_root_id")
+
+# %%
+
+n_pre_synapses = (
+    pre_synapses.groupby("pre_pt_root_id").size().reindex(all_inhib_roots).fillna(0)
 )
+n_post_synapses = (
+    post_synapses.groupby("post_pt_root_id").size().reindex(all_inhib_roots).fillna(0)
+)
+
+# %%
+from joblib import Parallel, delayed
+from tqdm_joblib import tqdm_joblib
+
+
+def get_n_leaves_for_root(root_id):
+    return len(client.chunkedgraph.get_leaves(root_id, stop_layer=2))
+
+
+with tqdm_joblib(tqdm(desc="Getting n_leaves", total=len(all_inhib_roots))) as progress:
+    n_leaves = Parallel(n_jobs=12)(
+        delayed(get_n_leaves_for_root)(root_id) for root_id in all_inhib_roots
+    )
+
+# %%
+
+n_leaves = pd.Series(n_leaves, index=all_inhib_roots)
+n_leaves.to_csv(out_path / "n_leaves.csv")
+
+# %%
+inhib_features = pd.concat([n_pre_synapses, n_post_synapses, n_leaves], axis=1)
+inhib_features.columns = ["n_pre_synapses", "n_post_synapses", "n_nodes"]
+X = inhib_features.copy()
+X = X.query("n_pre_synapses > 0 & n_post_synapses > 0 & n_nodes > 0")
+X["n_pre_synapses"] = np.log10(X["n_pre_synapses"].astype(float))
+X["n_post_synapses"] = np.log10(X["n_post_synapses"].astype(float))
+X["n_nodes"] = np.log10(X["n_nodes"].astype(float))
+
+#%%
+y_scores = lda.decision_function(X)
+#%%
+y_scores = pd.Series(y_scores, index=X.index)
+
+y_scores.idxmax()
+
+#%%
+
+
