@@ -1,9 +1,3 @@
-#%%
-from pkg.utils import send_message
-
-send_message("Hello, world!")
-
-
 # %%
 import time
 from pathlib import Path
@@ -12,25 +6,24 @@ import numpy as np
 from caveclient import CAVEclient
 from joblib import Parallel, delayed
 
-from pkg.utils import load_mtypes
+from pkg.utils import load_mtypes, send_message, start_client
 
-client = CAVEclient("minnie65_phase3_v1")
-# mtypes =
+client = start_client()
+
 mtypes = load_mtypes(client)
-
-#%%
 
 # %%
 inhibitory_root_ids = mtypes.query("classification_system == 'inhibitory_neuron'").index
 
 # %%
 
-
 chunk_size = 50
 
 inhibitory_root_chunks = np.array_split(
     inhibitory_root_ids, np.ceil(len(inhibitory_root_ids) / chunk_size)
 )
+
+# %%
 
 out_path = Path("data/synapse_pull")
 
@@ -92,6 +85,9 @@ def query_synapses_for_chunk(chunk_ids, chunk_label, n_attempts=3):
             n_attempts -= 1
             continue
 
+    if chunk_label % 10 == 0:
+        send_message(f"Finished chunk {chunk_label}.")
+
     return pre_synapses, post_synapses
 
 
@@ -102,3 +98,5 @@ synapses_by_chunk = Parallel(n_jobs=8, verbose=True)(
     for i, chunk_ids in enumerate(inhibitory_root_chunks[:])
 )
 print(f"{time.time() - currtime:.3f} seconds elapsed.")
+
+# %%
