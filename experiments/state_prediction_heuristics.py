@@ -11,7 +11,6 @@ import numpy as np
 import pandas as pd
 import pyvista as pv
 import seaborn as sns
-from giskard.plot import MatrixGrid
 from joblib import Parallel, delayed
 from matplotlib.colors import LinearSegmentedColormap, ListedColormap, Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -34,9 +33,9 @@ from sklearn.preprocessing import QuantileTransformer
 from tqdm import tqdm
 from tqdm_joblib import tqdm_joblib
 
-from pkg.constants import MTYPES_TABLE, OUT_PATH
+from pkg.constants import OUT_PATH
 from pkg.plot import savefig, set_context
-from pkg.utils import load_casey_palette, load_manifest, load_mtypes, start_client
+from pkg.utils import load_manifest, load_mtypes, start_client
 
 # %%
 
@@ -720,7 +719,6 @@ y_scores = lda.decision_function(X)
 fig, ax = plt.subplots(figsize=(6, 6))
 sns.histplot(y_scores, ax=ax)
 
-
 qt = QuantileTransformer(n_quantiles=100, output_distribution="uniform")
 qt.fit(y_scores.reshape(-1, 1))
 
@@ -732,13 +730,6 @@ sns.move_legend(ax, loc="upper left", title="Euc. distance < 0.2")
 ax.set(xlabel="Log posterior ratio")
 ax.axvline(0, color="black", lw=1, ls="--")
 savefig("lda_decision_function", fig, file_name, doc_save=True)
-
-# %%
-
-y_posteriors = lda.predict_proba(X)[:, 1]
-
-fig, ax = plt.subplots(figsize=(6, 6))
-sns.histplot(y_posteriors, ax=ax)
 
 # %%
 precisions, recalls, thresholds = precision_recall_curve(
@@ -819,15 +810,10 @@ for file in tqdm(files):
         post_synapses.append(chunk_post_synapses)
 post_synapses = pd.concat(post_synapses)
 
-# %%
 pre_synapses["post_mtype"] = pre_synapses["post_pt_root_id"].map(mtypes["cell_type"])
-
-# %%
 
 pre_synapses = pre_synapses.query("pre_pt_root_id != post_pt_root_id")
 post_synapses = post_synapses.query("pre_pt_root_id != post_pt_root_id")
-
-# %%
 
 n_pre_synapses = (
     pre_synapses.groupby("pre_pt_root_id").size().reindex(all_inhib_roots).fillna(0)
@@ -879,18 +865,6 @@ sns.histplot(x=y_scores_new, ax=ax)
 ax.set_xlabel("Log posterior ratio")
 
 savefig("new_log_posterior_ratio", fig, file_name, doc_save=True)
-
-# %%
-X_trans_new = lda.transform(X_new)
-
-remapped_y = np.vectorize({True: "old", False: "old"}.get)(y)
-labels = np.array(remapped_y.tolist() + ["new"] * len(X_new))
-
-X_trans_combined = np.concatenate((X_trans, X_trans_new), axis=0).ravel()
-
-fig, ax = plt.subplots(figsize=(6, 6))
-
-sns.histplot(x=X_trans_new.ravel(), ax=ax)
 
 # %%
 
@@ -1015,7 +989,17 @@ pre_synapses["pre_log_odds_quant"] = pre_synapses["pre_pt_root_id"].map(
 # meta model thingy
 # include them in the clustering regardless of the posterior
 # see what cluster centroids look like relative to these cells
+# %%
 
+from giskard.plot import MatrixGrid
+
+from pkg.utils import load_casey_palette, load_mtypes
+
+manifest = load_manifest()
+
+ctypes = manifest["ctype"]
+
+casey_palette = load_casey_palette()
 
 # %%
 
@@ -1060,8 +1044,6 @@ label_order = [
 
 props_by_mtype = props_by_mtype.loc[:, label_order]
 
-sns.clustermap(props_by_mtype.T, xticklabels=False, row_cluster=False, figsize=(20, 10))
-
 # %%
 
 method = "ward"
@@ -1088,10 +1070,6 @@ label_ranking = means.mul(means.columns).sum(axis=1).sort_values()
 
 new_label_map = dict(zip(labels, label_ranking.index.get_indexer_for(labels)))
 
-# %%
-manifest = load_manifest()
-ctypes = manifest["ctype"]
-
 
 # %%
 
@@ -1100,14 +1078,20 @@ set_context(font_scale=2)
 
 colors = sns.color_palette("tab20", n_colors=k)
 palette = dict(zip(np.arange(1, k + 1), colors))
-color_labels = labels.map(palette).rename("Cluster")
+
+color_labels = labels.map(palette).rename("Cluster").copy()
 
 color_labels = color_labels.to_frame()
+
+color_labels["M-type"] = (
+    color_labels.index.to_series().map(mtypes["cell_type"]).map(casey_palette)
+)
+
 color_labels["Posterior quantile"] = labeled_inhib_features.loc[
     color_labels.index, "log_odds_quant"
 ]
 
-norm = Normalize(vmin=0.7, vmax=1)
+norm = Normalize(vmin=threshold, vmax=1)
 
 # colormap that is increasing reds from 0 to 1
 colors = [(1, 1, 1), (0, 0, 0)]
@@ -1119,15 +1103,16 @@ color_labels["Posterior quantile"] = color_labels["Posterior quantile"].map(
 
 color_labels["Motif group"] = color_labels.index.to_series().map(ctypes).map(palette)
 
-
 cgrid = sns.clustermap(
     props_by_mtype.T,
     cmap="Reds",
-    figsize=(30, 10),
+    figsize=(25, 10),
     row_cluster=False,
     col_colors=color_labels,
     col_linkage=linkage_matrix,
     xticklabels=False,
+    cbar_pos=None,
+    dendrogram_ratio=(0, 0.2),
 )
 ax = cgrid.ax_heatmap
 
@@ -1145,21 +1130,121 @@ for shift in shift_ilocs:
     ax.axvline(shift, color="black", lw=0.5)
 ax.set(xlabel="Inhibitory Neuron", ylabel="Excitatory Neuron Class")
 
+
+# final touches
+label_pos = labels.rename("label").to_frame().copy().loc[props_by_mtype.index]
+label_pos["pos"] = np.arange(len(label_pos))
+positions_by_label = label_pos.groupby("label")["pos"].mean()
+
+ax.set_xticks(positions_by_label.values)
+ax.set_xticklabels(positions_by_label.index)
+
+
 props_by_mtype.drop("label", axis=1, inplace=True)
 
 y_borders = [3, 5, 8, 12, 14]
 for y_border in y_borders:
     ax.axhline(y_border, color="black", lw=0.5)
 
-plt.savefig("excitatory_inhibitory_clustermap_w_tree.png", bbox_inches="tight")
+cgrid.ax_col_colors.yaxis.tick_left()
+
+savefig(
+    f"excitatory_inhibitory_clustermap_w_tree-metric={metric}-method={method}",
+    cgrid.figure,
+    folder="state_prediction_heuristics",
+    doc_save=True,
+)
+
+
+# colors = sns.color_palette("tab20", n_colors=k)
+# palette = dict(zip(np.arange(1, k + 1), colors))
+# color_labels = labels.map(palette).rename("Cluster")
+
+# color_labels = color_labels.to_frame()
+
+# color_labels["M-type"] = (
+#     color_labels.index.to_series().map(mtypes["cell_type"]).map(casey_palette)
+# )
+
+# color_labels["Posterior quantile"] = labeled_inhib_features.loc[
+#     color_labels.index, "log_odds_quant"
+# ]
+
+# norm = Normalize(vmin=threshold, vmax=1)
+
+# # colormap that is increasing reds from 0 to 1
+# colors = [(1, 1, 1), (0, 0, 0)]
+# cmap = LinearSegmentedColormap.from_list("custom", colors)
+
+# color_labels["Posterior quantile"] = color_labels["Posterior quantile"].map(
+#     lambda x: cmap(norm(x))
+# )
+
+# color_labels["Motif group"] = color_labels.index.to_series().map(ctypes).map(palette)
+
+sort_bys = ["label", "log_odds_quant"]
+props_by_mtype["label"] = labels.map(new_label_map)
+props_by_mtype["log_odds_quant"] = labeled_inhib_features.loc[
+    props_by_mtype.index, "log_odds_quant"
+]
+props_by_mtype = props_by_mtype.sort_values(sort_bys)
+props_by_mtype.drop(sort_bys, axis=1, inplace=True)
+color_labels = color_labels.loc[props_by_mtype.index]
+
+cgrid = sns.clustermap(
+    props_by_mtype.T,
+    cmap="Reds",
+    figsize=(25, 10),
+    row_cluster=False,
+    col_colors=color_labels,
+    col_cluster=False,
+    xticklabels=False,
+    cbar_pos=None,
+    dendrogram_ratio=(0, 0),
+)
+ax = cgrid.ax_heatmap
+
+# move the y-axis labels to the left
+ax.yaxis.tick_left()
+ax.set(ylabel="Excitatory Neuron Class", xlabel="Inhibitory Neuron")
+ax.yaxis.set_label_position("left")
+
+props_by_mtype["label"] = labels.map(new_label_map)
+shifts = props_by_mtype["label"] != props_by_mtype["label"].shift()
+shifts.iloc[0] = False
+shifts = shifts[shifts].index
+shift_ilocs = props_by_mtype.index.get_indexer_for(shifts)
+for shift in shift_ilocs:
+    ax.axvline(shift, color="black", lw=0.5)
+ax.set(xlabel="Inhibitory Neuron", ylabel="Excitatory Neuron Class")
+
+
+# final touches
+label_pos = labels.rename("label").to_frame().copy().loc[props_by_mtype.index]
+label_pos["pos"] = np.arange(len(label_pos))
+positions_by_label = label_pos.groupby("label")["pos"].mean()
+
+ax.set_xticks(positions_by_label.values)
+ax.set_xticklabels(positions_by_label.index)
+
+
+props_by_mtype.drop("label", axis=1, inplace=True)
+
+y_borders = [3, 5, 8, 12, 14]
+for y_border in y_borders:
+    ax.axhline(y_border, color="black", lw=0.5)
+
+cgrid.ax_col_colors.yaxis.tick_left()
+
+savefig(
+    f"excitatory_inhibitory_clustermap_sorted-metric={metric}-method={method}",
+    cgrid.figure,
+    folder="state_prediction_heuristics",
+    doc_save=True,
+)
 
 
 # %%
-
-casey_palette = load_casey_palette()
-
-# %%
-mtypes = client.materialize.query_table(MTYPES_TABLE).set_index("pt_root_id")
 
 sort_bys = ["label", "log_odds_quant"]
 props_by_mtype["label"] = labels.map(new_label_map)
@@ -1172,7 +1257,6 @@ props_by_mtype.drop(sort_bys, axis=1, inplace=True)
 mg = MatrixGrid(figsize=(25, 10))
 ax = mg.ax
 sns.heatmap(props_by_mtype.T, cmap="Reds", xticklabels=False, ax=ax)
-
 
 props_by_mtype["label"] = labels.map(new_label_map)
 shifts = props_by_mtype["label"] != props_by_mtype["label"].shift()
@@ -1212,6 +1296,8 @@ mtype_ax = mg.append_axes("top", size="5%", pad=0.05)
 # add the mtype labels
 palette = casey_palette.copy()
 plot_frame = mtypes.loc[props_by_mtype.index]["cell_type"].to_frame().copy()
+
+# def categorical_colormap
 unique_values = np.unique(plot_frame.values)
 value_map = dict(zip(unique_values, np.arange(len(unique_values))))
 plot_frame = plot_frame.replace(value_map)
@@ -1227,6 +1313,7 @@ sns.heatmap(
 )
 mtype_ax.set_ylabel("Mtype", rotation=0, ha="right", va="center")
 mtype_ax.set_xlabel("")
+
 
 # final touches
 label_pos = labels.rename("label").to_frame().copy().loc[props_by_mtype.index]
