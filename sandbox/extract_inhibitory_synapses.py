@@ -1,12 +1,13 @@
 # %%
 import time
 from pathlib import Path
+from time import sleep
 
 import numpy as np
-from caveclient import CAVEclient
 from joblib import Parallel, delayed
+from tqdm_joblib import tqdm_joblib
 
-from pkg.utils import load_mtypes, send_message, start_client
+from pkg.utils import load_mtypes, start_client
 
 client = start_client()
 
@@ -14,6 +15,7 @@ mtypes = load_mtypes(client)
 
 # %%
 inhibitory_root_ids = mtypes.query("classification_system == 'inhibitory_neuron'").index
+inhibitory_root_ids = inhibitory_root_ids.sort_values()
 
 # %%
 
@@ -28,8 +30,8 @@ inhibitory_root_chunks = np.array_split(
 out_path = Path("data/synapse_pull")
 
 
-def query_synapses_for_chunk(chunk_ids, chunk_label, n_attempts=3):
-    client = CAVEclient("minnie65_phase3_v1")
+def query_synapses_for_chunk(chunk_ids, chunk_label, n_attempts=4):
+    client = start_client()
 
     while n_attempts > 0:
         try:
@@ -55,6 +57,7 @@ def query_synapses_for_chunk(chunk_ids, chunk_label, n_attempts=3):
             )
             break
         except Exception:
+            sleep(10)
             n_attempts -= 1
             continue
 
@@ -82,21 +85,20 @@ def query_synapses_for_chunk(chunk_ids, chunk_label, n_attempts=3):
             )
             break
         except Exception:
+            sleep(10)
             n_attempts -= 1
             continue
-
-    if chunk_label % 10 == 0:
-        send_message(f"Finished chunk {chunk_label}.")
 
     return pre_synapses, post_synapses
 
 
 currtime = time.time()
 
-synapses_by_chunk = Parallel(n_jobs=8, verbose=True)(
-    delayed(query_synapses_for_chunk)(chunk_ids, i)
-    for i, chunk_ids in enumerate(inhibitory_root_chunks[:])
-)
+with tqdm_joblib(total=len(inhibitory_root_chunks)) as pbar:
+    synapses_by_chunk = Parallel(n_jobs=-1, verbose=True)(
+        delayed(query_synapses_for_chunk)(chunk_ids, i)
+        for i, chunk_ids in enumerate(inhibitory_root_chunks[:])
+    )
 print(f"{time.time() - currtime:.3f} seconds elapsed.")
 
 # %%

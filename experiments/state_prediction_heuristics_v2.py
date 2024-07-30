@@ -5,7 +5,6 @@ import pickle
 from itertools import chain, combinations
 from pathlib import Path
 
-import caveclient as cc
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -18,17 +17,21 @@ from nglui import statebuilder
 from nglui.segmentprops import SegmentProperties
 from scipy.cluster.hierarchy import fcluster, linkage
 from scipy.spatial.distance import cdist
-from scipy.stats import wilcoxon
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
-    accuracy_score,
-    confusion_matrix,
+    cohen_kappa_score,
     f1_score,
+    matthews_corrcoef,
     precision_recall_curve,
+    precision_score,
+    recall_score,
 )
 from sklearn.model_selection import (
     RepeatedStratifiedKFold,
 )
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import QuantileTransformer
 from tqdm import tqdm
 from tqdm_joblib import tqdm_joblib
@@ -43,22 +46,9 @@ file_name = "state_prediction_heuristics"
 
 set_context()
 
-client = cc.CAVEclient("minnie65_phase3_v1")
+client = start_client()
 mtypes = load_mtypes(client)
 
-distance_colors = sns.color_palette("Set1", n_colors=4)
-distance_palette = dict(
-    zip(["euclidean", "cityblock", "jensenshannon", "cosine"], distance_colors)
-)
-# TODO whether to implement this as a table of tables, one massive table...
-# nothing really feels satisfying here
-# perhaps a table of tables will work, and it can infill the index onto those tables
-# before doing a join or concat
-
-# TODO key the elements in the sequence on something other than metaoperation_id, this
-# will make it easier to join with the time-ordered dataframes which use "operation_id",
-# or do things like take "bouts" for computing metrics which are not tied to a specific
-# operation_id
 
 with open(OUT_PATH / "sequence_metrics" / "all_infos.pkl", "rb") as f:
     all_infos = pickle.load(f)
@@ -77,6 +67,16 @@ all_infos = all_infos.loc[
     all_infos.index.get_level_values("root_id").intersection(manifest.index)
 ]
 
+# %%
+
+n_filtered = (
+    all_infos.loc[pd.IndexSlice[:, "historical"], :]["is_filtered"]
+    .fillna(False)
+    .groupby("root_id")
+    .cumsum()
+)
+
+all_infos["n_filtered_edits"] = n_filtered
 
 # %%
 
@@ -155,6 +155,7 @@ for i, (mtype, group_info) in enumerate(all_infos.groupby("mtype")):
     diffs["n_post_synapses"] = group_info["n_post_synapses"]
     diffs["n_nodes"] = group_info["n_nodes"]
     diffs["cumulative_n_operations"] = group_info["cumulative_n_operations"]
+    diffs["n_filtered_edits"] = group_info["n_filtered_edits"]
 
     diffs["synapse_count_bin"] = pd.cut(
         diffs["n_pre_synapses"], synapse_bins, right=False
@@ -193,106 +194,44 @@ diffs = diffs.join(
             "n_post_synapses",
             "n_nodes",
             "cumulative_n_operations",
+            "n_filtered_edits",
+            "is_filtered",
         ]
     ]
 )
 
+diffs["is_filtered"] = diffs["is_filtered"].fillna(True)
+diffs = diffs.query("is_filtered")
 
 # %%
 
-fine_synapse_bins = np.linspace(0, 2000, 101)
 
-objects = "neurons"
 thresh = 0.2
 metric = "euclidean"
-rows = []
-for bin in fine_synapse_bins:
-    sub_diffs = diffs.query(f"n_pre_synapses >= {bin}")
-    if objects == "neurons":
-        idx = sub_diffs.groupby("root_id")["cumulative_n_operations"].idxmin()
-        sub_diffs = sub_diffs.loc[idx]
-    prop = (sub_diffs[metric] < thresh).mean()
-    rows.append({"n_pre_synapses": bin, "prop": prop})
-
-prop_df = pd.DataFrame(rows)
-
-fig, ax = plt.subplots(figsize=(6, 6))
-sns.lineplot(data=prop_df, x="n_pre_synapses", y="prop", ax=ax)
-ax.set(
-    ylabel=f"Proportion of {objects} with\n{metric} < {thresh}",
-    xlabel="Number of pre-synapses",
-)
-
-# %%
-fine_synapse_bins = np.linspace(0, 2000, 201)
-
-object = "neurons"
-rows = []
-for bin in fine_synapse_bins:
-    sub_diffs = diffs.query(f"n_pre_synapses >= {bin}")
-    if objects == "neurons":
-        idx = sub_diffs.groupby("root_id")["cumulative_n_operations"].idxmin()
-        sub_diffs = sub_diffs.loc[idx]
-    cell_types = sub_diffs.index.get_level_values("root_id").map(manifest["mtype"])
-    sub_diffs["cell_type"] = cell_types
-    for cell_type, cell_group in sub_diffs.groupby("cell_type"):
-        prop = (cell_group[metric] < thresh).mean()
-        rows.append({"n_pre_synapses": bin, "prop": prop, "cell_type": cell_type})
-
-prop_df = pd.DataFrame(rows)
-
-fig, ax = plt.subplots(figsize=(6, 6))
-sns.lineplot(data=prop_df, x="n_pre_synapses", y="prop", hue="cell_type", ax=ax)
-ax.set(
-    ylabel=f"Proportion of {objects} with\n{metric} < {thresh}",
-    xlabel="Number of pre-synapses",
-)
-
-# savefig(
-#     f"prop_{objects}_below_threshold_metric={metric}_thresh={thresh}",
-#     fig,
-#     file_name,
-#     doc_save=True,
-# )
-
-# %%
 
 diffs["mtype"] = diffs.index.get_level_values("root_id").map(manifest["mtype"])
-diffs["label"] = diffs["euclidean"] < 0.2
+diffs["label"] = diffs[metric] < thresh
 
 X = diffs[
     [
         "n_pre_synapses",
         "n_post_synapses",
         "n_nodes",
-        "cumulative_n_operations",
         "path_length",
         "label",
-    ]
-].copy()
-y = diffs["label"]
-
-sns.PairGrid(X, hue="label").map_upper(sns.scatterplot, alpha=0.3, linewidth=0, s=1)
-
-# %%
-
-diffs["label"] = diffs["euclidean"] < 0.2
-
-X = diffs[
-    [
-        "n_pre_synapses",
-        "n_post_synapses",
-        "n_nodes",
-        "cumulative_n_operations",
-        "path_length",
-        "label",
+        "n_filtered_edits",
     ]
 ].copy()
 
+X["n_pre_synapses"] = X["n_pre_synapses"].replace(0, 1)
+X["n_post_synapses"] = X["n_post_synapses"].replace(0, 1)
 X["n_pre_synapses"] = np.log10(X["n_pre_synapses"])
 X["n_post_synapses"] = np.log10(X["n_post_synapses"])
 X["n_nodes"] = np.log10(X["n_nodes"].astype(float))
 X["path_length"] = np.log10(X["path_length"].astype(float))
+X["n_filtered_edits"] = np.log10((X["n_filtered_edits"] + 1).astype(float))
+
+X = X.fillna(0)
 
 pg = sns.PairGrid(X, hue="label", corner=True)
 pg.map_lower(
@@ -307,36 +246,54 @@ fig = pg.figure
 savefig("proofreading_feature_pairplot", fig, file_name, doc_save=True)
 
 # %%
+fig, ax = plt.subplots(figsize=(6, 6))
 
-X = diffs[
-    [
-        "n_pre_synapses",
-        "n_post_synapses",
-        "n_nodes",
-        "cumulative_n_operations",
-        "path_length",
-    ]
-].copy()
-
-X = X.query(
-    "n_pre_synapses > 0 & n_post_synapses > 0 & n_nodes > 0 & cumulative_n_operations > 0 & path_length > 0"
+sns.scatterplot(
+    data=X,
+    x="n_pre_synapses",
+    y="n_post_synapses",
+    hue="label",
+    ax=ax,
+    alpha=0.7,
+    linewidth=0,
+    s=2,
 )
-X["n_pre_synapses"] = np.log10(X["n_pre_synapses"].astype(float))
-X["n_post_synapses"] = np.log10(X["n_post_synapses"].astype(float))
-X["n_nodes"] = np.log10(X["n_nodes"].astype(float))
-X["path_length"] = np.log10(X["path_length"].astype(float))
 
-y = diffs.loc[X.index, "euclidean"]
-y = y < 0.2
+# %%
 
+y = X["label"]
+X = X.drop(columns="label")
 
 lda = LinearDiscriminantAnalysis()
 lda.fit(X, y)
 
 y_pred = lda.predict(X)
+# %%
 
-acc = (y == y_pred).mean()
-print(acc)
+
+def compute_scores(X, y, y_pred):
+    counts = X.groupby("root_id").size()
+    inv_counts = 1 / counts
+    sample_weight = X.index.get_level_values("root_id").map(inv_counts)
+
+    precision = precision_score(y, y_pred, sample_weight=sample_weight, pos_label=True)
+    recall = recall_score(y, y_pred, sample_weight=sample_weight, pos_label=True)
+    f1 = f1_score(y, y_pred, sample_weight=sample_weight, pos_label=True)
+    coehns = cohen_kappa_score(y, y_pred, sample_weight=sample_weight)
+    matthews = matthews_corrcoef(y, y_pred, sample_weight=sample_weight)
+
+    scores = {
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "coehns": coehns,
+        "matthews": matthews,
+    }
+    return scores
+
+
+print(compute_scores(X, y, y_pred))
+
 
 # %%
 
@@ -347,127 +304,26 @@ def extract_features_and_labels(diffs, metric="euclidean", threshold=0.2):
             "n_pre_synapses",
             "n_post_synapses",
             "n_nodes",
-            "cumulative_n_operations",
             "path_length",
+            "label",
+            "n_filtered_edits",
         ]
     ].copy()
 
-    X.query(
-        "n_pre_synapses > 0 & n_post_synapses > 0 & n_nodes > 0 & cumulative_n_operations > 0 & path_length > 0",
-        inplace=True,
-    )
-    X["n_pre_synapses"] = np.log10(X["n_pre_synapses"].astype(float))
-    X["n_post_synapses"] = np.log10(X["n_post_synapses"].astype(float))
+    X["n_pre_synapses"] = X["n_pre_synapses"].replace(0, 1)
+    X["n_post_synapses"] = X["n_post_synapses"].replace(0, 1)
+    X["n_pre_synapses"] = np.log10(X["n_pre_synapses"])
+    X["n_post_synapses"] = np.log10(X["n_post_synapses"])
     X["n_nodes"] = np.log10(X["n_nodes"].astype(float))
     X["path_length"] = np.log10(X["path_length"].astype(float))
+    X["n_filtered_edits"] = np.log10((X["n_filtered_edits"] + 1).astype(float))
+
+    X = X.fillna(0)
 
     y = diffs.loc[X.index, metric]
     y = y < threshold
     return X, y
 
-
-# %%
-
-total_y = []
-total_y_pred = []
-
-
-def split_fit_predict(diffs, train_idx, test_idx):
-    # separate classification by cell type
-    total_y_test = []
-    total_y_train = []
-    total_y_pred = []
-    for cell_type, cell_type_diffs in diffs.groupby("mtype"):
-        sub_train_idx = train_idx.intersection(
-            cell_type_diffs.index.get_level_values("root_id")
-        )
-        sub_test_idx = test_idx.intersection(
-            cell_type_diffs.index.get_level_values("root_id")
-        )
-        X, y = extract_features_and_labels(cell_type_diffs)
-        X_train = X.loc[sub_train_idx]
-        y_train = y.loc[sub_train_idx]
-        X_test = X.loc[sub_test_idx]
-        y_test = y.loc[sub_test_idx]
-        lda = LinearDiscriminantAnalysis()
-        lda.fit(X_train, y_train)
-        y_pred = lda.predict(X_test)
-
-        total_y_train.append(y_train)
-        total_y_test.append(y_test)
-        total_y_pred.append(y_pred)
-
-    total_y_train = np.concatenate(total_y_train)
-    total_y_test = np.concatenate(total_y_test)
-    total_y_pred = np.concatenate(total_y_pred)
-    return total_y_train, total_y_test, total_y_pred
-
-
-rows = []
-splitter = RepeatedStratifiedKFold(n_splits=5, n_repeats=10, random_state=888)
-roots = X.index.get_level_values("root_id").unique()
-for i, (train_idx, test_idx) in enumerate(
-    splitter.split(roots, manifest.loc[roots, "mtype"].values)
-):
-    train_idx = roots[train_idx]
-    test_idx = roots[test_idx]
-
-    # split classification
-    y_train, y_test, y_pred = split_fit_predict(diffs, train_idx, test_idx)
-
-    # scoring
-    acc = accuracy_score(y_test, y_pred)
-    f1 = f1_score(y_test, y_pred, pos_label=True)
-    rows.append({"split": i, "acc": acc, "f1": f1, "method": "split"})
-
-    # pooled classification
-    X, y = extract_features_and_labels(diffs)
-    X_train = X.loc[train_idx]
-    y_train = y.loc[train_idx]
-    X_test = X.loc[test_idx]
-    y_test = y.loc[test_idx]
-    lda = LinearDiscriminantAnalysis()
-    lda.fit(X_train, y_train)
-    y_pred = lda.predict(X_test)
-
-    # scoring
-    acc = accuracy_score(y_test, y_pred)
-    f1 = f1_score(y_test, y_pred, pos_label=True)
-    rows.append({"split": i, "acc": acc, "f1": f1, "method": "pooled"})
-
-results_df = pd.DataFrame(rows)
-
-
-# %%
-fig, ax = plt.subplots(figsize=(6, 6))
-
-sns.stripplot(data=results_df, x="method", y="f1", ax=ax)
-
-ax.set_ylabel("F1 score (cross-validated)")
-
-savefig("pooled-vs-split-f1", fig, file_name, doc_save=True)
-
-# %%
-
-fig, ax = plt.subplots(figsize=(6, 6))
-
-sns.stripplot(data=results_df, x="method", y="acc", ax=ax)
-
-ax.set_ylabel("Accuracy (cross-validated)")
-
-savefig("pooled-vs-split-acc", fig, file_name, doc_save=True)
-
-# %%
-
-wilcoxon(
-    results_df.query("method == 'split'").set_index("split")["f1"],
-    results_df.query("method == 'pooled'").set_index("split")["f1"],
-)
-# %%
-np.mean(
-    results_df.query("method == 'split'").set_index("split")["f1"]
-    - results_df.query("method == 'pooled'").set_index("split")["f1"]
-)
 
 # %%
 
@@ -477,18 +333,41 @@ def powerset(iterable):
     return chain.from_iterable(combinations(s, r) for r in range(len(s) + 1))
 
 
-feature_sets = list(powerset(X.columns))[1:]  # drop null set
+all_features = [
+    "n_pre_synapses",
+    "n_post_synapses",
+    "n_nodes",
+    "path_length",
+    "n_filtered_edits",
+]
+
+feature_sets = list(powerset(all_features))[1:]  # drop null set
 feature_sets = [list(f) for f in feature_sets]
-all_features = X.columns.tolist()
 
 X, y = extract_features_and_labels(diffs)
 rows = []
 drop_cols = None  #  ["cumulative_n_operations"]
 
+
+quantile_lda = Pipeline(
+    [
+        ("quantile", QuantileTransformer(output_distribution="normal")),
+        ("lda", LinearDiscriminantAnalysis()),
+    ]
+)
+
+models = {
+    "lda": LinearDiscriminantAnalysis(),
+    "quantile-lda": quantile_lda,
+    "rf": RandomForestClassifier(max_depth=5),
+    "lr": LogisticRegression(),
+}
+
 splitter = RepeatedStratifiedKFold(n_splits=5, n_repeats=10, random_state=888)
 roots = X.index.get_level_values("root_id").unique()
-for i, (train_idx, test_idx) in enumerate(
-    splitter.split(roots, manifest.loc[roots, "mtype"].values)
+for i, (train_idx, test_idx) in tqdm(
+    enumerate(splitter.split(roots, manifest.loc[roots, "mtype"].values)),
+    total=splitter.get_n_splits(),
 ):
     train_idx = roots[train_idx]
     test_idx = roots[test_idx]
@@ -501,17 +380,18 @@ for i, (train_idx, test_idx) in enumerate(
         X_test = this_X.loc[test_idx]
         y_test = y.loc[test_idx]
 
-        lda = LinearDiscriminantAnalysis()
-        lda.fit(X_train, y_train)
-        y_pred = lda.predict(X_test)
+        for model_name, model in models.items():
+            model.fit(X_train, y_train)
+            y_pred = model.predict(X_test)
 
-        acc = accuracy_score(y_test, y_pred)
-        f1 = f1_score(y_test, y_pred, pos_label=True)
+            row = compute_scores(X_test, y_test, y_pred)
+            row["split"] = i
+            row["model_name"] = model_name
 
-        row = {"split": i, "acc": acc, "f1": f1}
-        for feature in all_features:
-            row[feature] = feature in feature_set
-        rows.append(row)
+            for feature in all_features:
+                row[feature] = feature in feature_set
+
+            rows.append(row)
 
 results_df = pd.DataFrame(rows)
 
@@ -675,22 +555,28 @@ def plot_upset_indicators(
     ax.set_xticks([])
 
 
-value = "f1"
-results_df[f"mean_{value}"] = results_df.groupby(all_features).transform("mean")[value]
-results_df = results_df.sort_values([f"mean_{value}", "split"], ascending=False)
-upsetplot = upset_catplot(
-    results_df,
-    x=all_features,
-    y=value,
-    kind="strip",
-    estimator=np.mean,
-    estimator_width=0.3,
-    s=80,
-    alpha=0.3,
-)
-upsetplot.ax.set_ylabel("F1 score")
+# value = "coehns"
+# results_df[f"mean_{value}"] = results_df.groupby(all_features).transform("mean")[value]
+# results_df = results_df.sort_values([f"mean_{value}", "split"], ascending=False)
+# upsetplot = upset_catplot(
+#     results_df,
+#     x=all_features,
+#     y=value,
+#     hue="model_name",
+#     kind="strip",
+#     # estimator=np.mean,
+#     # estimator_width=0.3,
+#     s=80,
+#     alpha=0.3,
+# )
+# upsetplot.ax.set_ylabel("F1 score")
 
-savefig("feature_set_f1_scores", upsetplot.fig, file_name, doc_save=True)
+# savefig("feature_set_f1_scores", upsetplot.fig, file_name, doc_save=True)
+
+# %%
+results_df.groupby(all_features + ["model_name"])["f1"].mean().sort_values(
+    ascending=False
+).head(20)
 
 # %%
 final_feature_set = ["n_pre_synapses", "n_post_synapses", "n_nodes"]
@@ -701,39 +587,34 @@ X = X[final_feature_set]
 lda = LinearDiscriminantAnalysis()
 lda.fit(X, y)
 y_pred = lda.predict(X)
-tn, fp, fn, tp = confusion_matrix(y, y_pred, normalize="all").ravel()
-
-
-X_trans = lda.transform(X)
-
-fig, ax = plt.subplots(figsize=(6, 6))
-sns.histplot(x=X_trans.ravel(), hue=y, ax=ax, stat="density")
-sns.move_legend(ax, loc="upper left", title="Euc. distance < 0.2")
-savefig("lda_transformed", fig, file_name, doc_save=True)
-
 
 # %%
 
 y_scores = lda.decision_function(X)
+y_scores = pd.Series(y_scores, index=X.index)
 
 fig, ax = plt.subplots(figsize=(6, 6))
 sns.histplot(y_scores, ax=ax)
 
 qt = QuantileTransformer(n_quantiles=100, output_distribution="uniform")
-qt.fit(y_scores.reshape(-1, 1))
+qt.fit(y_scores.values.reshape(-1, 1))
 
 # %%
 
 fig, ax = plt.subplots(figsize=(6, 6))
-sns.histplot(x=y_scores.ravel(), hue=y, ax=ax, stat="density")
+sns.histplot(x=y_scores.values.ravel(), hue=y, ax=ax, stat="density")
 sns.move_legend(ax, loc="upper left", title="Euc. distance < 0.2")
 ax.set(xlabel="Log posterior ratio")
 ax.axvline(0, color="black", lw=1, ls="--")
 savefig("lda_decision_function", fig, file_name, doc_save=True)
 
 # %%
+counts = X.groupby("root_id").size()
+inv_counts = 1 / counts
+sample_weight = X.index.get_level_values("root_id").map(inv_counts)
+
 precisions, recalls, thresholds = precision_recall_curve(
-    y, y_scores, drop_intermediate=True
+    y, y_scores, drop_intermediate=True, sample_weight=sample_weight
 )
 
 i = 200
@@ -765,9 +646,54 @@ savefig("precision_recall_curve", fig, file_name, doc_save=True)
 # %%
 
 
-client = start_client()
+fig, ax = plt.subplots(figsize=(6, 6))
+sns.histplot(x=y_scores.values, hue=y.values, ax=ax)
+ax.set(ylabel="Count (neuron-states)")
+right_ax = plt.twinx(ax)
 
-mtypes = load_mtypes(client)
+colors = sns.color_palette("tab10", n_colors=6)
+sns.lineplot(
+    x=threshold_df["threshold"],
+    y=threshold_df["precision"],
+    ax=right_ax,
+    label="Precision",
+    color=colors[3],
+)
+sns.lineplot(
+    x=threshold_df["threshold"],
+    y=threshold_df["recall"],
+    ax=right_ax,
+    label="Recall",
+    color=colors[4],
+)
+
+threshold_df["f1"] = (
+    2
+    * threshold_df["precision"]
+    * threshold_df["recall"]
+    / (threshold_df["precision"] + threshold_df["recall"])
+)
+sns.lineplot(
+    x=threshold_df["threshold"],
+    y=threshold_df["f1"],
+    ax=right_ax,
+    label="F1",
+    color=colors[5],
+)
+
+right_ax.set_ylabel("Precision/Recall/F1")
+right_ax.set_ylim(0, 1)
+
+sns.move_legend(ax, "center left", title="Euc. dist\n< 0.2")
+sns.move_legend(right_ax, "upper right")
+
+ax.spines[["right"]].set_visible(True)
+
+savefig("precision_recall_overlay", fig, folder=file_name)
+
+# %%
+
+
 inhib_mtypes = mtypes.query("classification_system == 'inhibitory_neuron'")
 all_inhib_roots = inhib_mtypes.index
 
@@ -801,6 +727,9 @@ n_pre_synapses = (
 n_post_synapses = (
     post_synapses.groupby("post_pt_root_id").size().reindex(all_inhib_roots).fillna(0)
 )
+
+# %%
+pre_synapses.query("pre_pt_root_id == 864691135697284250")
 
 # %%
 
@@ -857,7 +786,13 @@ inhib_features = inhib_features.join(changes_df)
 # %%
 
 X_new = inhib_features.copy()
-X_new = X_new.query("n_pre_synapses > 0 & n_post_synapses > 0 & n_nodes > 0")
+
+# %%%
+
+X_new["n_pre_synapses"].replace(0, 1, inplace=True)
+X_new["n_post_synapses"].replace(0, 1, inplace=True)
+X_new["n_nodes"].replace(0, 1, inplace=True)
+
 X_new["n_pre_synapses"] = np.log10(X_new["n_pre_synapses"].astype(float))
 X_new["n_post_synapses"] = np.log10(X_new["n_post_synapses"].astype(float))
 X_new["n_nodes"] = np.log10(X_new["n_nodes"].astype(float))
@@ -878,13 +813,41 @@ ax.set_xlabel("Log posterior ratio")
 savefig("new_log_posterior_ratio", fig, file_name, doc_save=True)
 
 # %%
-fig, ax = plt.subplots(figsize=(6, 6))
+inhib_features["log_posterior_ratio"] = y_scores_new
+inhib_features["mtype"] = inhib_features.index.map(mtypes["cell_type"])
 
-sns.histplot(x=y_scores_new, ax=ax, cumulative=True, element="step")
-poly = ax.get_children()[0]
-ax.set_xlabel("Log posterior ratio")
+# %%
+from pkg.utils import load_casey_palette
 
-# savefig("new_log_posterior_ratio", fig, file_name, doc_save=True)
+casey_palette = load_casey_palette()
+
+fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+sns.histplot(
+    data=inhib_features,
+    x="log_posterior_ratio",
+    hue="mtype",
+    element="step",
+    palette=casey_palette,
+)
+ax.set(xlabel="Log posterior ratio")
+sns.move_legend(ax, "upper left")
+savefig("log_posterior_ratio_count_by_mtype", fig, folder=file_name)
+
+# %%
+
+fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+sns.histplot(
+    data=inhib_features,
+    x="log_posterior_ratio",
+    hue="mtype",
+    stat="density",
+    common_norm=False,
+    element="step",
+    palette=casey_palette,
+)
+sns.move_legend(ax, loc="upper left")
+ax.set(xlabel="Log posterior ratio")
+savefig("log_posterior_ratio_density_by_mtype", fig, folder=file_name)
 
 # %%
 bins = np.histogram_bin_edges(y_scores_new, bins="auto")
@@ -898,6 +861,50 @@ sns.lineplot(x=survival.index.categories.mid, y=survival.values, ax=ax)
 ax.set_xlabel("Log posterior ratio")
 
 savefig("log_posterior_ratio_survival", fig, file_name, doc_save=True)
+
+# %%
+
+with sns.axes_style("white"):
+    fig, ax = plt.subplots(figsize=(6, 6))
+    sns.lineplot(
+        x=survival.index.categories.mid,
+        y=survival.values,
+        ax=ax,
+        # color="darkblue",
+        linewidth=3,
+        label="Survival",
+    )
+    ax.set_xlabel("Log posterior ratio")
+    sns.move_legend(ax, loc="lower left")
+
+    right_ax = plt.twinx(ax)
+    sns.lineplot(
+        data=threshold_df,
+        x="threshold",
+        y="recall",
+        ax=right_ax,
+        color="red",
+        label="Recall",
+    )
+    sns.lineplot(
+        data=threshold_df,
+        x="threshold",
+        y="precision",
+        ax=right_ax,
+        color="purple",
+        label="Precision",
+    )
+    sns.lineplot(
+        data=threshold_df, x="threshold", y="f1", ax=right_ax, color="green", label="F1"
+    )
+    sns.move_legend(right_ax, loc="upper right")
+    right_ax.set_ylabel("Estimated Precision/Recall/F1")
+
+    ax.spines["right"].set_visible(True)
+
+
+savefig("log_posterior_ratio_survival_precision_recall", fig, file_name, doc_save=True)
+
 
 # %%
 
@@ -922,8 +929,9 @@ seg_df["log_odds"] = np.nan
 seg_df.loc[y_scores_new.index, "log_odds"] = y_scores_new
 seg_df = seg_df.dropna()
 seg_df["log_odds_quant"] = y_scores_quant_new
+seg_df["log_odds_rank"] = seg_df["log_odds"].rank()
 
-
+# %%
 n_randoms = 10
 for i in range(n_randoms):
     seg_df[f"random_{i}"] = np.random.uniform(0, 1, size=len(seg_df))
@@ -938,6 +946,7 @@ seg_prop = SegmentProperties.from_dataframe(
         "n_nodes",
         "log_odds",
         "log_odds_quant",
+        "log_odds_rank",
     ]
     + [f"random_{i}" for i in range(n_randoms)],
 )
@@ -966,14 +975,16 @@ sb.render_state()
 
 
 # %%
+
 proofreading_df = client.materialize.query_table("proofreading_status_and_strategy")
 
 proofreading_df.set_index("pt_root_id", inplace=True)
 
-seg_df = seg_df.join(proofreading_df[["strategy_dendrite", "strategy_axon"]])
+seg_df = seg_df.join(
+    proofreading_df[["strategy_dendrite", "strategy_axon"]], how="left"
+)
 
 # %%
-
 
 fig, ax = plt.subplots(figsize=(6, 6))
 sns.histplot(data=seg_df, x="log_odds", hue="strategy_axon", stat="count")
@@ -1028,9 +1039,7 @@ labeled_inhib_features = labeled_inhib_features.dropna()
 labeled_inhib_features["log_odds_quant"] = y_scores_quant_new
 
 # %%
-pre_synapses["pre_log_odds_quant"] = pre_synapses["pre_pt_root_id"].map(
-    labeled_inhib_features["log_odds_quant"]
-)
+
 
 # TODO add casey's cells back in here, including those which were misclassified in the
 # meta model thingy
@@ -1049,213 +1058,308 @@ casey_palette = load_casey_palette()
 
 # %%
 
-threshold = 0.6
-method = "complete"
-metric = "cosine"
-k = 30
-
-pre_synapses_by_threshold = pre_synapses.query(f"pre_log_odds_quant > {threshold}")
-
-projection_counts = pre_synapses_by_threshold.groupby("pre_pt_root_id")[
-    "post_mtype"
-].value_counts()
-
+threshold_feature = "log_odds"
+method = "ward"
+metric = "euclidean"
+k = 40
 remove_inhib = True
-if remove_inhib:
-    projection_counts = projection_counts.drop(
-        labels=["DTC", "ITC", "PTC", "STC"], level="post_mtype"
+labels_by_threshold = {}
+for threshold in np.arange(0, 11, 1).astype(int):
+    pre_synapses[f"pre_{threshold_feature}"] = pre_synapses["pre_pt_root_id"].map(
+        labeled_inhib_features[threshold_feature]
     )
 
-# turn counts into proportions
-projection_props = projection_counts / projection_counts.groupby("pre_pt_root_id").sum()
+    pre_synapses_by_threshold = pre_synapses.query(
+        f"pre_{threshold_feature} > {threshold}"
+    )
 
-props_by_mtype = projection_props.unstack().fillna(0)
+    projection_counts = pre_synapses_by_threshold.groupby("pre_pt_root_id")[
+        "post_mtype"
+    ].value_counts()
 
-label_order = [
-    "L2a",
-    "L2b",
-    "L2c",
-    "L3a",
-    "L3b",
-    "L4a",
-    "L4b",
-    "L4c",
-    "L5a",
-    "L5b",
-    "L5ET",
-    "L5NP",
-    "L6short-a",
-    "L6short-b",
-    "L6tall-a",
-    "L6tall-b",
-    "L6tall-c",
-]
+    if remove_inhib:
+        projection_counts = projection_counts.drop(
+            labels=["DTC", "ITC", "PTC", "STC"], level="post_mtype"
+        )
 
-props_by_mtype = props_by_mtype.loc[:, label_order]
+    # turn counts into proportions
+    projection_props = (
+        projection_counts / projection_counts.groupby("pre_pt_root_id").sum()
+    )
 
+    props_by_mtype = projection_props.unstack().fillna(0)
 
-linkage_matrix = linkage(props_by_mtype, method=method, metric=metric)
+    label_order = [
+        "L2a",
+        "L2b",
+        "L2c",
+        "L3a",
+        "L3b",
+        "L4a",
+        "L4b",
+        "L4c",
+        "L5a",
+        "L5b",
+        "L5ET",
+        "L5NP",
+        "L6short-a",
+        "L6short-b",
+        "L6tall-a",
+        "L6tall-b",
+        "L6tall-c",
+    ]
 
-# leaves = leaves_list(linkage_matrix)[::-1]
-from scipy.cluster.hierarchy import dendrogram
+    props_by_mtype = props_by_mtype.loc[:, label_order]
 
-dend = dendrogram(linkage_matrix, no_plot=True, color_threshold=-np.inf)
-leaves = dend["leaves"]
+    linkage_matrix = linkage(props_by_mtype, method=method, metric=metric)
 
-props_by_mtype = props_by_mtype.iloc[leaves]
+    # leaves = leaves_list(linkage_matrix)[::-1]
+    from scipy.cluster.hierarchy import dendrogram
 
-linkage_matrix = linkage(props_by_mtype, method=method, metric=metric)
-labels = pd.Series(
-    fcluster(linkage_matrix, k, criterion="maxclust"), index=props_by_mtype.index
+    dend = dendrogram(linkage_matrix, no_plot=True, color_threshold=-np.inf)
+    leaves = dend["leaves"]
+
+    props_by_mtype = props_by_mtype.iloc[leaves]
+
+    linkage_matrix = linkage(props_by_mtype, method=method, metric=metric)
+    labels = pd.Series(
+        fcluster(linkage_matrix, k, criterion="maxclust"), index=props_by_mtype.index
+    )
+
+    weighting = props_by_mtype.copy()
+    weighting.columns = np.arange(len(weighting.columns))
+    weighting["label"] = labels
+
+    means = weighting.groupby("label").mean()
+    label_ranking = means.mul(means.columns).sum(axis=1).sort_values()
+
+    new_label_map = dict(zip(labels, label_ranking.index.get_indexer_for(labels)))
+
+    set_context(font_scale=2)
+
+    import colorcet as cc
+
+    # colors = sns.color_palette("tab20", n_colors=k)
+    colors = cc.glasbey_light
+    palette = dict(zip(np.arange(1, k + 1), colors))
+
+    color_labels = labels.map(palette).rename("Cluster").copy()
+
+    color_labels = color_labels.to_frame()
+
+    color_labels["Posterior quantile"] = labeled_inhib_features.loc[
+        color_labels.index, "log_odds_quant"
+    ]
+
+    color_labels["M-type"] = (
+        color_labels.index.to_series().map(mtypes["cell_type"]).map(casey_palette)
+    )
+
+    norm = Normalize(
+        vmin=labeled_inhib_features.loc[color_labels.index, "log_odds_quant"].min(),
+        vmax=labeled_inhib_features.loc[color_labels.index, "log_odds_quant"].max(),
+    )
+    colors = [(1, 1, 1), (0, 0, 0)]
+    cmap = LinearSegmentedColormap.from_list("custom", colors)
+
+    color_labels["Posterior quantile"] = color_labels["Posterior quantile"].map(
+        lambda x: cmap(norm(x))
+    )
+
+    norm = Normalize(
+        vmin=0,
+        # vmax=labeled_inhib_features.loc[color_labels.index, "n_operations"].max(),
+        vmax=100,
+    )
+    colors = [(1, 1, 1), (0, 0, 0)]
+    cmap = LinearSegmentedColormap.from_list("custom", colors)
+
+    color_labels["# edits (0-100)"] = labeled_inhib_features.loc[
+        color_labels.index, "n_operations"
+    ].map(lambda x: cmap(norm(x)))
+
+    color_labels["Motif group"] = (
+        color_labels.index.to_series().map(ctypes).map(palette)
+    )
+
+    props_by_mtype.to_csv(
+        OUT_PATH / f"exc_projection_proportions_by_mtype_threshold={threshold}.csv"
+    )
+
+    cgrid = sns.clustermap(
+        props_by_mtype.T,
+        cmap="Reds",
+        figsize=(25, 10),
+        row_cluster=False,
+        col_colors=color_labels,
+        col_linkage=linkage_matrix,
+        xticklabels=False,
+        cbar_pos=None,
+        dendrogram_ratio=(0, 0.2),
+    )
+    ax = cgrid.ax_heatmap
+
+    cgrid.figure.suptitle(
+        f"{threshold_feature} threshold = {threshold}", fontsize="x-large", y=1.02
+    )
+
+    from matplotlib.patches import Rectangle
+
+    rect = Rectangle(
+        (0, props_by_mtype.shape[1] + 2),
+        200,
+        1,
+        fill=True,
+        edgecolor="black",
+        facecolor="black",
+        lw=1,
+        clip_on=False,
+    )
+    ax.add_patch(rect)
+
+    text = ax.text(
+        200,
+        props_by_mtype.shape[1] + 2.5,
+        f"  200 neurons ({props_by_mtype.shape[0]} total)",
+        ha="left",
+        va="center",
+        clip_on=False,
+    )
+
+    # move the y-axis labels to the left
+    ax.yaxis.tick_left()
+    ax.set(ylabel="Excitatory Neuron Class", xlabel="Inhibitory Neuron")
+    ax.yaxis.set_label_position("left")
+
+    props_by_mtype = props_by_mtype.iloc[cgrid.dendrogram_col.reordered_ind]
+    props_by_mtype["label"] = labels.map(new_label_map)
+    shifts = props_by_mtype["label"] != props_by_mtype["label"].shift()
+    shifts.iloc[0] = False
+    shifts = shifts[shifts].index
+    shift_ilocs = props_by_mtype.index.get_indexer_for(shifts)
+    for shift in shift_ilocs:
+        ax.axvline(shift, color="black", lw=0.5)
+    ax.set(xlabel="Inhibitory Neuron", ylabel="Excitatory Neuron Class")
+
+    label_pos = labels.rename("label").to_frame().copy().loc[props_by_mtype.index]
+    label_pos["pos"] = np.arange(len(label_pos))
+    positions_by_label = label_pos.groupby("label")["pos"].mean()
+
+    ax.set_xticks(positions_by_label.values)
+    ax.set_xticklabels(positions_by_label.index)
+
+    props_by_mtype.drop("label", axis=1, inplace=True)
+
+    y_borders = [3, 5, 8, 12, 14]
+    for y_border in y_borders:
+        ax.axhline(y_border, color="black", lw=0.5)
+
+    cgrid.ax_col_colors.yaxis.tick_left()
+
+    savefig(
+        f"excitatory_inhibitory_clustermap_w_tree-threshold={threshold}-k={k}-metric={metric}-method={method}",
+        cgrid.figure,
+        folder="state_prediction_heuristics",
+        doc_save=True,
+    )
+
+    sort_bys = ["label", "log_odds_quant"]
+    props_by_mtype_sorted = props_by_mtype.copy()
+    props_by_mtype_sorted["label"] = labels.map(new_label_map)
+    props_by_mtype_sorted["log_odds_quant"] = labeled_inhib_features.loc[
+        props_by_mtype_sorted.index, "log_odds_quant"
+    ]
+    props_by_mtype_sorted = props_by_mtype_sorted.sort_values(sort_bys)
+    props_by_mtype_sorted.drop(sort_bys, axis=1, inplace=True)
+    color_labels = color_labels.loc[props_by_mtype_sorted.index]
+
+    cgrid = sns.clustermap(
+        props_by_mtype_sorted.T,
+        cmap="Reds",
+        figsize=(25, 10),
+        row_cluster=False,
+        col_colors=color_labels,
+        col_cluster=False,
+        xticklabels=False,
+        cbar_pos=None,
+        dendrogram_ratio=(0, 0),
+    )
+    ax = cgrid.ax_heatmap
+
+    cgrid.figure.suptitle(
+        f"{threshold_feature} threshold = {threshold}", fontsize="x-large", y=1.04
+    )
+
+    rect = Rectangle(
+        (0, props_by_mtype.shape[1] + 2),
+        200,
+        1,
+        fill=True,
+        edgecolor="black",
+        facecolor="black",
+        lw=1,
+        clip_on=False,
+    )
+    ax.add_patch(rect)
+
+    text = ax.text(
+        200,
+        props_by_mtype.shape[1] + 2.5,
+        f"  200 neurons ({props_by_mtype.shape[0]} total)",
+        ha="left",
+        va="center",
+        clip_on=False,
+    )
+
+    # move the y-axis labels to the left
+    ax.yaxis.tick_left()
+    ax.set(ylabel="Excitatory Neuron Class", xlabel="Inhibitory Neuron")
+    ax.yaxis.set_label_position("left")
+
+    props_by_mtype_sorted["label"] = labels.map(new_label_map)
+    shifts = props_by_mtype_sorted["label"] != props_by_mtype_sorted["label"].shift()
+    shifts.iloc[0] = False
+    shifts = shifts[shifts].index
+    shift_ilocs = props_by_mtype_sorted.index.get_indexer_for(shifts)
+    for shift in shift_ilocs:
+        ax.axvline(shift, color="black", lw=0.5)
+    ax.set(xlabel="Inhibitory Neuron", ylabel="Excitatory Neuron Class")
+
+    # final touches
+    label_pos = (
+        labels.rename("label").to_frame().copy().loc[props_by_mtype_sorted.index]
+    )
+    label_pos["pos"] = np.arange(len(label_pos))
+    positions_by_label = label_pos.groupby("label")["pos"].mean()
+
+    ax.set_xticks(positions_by_label.values)
+    ax.set_xticklabels(positions_by_label.index)
+
+    props_by_mtype_sorted.drop("label", axis=1, inplace=True)
+
+    y_borders = [3, 5, 8, 12, 14]
+    for y_border in y_borders:
+        ax.axhline(y_border, color="black", lw=0.5)
+
+    cgrid.ax_col_colors.yaxis.tick_left()
+
+    savefig(
+        f"excitatory_inhibitory_clustermap_sorted-threshold={threshold}-k={k}-metric={metric}-method={method}",
+        cgrid.figure,
+        folder="state_prediction_heuristics",
+        doc_save=True,
+    )
+
+    labels_by_threshold[threshold] = labels
+
+# %%
+props_by_mtype.to_csv(
+    OUT_PATH / f"projection_proportions_by_mtype_threshold={threshold}.csv"
 )
 
-weighting = props_by_mtype.copy()
-weighting.columns = np.arange(len(weighting.columns))
-weighting["label"] = labels
+# %%
 
-means = weighting.groupby("label").mean()
-label_ranking = means.mul(means.columns).sum(axis=1).sort_values()
-
-new_label_map = dict(zip(labels, label_ranking.index.get_indexer_for(labels)))
-
-set_context(font_scale=2)
-
-colors = sns.color_palette("tab20", n_colors=k)
-palette = dict(zip(np.arange(1, k + 1), colors))
-
-color_labels = labels.map(palette).rename("Cluster").copy()
-
-color_labels = color_labels.to_frame()
-
-color_labels["Posterior quantile"] = labeled_inhib_features.loc[
-    color_labels.index, "log_odds_quant"
-]
-
-color_labels["M-type"] = (
-    color_labels.index.to_series().map(mtypes["cell_type"]).map(casey_palette)
-)
-
-norm = Normalize(vmin=threshold, vmax=1)
-colors = [(1, 1, 1), (0, 0, 0)]
-cmap = LinearSegmentedColormap.from_list("custom", colors)
-
-color_labels["Posterior quantile"] = color_labels["Posterior quantile"].map(
-    lambda x: cmap(norm(x))
-)
-
-color_labels["Motif group"] = color_labels.index.to_series().map(ctypes).map(palette)
-
-cgrid = sns.clustermap(
-    props_by_mtype.T,
-    cmap="Reds",
-    figsize=(25, 10),
-    row_cluster=False,
-    col_colors=color_labels,
-    col_linkage=linkage_matrix,
-    xticklabels=False,
-    cbar_pos=None,
-    dendrogram_ratio=(0, 0.2),
-)
-ax = cgrid.ax_heatmap
-
-# move the y-axis labels to the left
-ax.yaxis.tick_left()
-ax.set(ylabel="Excitatory Neuron Class", xlabel="Inhibitory Neuron")
-ax.yaxis.set_label_position("left")
-
-props_by_mtype = props_by_mtype.iloc[cgrid.dendrogram_col.reordered_ind]
-props_by_mtype["label"] = labels.map(new_label_map)
-shifts = props_by_mtype["label"] != props_by_mtype["label"].shift()
-shifts.iloc[0] = False
-shifts = shifts[shifts].index
-shift_ilocs = props_by_mtype.index.get_indexer_for(shifts)
-for shift in shift_ilocs:
-    ax.axvline(shift, color="black", lw=0.5)
-ax.set(xlabel="Inhibitory Neuron", ylabel="Excitatory Neuron Class")
-
-label_pos = labels.rename("label").to_frame().copy().loc[props_by_mtype.index]
-label_pos["pos"] = np.arange(len(label_pos))
-positions_by_label = label_pos.groupby("label")["pos"].mean()
-
-ax.set_xticks(positions_by_label.values)
-ax.set_xticklabels(positions_by_label.index)
-
-props_by_mtype.drop("label", axis=1, inplace=True)
-
-y_borders = [3, 5, 8, 12, 14]
-for y_border in y_borders:
-    ax.axhline(y_border, color="black", lw=0.5)
-
-cgrid.ax_col_colors.yaxis.tick_left()
-
-savefig(
-    f"excitatory_inhibitory_clustermap_w_tree-threshold={threshold}-k={k}-metric={metric}-method={method}",
-    cgrid.figure,
-    folder="state_prediction_heuristics",
-    doc_save=True,
-)
-
-sort_bys = ["label", "log_odds_quant"]
-props_by_mtype_sorted = props_by_mtype.copy()
-props_by_mtype_sorted["label"] = labels.map(new_label_map)
-props_by_mtype_sorted["log_odds_quant"] = labeled_inhib_features.loc[
-    props_by_mtype_sorted.index, "log_odds_quant"
-]
-props_by_mtype_sorted = props_by_mtype_sorted.sort_values(sort_bys)
-props_by_mtype_sorted.drop(sort_bys, axis=1, inplace=True)
-color_labels = color_labels.loc[props_by_mtype_sorted.index]
-
-cgrid = sns.clustermap(
-    props_by_mtype_sorted.T,
-    cmap="Reds",
-    figsize=(25, 10),
-    row_cluster=False,
-    col_colors=color_labels,
-    col_cluster=False,
-    xticklabels=False,
-    cbar_pos=None,
-    dendrogram_ratio=(0, 0),
-)
-ax = cgrid.ax_heatmap
-
-# move the y-axis labels to the left
-ax.yaxis.tick_left()
-ax.set(ylabel="Excitatory Neuron Class", xlabel="Inhibitory Neuron")
-ax.yaxis.set_label_position("left")
-
-props_by_mtype_sorted["label"] = labels.map(new_label_map)
-shifts = props_by_mtype_sorted["label"] != props_by_mtype_sorted["label"].shift()
-shifts.iloc[0] = False
-shifts = shifts[shifts].index
-shift_ilocs = props_by_mtype_sorted.index.get_indexer_for(shifts)
-for shift in shift_ilocs:
-    ax.axvline(shift, color="black", lw=0.5)
-ax.set(xlabel="Inhibitory Neuron", ylabel="Excitatory Neuron Class")
-
-
-# final touches
-label_pos = labels.rename("label").to_frame().copy().loc[props_by_mtype_sorted.index]
-label_pos["pos"] = np.arange(len(label_pos))
-positions_by_label = label_pos.groupby("label")["pos"].mean()
-
-ax.set_xticks(positions_by_label.values)
-ax.set_xticklabels(positions_by_label.index)
-
-
-props_by_mtype_sorted.drop("label", axis=1, inplace=True)
-
-y_borders = [3, 5, 8, 12, 14]
-for y_border in y_borders:
-    ax.axhline(y_border, color="black", lw=0.5)
-
-cgrid.ax_col_colors.yaxis.tick_left()
-
-savefig(
-    f"excitatory_inhibitory_clustermap_sorted-threshold={threshold}-k={k}-metric={metric}-method={method}",
-    cgrid.figure,
-    folder="state_prediction_heuristics",
-    doc_save=True,
-)
+labeled_inhib_features.to_csv(OUT_PATH / "labeled_inhib_features.csv")
 
 # %%
 from nglui.segmentprops import SegmentProperties
@@ -1265,7 +1369,9 @@ seg_df["log_odds"] = np.nan
 seg_df.loc[y_scores_new.index, "log_odds"] = y_scores_new
 seg_df = seg_df.dropna()
 seg_df["log_odds_quant"] = y_scores_quant_new
-seg_df["label"] = labels.fillna(-1).astype(int)
+
+for threshold, labels in labels_by_threshold.items():
+    seg_df[f"label_at_{threshold}"] = labels.fillna(-1).astype(int)
 
 n_randoms = 5
 for i in range(n_randoms):
@@ -1274,8 +1380,10 @@ for i in range(n_randoms):
 seg_prop = SegmentProperties.from_dataframe(
     seg_df.reset_index(),
     id_col="pt_root_id",
-    label_col="label",
-    tag_value_cols=["label"],
+    label_col="mtype",
+    tag_value_cols=[
+        f"label_at_{threshold}" for threshold in labels_by_threshold.keys()
+    ],
     number_cols=[
         "n_pre_synapses",
         "n_post_synapses",
@@ -1300,6 +1408,7 @@ img = statebuilder.ImageLayerConfig(
 seg = statebuilder.SegmentationLayerConfig(
     source=client.info.segmentation_source(),
     segment_properties=prop_url,
+    skeleton_source="precomputed://middleauth+https://minnie.microns-daf.com/skeletoncache/api/v1/minnie65_phase3_v1/precomputed/skeleton",
 )
 
 sb = statebuilder.StateBuilder(
@@ -1307,6 +1416,4 @@ sb = statebuilder.StateBuilder(
     target_site="mainline",
     view_kws={"zoom_3d": 0.001, "zoom_image": 0.00000001},
 )
-sb.render_state()
-
-# %%
+sb.render_state(return_as="url")
