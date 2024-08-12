@@ -111,7 +111,7 @@ for sequence_label, row in meta_features_df.iterrows():
 meta_diff_df = pd.DataFrame(all_sequence_diffs).T
 meta_diff_df.index.names = ["root_id", "scheme", "order_by", "random_seed"]
 
-meta_diff_df
+precision_recall_df = pd.concat(meta_features_df["pre_precision_recall"].tolist())
 
 # %%
 
@@ -121,6 +121,8 @@ group_info = all_infos.copy()
 idx = pd.IndexSlice
 diffs = meta_diff_df.loc[idx[:, scheme], :]["props_by_mtype"].values
 diffs = pd.concat(diffs, axis=0).copy().reset_index()
+
+precision_recall_df = precision_recall_df.loc[idx[:, scheme], :].copy()
 
 group_info = group_info.copy()
 group_root_ids = group_info.index.get_level_values("root_id").unique()
@@ -144,11 +146,16 @@ diffs = diffs.join(
     ]
 )
 
+diffs = diffs.join(
+    precision_recall_df.reset_index()
+    .set_index(["root_id", "random_seed", "order"])
+    .drop(columns=["scheme", "order_by"])
+)
+
 diffs["is_filtered"] = diffs["is_filtered"].fillna(True)
 diffs = diffs.query("is_filtered")
 
 # %%
-
 
 thresh = 0.2
 metric = "euclidean"
@@ -205,6 +212,39 @@ sns.scatterplot(
 
 # %%
 
+fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+
+sns.scatterplot(
+    data=diffs, x="euclidean", y="precision", s=1, alpha=0.3, linewidth=0, ax=axs[0]
+)
+axs[0].axvline(0.2, color="black", lw=1, ls="--")
+sns.scatterplot(
+    data=diffs, x="euclidean", y="recall", s=1, alpha=0.3, linewidth=0, ax=axs[1]
+)
+axs[1].axvline(0.2, color="black", lw=1, ls="--")
+
+savefig("precision_recall_scatter_vs_distance", fig, file_name, doc_save=True)
+
+# %%
+
+filt = diffs[diffs["euclidean"] < 0.2].copy()
+
+fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+
+filt["weight"] = 1 / filt.groupby("root_id").transform("size")
+
+sns.histplot(
+    data=filt, x="precision", weights="weight", ax=axs[0], bins=20, stat="percent"
+)
+
+sns.histplot(
+    data=filt, x="recall", weights="weight", ax=axs[1], bins=20, stat="percent"
+)
+
+fig.suptitle("States with euclidean distance < 0.2")
+
+# %%
+
 y = X["label"]
 X = X.drop(columns="label")
 
@@ -212,6 +252,7 @@ lda = LinearDiscriminantAnalysis()
 lda.fit(X, y)
 
 y_pred = lda.predict(X)
+
 # %%
 
 
@@ -638,4 +679,6 @@ savefig("precision_recall_overlay", fig, folder=file_name)
 save_path = OUT_PATH / file_name
 
 with open(save_path / "state_prediction_model.pkl", "wb") as f:
-    pickle.dumps(final_model, f)
+    pickle.dump(final_model, f)
+
+# %%

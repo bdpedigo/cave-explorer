@@ -2,7 +2,6 @@
 
 import pickle
 
-import caveclient as cc
 import numpy as np
 import pandas as pd
 from cloudfiles import CloudFiles
@@ -154,14 +153,43 @@ def apply_metadata(df, key):
     return df
 
 
+def compute_precision_recall(sequence: pd.DataFrame, which="pre"):
+    synapses: pd.Series = sequence.sequence_info[f"{which}_synapses"]
+    final_synapses = synapses.iloc[-1]
+
+    results = pd.DataFrame(
+        index=synapses.index,
+        columns=[f"{which}_synapse_recall", f"{which}_synapse_precision"],
+    )
+    for idx, synapses in synapses.items():
+        n_intersection = len(np.intersect1d(final_synapses, synapses))
+
+        # recall: the proportion of synapses in the final state that show up in the current
+        if len(final_synapses) == 0:
+            recall = np.nan
+        else:
+            recall = n_intersection / len(final_synapses)
+            results.loc[idx, f"{which}_synapse_recall"] = recall
+
+        # precision: the proportion of synapses in the current state that show up in the final
+        if len(synapses) == 0:
+            precision = np.nan
+        else:
+            precision = n_intersection / len(synapses)
+            results.loc[idx, f"{which}_synapse_precision"] = precision
+
+    return results
+
+
 # %%
 
-client = cc.CAVEclient("minnie65_phase3_v1")
+from pkg.utils import start_client
+
+client = start_client()
 mtypes = load_mtypes(client)
 
 
 # %%
-
 
 root_id = 864691134886016762
 neuron = load_neuronframe(root_id, client)
@@ -180,6 +208,7 @@ def compute_partners(synapses_df: pd.DataFrame, by=None):
 
 sequence = create_time_ordered_sequence(neuron, root_id)
 partner_sequence = sequence.apply_to_synapses_by_sample(compute_partners, which="pre")
+
 
 # %%
 X = partner_sequence.fillna(0).values
@@ -258,6 +287,15 @@ def process_for_neuron(root_id, rows):
 
         sequence_feature_dfs["partners"] = partners
 
+        pre_precision_recall = compute_precision_recall(sequence, which="pre")
+        pre_precision_recall = apply_metadata(pre_precision_recall, sequence_key)
+
+        post_precision_recall = compute_precision_recall(sequence, which="post")
+        post_precision_recall = apply_metadata(post_precision_recall, sequence_key)
+
+        sequence_feature_dfs["pre_precision_recall"] = pre_precision_recall
+        sequence_feature_dfs["post_precision_recall"] = post_precision_recall
+
         neuron_sequence_features[sequence_key] = sequence_feature_dfs
 
         info = sequence.sequence_info
@@ -306,4 +344,8 @@ if save:
     with open(OUT_PATH / "sequence_metrics" / "meta_features_df.pkl", "wb") as f:
         pickle.dump(meta_features_df, f)
 
+
 # %%
+
+
+compute_precision_recall(sequence)

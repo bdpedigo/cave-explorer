@@ -1,8 +1,10 @@
 # %%
 
 import os
+import pickle
 from pathlib import Path
 
+import colorcet as cc
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -10,29 +12,34 @@ import pyvista as pv
 import seaborn as sns
 from joblib import Parallel, delayed
 from matplotlib.colors import LinearSegmentedColormap, Normalize
+from matplotlib.patches import Rectangle
 from nglui import statebuilder
 from nglui.segmentprops import SegmentProperties
-from scipy.cluster.hierarchy import fcluster, linkage
+from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
 from tqdm import tqdm
 from tqdm_joblib import tqdm_joblib
 
 from pkg.constants import OUT_PATH
 from pkg.plot import savefig, set_context
-from pkg.utils import load_manifest, load_mtypes, start_client
+from pkg.utils import load_casey_palette, load_manifest, load_mtypes, start_client
 
-file_name = "evaluate_state_prediction"
+# %%
+
+file_name = "state_prediction_heuristics"
 
 set_context()
 
 client = start_client()
 mtypes = load_mtypes(client)
+manifest = load_manifest()
+manifest = manifest.query("in_inhibitory_column")
 
 
+# %%
 inhib_mtypes = mtypes.query("classification_system == 'inhibitory_neuron'")
 all_inhib_roots = inhib_mtypes.index
 
 out_path = Path("data/synapse_pull")
-
 
 files = os.listdir(out_path)
 
@@ -76,7 +83,7 @@ else:
     with tqdm_joblib(
         tqdm(desc="Getting n_leaves", total=len(all_inhib_roots))
     ) as progress:
-        n_leaves = Parallel(n_jobs=12)(
+        n_leaves = Parallel(n_jobs=-1)(
             delayed(get_n_leaves_for_root)(root_id) for root_id in all_inhib_roots
         )
         n_leaves = pd.Series(n_leaves, index=all_inhib_roots)
@@ -128,27 +135,17 @@ X_new["n_pre_synapses"] = np.log10(X_new["n_pre_synapses"].astype(float))
 X_new["n_post_synapses"] = np.log10(X_new["n_post_synapses"].astype(float))
 X_new["n_nodes"] = np.log10(X_new["n_nodes"].astype(float))
 
-# %%
-
-model_path = OUT_PATH / "train_state_prediction"
-model_path = model_path / "state_prediction_model.pkl"
-
-from joblib import load
-
-lda = load(model_path)
-
 
 # %%
 
+model_path = OUT_PATH / file_name
+
+with open(model_path / "state_prediction_model.pkl", "rb") as f:
+    lda = pickle.load(f)
+
+# %%
 y_scores_new = lda.decision_function(X_new)
 y_scores_new = pd.Series(y_scores_new, index=X_new.index)
-
-from sklearn.preprocessing import QuantileTransformer
-
-qt = QuantileTransformer(output_distribution="uniform")
-
-y_scores_quant_new = qt.fit_transform(y_scores_new.values.reshape(-1, 1))
-y_scores_quant_new = pd.Series(y_scores_quant_new.flatten(), index=X_new.index)
 
 fig, ax = plt.subplots(figsize=(6, 6))
 
@@ -163,7 +160,6 @@ inhib_features["log_posterior_ratio"] = y_scores_new
 inhib_features["mtype"] = inhib_features.index.map(mtypes["cell_type"])
 
 # %%
-from pkg.utils import load_casey_palette
 
 casey_palette = load_casey_palette()
 
@@ -208,25 +204,23 @@ ax.set_xlabel("Log posterior ratio")
 
 savefig("log_posterior_ratio_survival", fig, file_name, doc_save=True)
 
-
 # %%
 
-"nucleus_functional_area_assignment"
-
-# %%
-
-bins = np.histogram_bin_edges(y_scores_quant_new, bins="auto")
-y_scores_quant_new_binned = pd.cut(y_scores_quant_new, bins=bins, include_lowest=True)
-bin_counts = y_scores_quant_new_binned.value_counts()
-cumsum = bin_counts.sort_index().cumsum()
-survival = len(y_scores_quant_new) - cumsum
-
-with sns.axes_style("whitegrid"):
+with sns.axes_style("white"):
     fig, ax = plt.subplots(figsize=(6, 6))
-    sns.lineplot(x=survival.index.categories.mid, y=survival.values, ax=ax)
-    ax.set_xlabel("Posterior ratio quantile")
+    sns.lineplot(
+        x=survival.index.categories.mid,
+        y=survival.values,
+        ax=ax,
+        # color="darkblue",
+        linewidth=3,
+        label="Survival",
+    )
+    ax.set_xlabel("Log posterior ratio")
+    sns.move_legend(ax, loc="lower left")
 
-savefig("posterior_ratio_quantile_survival", fig, file_name, doc_save=True)
+savefig("log_posterior_ratio_survival_precision_recall", fig, file_name, doc_save=True)
+
 
 # %%
 
@@ -235,7 +229,6 @@ seg_df = inhib_features.copy()
 seg_df["log_odds"] = np.nan
 seg_df.loc[y_scores_new.index, "log_odds"] = y_scores_new
 seg_df = seg_df.dropna()
-seg_df["log_odds_quant"] = y_scores_quant_new
 seg_df["log_odds_rank"] = seg_df["log_odds"].rank()
 
 # %%
@@ -343,7 +336,6 @@ labeled_inhib_features = inhib_features.copy()
 labeled_inhib_features["log_odds"] = np.nan
 labeled_inhib_features.loc[y_scores_new.index, "log_odds"] = y_scores_new
 labeled_inhib_features = labeled_inhib_features.dropna()
-labeled_inhib_features["log_odds_quant"] = y_scores_quant_new
 
 # %%
 
@@ -354,8 +346,6 @@ labeled_inhib_features["log_odds_quant"] = y_scores_quant_new
 # see what cluster centroids look like relative to these cells
 # %%
 
-
-from pkg.utils import load_casey_palette, load_mtypes
 
 manifest = load_manifest()
 
@@ -421,7 +411,6 @@ for threshold in np.arange(0, 11, 1).astype(int):
     linkage_matrix = linkage(props_by_mtype, method=method, metric=metric)
 
     # leaves = leaves_list(linkage_matrix)[::-1]
-    from scipy.cluster.hierarchy import dendrogram
 
     dend = dendrogram(linkage_matrix, no_plot=True, color_threshold=-np.inf)
     leaves = dend["leaves"]
@@ -443,8 +432,6 @@ for threshold in np.arange(0, 11, 1).astype(int):
     new_label_map = dict(zip(labels, label_ranking.index.get_indexer_for(labels)))
 
     set_context(font_scale=2)
-
-    import colorcet as cc
 
     # colors = sns.color_palette("tab20", n_colors=k)
     colors = cc.glasbey_light
@@ -509,8 +496,6 @@ for threshold in np.arange(0, 11, 1).astype(int):
     cgrid.figure.suptitle(
         f"{threshold_feature} threshold = {threshold}", fontsize="x-large", y=1.02
     )
-
-    from matplotlib.patches import Rectangle
 
     rect = Rectangle(
         (0, props_by_mtype.shape[1] + 2),
@@ -669,13 +654,11 @@ props_by_mtype.to_csv(
 labeled_inhib_features.to_csv(OUT_PATH / "labeled_inhib_features.csv")
 
 # %%
-from nglui.segmentprops import SegmentProperties
 
 seg_df = inhib_features.copy()
 seg_df["log_odds"] = np.nan
 seg_df.loc[y_scores_new.index, "log_odds"] = y_scores_new
 seg_df = seg_df.dropna()
-seg_df["log_odds_quant"] = y_scores_quant_new
 
 for threshold, labels in labels_by_threshold.items():
     seg_df[f"label_at_{threshold}"] = labels.fillna(-1).astype(int)
@@ -706,7 +689,6 @@ prop_url = client.state.build_neuroglancer_url(
     prop_id, format_properties=True, target_site="mainline"
 )
 
-from nglui import statebuilder
 
 img = statebuilder.ImageLayerConfig(
     source=client.info.image_source(),
