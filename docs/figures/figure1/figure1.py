@@ -7,10 +7,10 @@ import matplotlib.pyplot as plt
 import skunk
 
 mosaic = """
-AAB
-AAC
+AABDDD
+AACDDD
 """
-figsize = (5, 4)
+figsize = (10, 4)
 fontsize = 30
 
 fig, axs = plt.subplot_mosaic(
@@ -37,6 +37,7 @@ panel_mapping = {
     "A": "docs/result_images/show_neuron_edits/whole_neuron.svg",
     "B": "docs/result_images/show_neuron_edits/split_example.svg",
     "C": "docs/result_images/show_neuron_edits/merge_example.svg",
+    "D": "docs/result_images/show_neuron_edits/neuron_gallery.svg",
 }
 
 svg = skunk.insert(panel_mapping)

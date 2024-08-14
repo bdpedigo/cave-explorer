@@ -1,16 +1,23 @@
 # %%
-from caveclient import CAVEclient
+from pathlib import Path
+
+import numpy as np
+import pyvista as pv
+import seaborn as sns
+from neurovista import center_camera, to_line_polydata, to_mesh_polydata
+from pcg_skel import pcg_skeleton
 from tqdm.auto import tqdm
 
 from pkg.neuronframe import load_neuronframe
-from pkg.neuronframe.sequence import resolve_neuron
-from pkg.utils import load_manifest
+from pkg.utils import get_nucleus_point_nm, load_manifest, start_client
+
+colors = sns.color_palette("Dark2").as_hex()
+MERGE_COLOR = colors[0]
+SPLIT_COLOR = colors[1]
 
 # %%
-client = CAVEclient("minnie65_phase3_v1")
-# target_id = 269505
-# target_id = 304990
-# target_id = 309052
+client = start_client()
+
 target_id = 305182
 
 manifest = load_manifest()
@@ -18,79 +25,55 @@ manifest = manifest.query("in_inhibitory_column")
 
 root_id = manifest.query(f"target_id == {target_id}").index[0]
 
-
 nf = load_neuronframe(root_id, client)
 
-nfs = {}
-rows = []
-for i, edit_id in tqdm(enumerate(nf.edits.index), total=len(nf.edits)):
-    edited_nf = nf.set_edits(nf.edits.index[: i + 1])
-    # edited_nf = (
-    #     edited_nf.select_nucleus_component()
-    #     .remove_unused_nodes()
-    #     .remove_unused_synapses()
-    # )
-    edited_nf = resolve_neuron(edited_nf, nf, warn_on_missing=False)
+# nfs = {}
+# rows = []
+# for i, edit_id in tqdm(enumerate(nf.edits.index), total=len(nf.edits)):
+#     edited_nf = nf.set_edits(nf.edits.index[: i + 1])
+#     edited_nf = resolve_neuron(edited_nf, nf, warn_on_missing=False)
 
-    info = {
-        "order": i,
-        "edit_id": edit_id,
-        "n_nodes": len(edited_nf.nodes),
-        "n_pre_synapses": len(edited_nf.pre_synapses),
-        "n_post_synapses": len(edited_nf.post_synapses),
-    }
+#     info = {
+#         "order": i,
+#         "edit_id": edit_id,
+#         "n_nodes": len(edited_nf.nodes),
+#         "n_pre_synapses": len(edited_nf.pre_synapses),
+#         "n_post_synapses": len(edited_nf.post_synapses),
+#     }
 
-    nfs[edit_id] = edited_nf
-    rows.append(info)
+#     nfs[edit_id] = edited_nf
+#     rows.append(info)
 
-final_nf = edited_nf
+# final_nf = edited_nf
 
-# %%
-import pandas as pd
-
-df = pd.DataFrame(rows)
-
-df["n_synapses"] = df["n_pre_synapses"] + df["n_post_synapses"]
-
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-fig, ax = plt.subplots()
-sns.lineplot(data=df, x="order", y="n_nodes", ax=ax)
+# # %%
 
 
-# %%
+# pv.set_jupyter_backend("trame")
 
-df.diff()["n_nodes"].iloc[18]
+# # 9
+# plotter = pv.Plotter()
+# i = 8
+# skel1 = nfs[nf.edits.index[i]].to_skeleton_polydata()
+# skel2 = nfs[nf.edits.index[i + 1]].to_skeleton_polydata()
+# # plotter.add_mesh(skel1, color="grey", line_width=2)
+# # plotter.add_mesh(skel2, color="red", line_width=0.5)
+# merges = final_nf.to_merge_polydata()
+# plotter.add_mesh(merges, color="blue", line_width=2)
 
-# %%
+# splits = nf.to_split_polydata(filter="is_filtered")
+# plotter.add_mesh(splits, color="red", line_width=2)
 
-import pyvista as pv
-
-pv.set_jupyter_backend("trame")
-
-# 9
-plotter = pv.Plotter()
-i = 8
-skel1 = nfs[nf.edits.index[i]].to_skeleton_polydata()
-skel2 = nfs[nf.edits.index[i + 1]].to_skeleton_polydata()
-# plotter.add_mesh(skel1, color="grey", line_width=2)
-# plotter.add_mesh(skel2, color="red", line_width=0.5)
-merges = final_nf.to_merge_polydata()
-plotter.add_mesh(merges, color="blue", line_width=2)
-
-splits = nf.to_split_polydata(filter="is_filtered")
-plotter.add_mesh(splits, color="red", line_width=2)
-
-final_skel = final_nf.to_skeleton_polydata()
-plotter.add_mesh(final_skel, color="black", line_width=1)
-plotter.show()
+# final_skel = final_nf.to_skeleton_polydata()
+# plotter.add_mesh(final_skel, color="black", line_width=1)
+# plotter.show()
 # %%
 cv = client.info.segmentation_cloudvolume()
+cv.cache.enabled = True
+
 mesh = cv.mesh.get(root_id)[root_id]
 
 # %%
-from neurovista import center_camera, to_mesh_polydata
 
 split_iloc = 10
 split_row = nf.edits.iloc[split_iloc]
@@ -147,8 +130,6 @@ plotter.add_mesh(mesh_polys[root_before_2], color="blue")
 plotter.add_mesh(mesh_polys[other_root_after], color="red")
 
 
-import numpy as np
-
 direction = np.array(camera_pos[1]) - np.array(camera_pos[0])
 
 split_cylinder = pv.Cylinder(
@@ -191,21 +172,11 @@ plotter.add_point_labels(
 
 plotter.camera.zoom(1.5)
 
-# center_camera(plotter, edit_loc, distance=100_000)
-# scale_factor = 6
-# plotter.window_size = [
-#     scale_factor * plotter.window_size[0],
-#     scale_factor * plotter.window_size[1],
-# ]
 plotter.window_size = [3840, 3840]
 plotter.camera_position = camera_pos
-# plotter.enable_fly_to_right_click()
-# plotter.image_scale = 10
-from pathlib import Path
 
 out_path = Path("docs/result_images/show_neuron_edits")
 plotter.save_graphic(out_path / "whole_neuron.svg")
-# plotter.show()
 
 # %%
 
@@ -215,17 +186,6 @@ plotter.add_mesh(mesh_polys[other_root_after].smooth(50), color="red")
 
 center_camera(plotter, split_loc, distance=100_000)
 
-# camera_pos = plotter.camera_position
-# direction = np.array(camera_pos[1]) - np.array(camera_pos[0])
-# split_cylinder = pv.Cylinder(
-#     center=split_loc.values.astype(float),
-#     direction=direction,
-#     height=1000,
-#     radius=3_000,
-# )
-# plotter.add_mesh(
-#     split_cylinder, color="red", opacity=1, style="wireframe", line_width=5
-# )
 plotter.enable_depth_of_field()
 plotter.camera.zoom(5)
 
@@ -240,33 +200,90 @@ plotter.add_mesh(mesh_polys[root_before_2].smooth(50), color="blue")
 
 center_camera(plotter, merge_loc, distance=100_000)
 
-# camera_pos = plotter.camera_position
-# direction = np.array(camera_pos[1]) - np.array(camera_pos[0])
-# merge_cylinder = pv.Cylinder(
-#     center=merge_loc.values.astype(float),
-#     direction=direction,
-#     height=1000,
-#     radius=3_000,
-# )
-# plotter.add_mesh(
-#     merge_cylinder, color="blue", opacity=1, style="wireframe", line_width=5
-# )
 plotter.enable_depth_of_field()
 plotter.camera.zoom(5)
-
-# pl.set_environment_texture(cubemap)
 
 plotter.window_size = [3840, 3840]
 plotter.save_graphic(out_path / "merge_example.svg")
 
 # %%
 
-from pcg_skel import pcg_skeleton
 
-from pkg.utils import get_nucleus_point_nm
+manifest = load_manifest()
+manifest = manifest.query("is_sample").sort_values("nuc_y")
 
-root_point = get_nucleus_point_nm(root_id, client)
-skel = pcg_skeleton(root_id, client=client, root_point=root_point)
+root_ids = manifest.index
+
+
+skel_polys = {}
+point_polys = {}
+for root_id in tqdm(root_ids):
+    nf = load_neuronframe(root_id, client)
+    edits = nf.edits
+    edits = edits.query("is_filtered")
+    root_point = get_nucleus_point_nm(root_id, client)
+    skel = pcg_skeleton(root_id, client=client, root_point=root_point)
+
+    skel_poly = to_line_polydata(skel.vertices, skel.edges)
+
+    point_poly = pv.PolyData(edits[["centroid_x", "centroid_y", "centroid_z"]].values)
+    point_poly["is_merge"] = edits["is_merge"]
+
+    skel_polys[root_id] = skel_poly
+    point_polys[root_id] = point_poly
+
+# %%
+
+pv.set_jupyter_backend("client")
+
+# shape = (2, 10)
+window_size = [8000, 2000]
+# shape = (4, 5)
+# window_size = [2000, 4000]
+
+shape = (3, 5)
+window_size = [3000, 2500]
+
+plotter = pv.Plotter(shape=shape, window_size=window_size, border_width=0)
+
+nuc_loc_centroid = manifest.loc[root_ids, ["nuc_x", "nuc_y", "nuc_z"]].values.mean(
+    axis=0
+)
+for i, root_id in enumerate(root_ids[:15]):
+    skel_poly = skel_polys[root_id]
+    point_poly = point_polys[root_id]
+
+    row, col = np.unravel_index(i, shape, order="C")
+    plotter.subplot(row, col)
+    plotter.add_mesh(
+        skel_poly,
+        color="black",
+        line_width=1,
+        opacity=0.6,
+        show_scalar_bar=False,
+        style="wireframe",
+    )
+    plotter.add_mesh(
+        point_poly,
+        point_size=10,
+        render_points_as_spheres=True,
+        scalars="is_merge",
+        cmap=[SPLIT_COLOR, MERGE_COLOR],
+        show_scalar_bar=False,
+    )
+    nuc_loc_centroid = manifest.loc[root_id, ["nuc_x", "nuc_y", "nuc_z"]].values
+    center_camera(plotter, nuc_loc_centroid, distance=1_250_000)
+
+plotter.remove_bounding_box()
+# plotter.link_views()
+
+# plotter.view_isometric()
+
+# plotter.show()
+
+plotter.save_graphic(out_path / "neuron_gallery.svg")
+plotter.save_graphic(out_path / "neuron_gallery.pdf")
+
 
 # %%
 
