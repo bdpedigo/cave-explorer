@@ -189,8 +189,10 @@ plotter.add_point_labels(
     text_color="blue",
 )
 
+plotter.camera.zoom(1.5)
+
 # center_camera(plotter, edit_loc, distance=100_000)
-scale_factor = 5
+# scale_factor = 6
 # plotter.window_size = [
 #     scale_factor * plotter.window_size[0],
 #     scale_factor * plotter.window_size[1],
@@ -199,7 +201,10 @@ plotter.window_size = [3840, 3840]
 plotter.camera_position = camera_pos
 # plotter.enable_fly_to_right_click()
 # plotter.image_scale = 10
-plotter.save_graphic("test.pdf")
+from pathlib import Path
+
+out_path = Path("docs/result_images/show_neuron_edits")
+plotter.save_graphic(out_path / "whole_neuron.svg")
 # plotter.show()
 
 # %%
@@ -225,7 +230,7 @@ plotter.enable_depth_of_field()
 plotter.camera.zoom(5)
 
 plotter.window_size = [3840, 3840]
-plotter.save_graphic("test1.pdf")
+plotter.save_graphic(out_path / "split_example.svg")
 
 # %%
 
@@ -252,7 +257,7 @@ plotter.camera.zoom(5)
 # pl.set_environment_texture(cubemap)
 
 plotter.window_size = [3840, 3840]
-plotter.save_graphic("test2.pdf")
+plotter.save_graphic(out_path / "merge_example.svg")
 
 # %%
 
