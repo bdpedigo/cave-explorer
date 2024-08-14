@@ -3,17 +3,13 @@ from pathlib import Path
 
 import numpy as np
 import pyvista as pv
-import seaborn as sns
 from neurovista import center_camera, to_line_polydata, to_mesh_polydata
 from pcg_skel import pcg_skeleton
 from tqdm.auto import tqdm
 
+from pkg.constants import MERGE_COLOR, SPLIT_COLOR
 from pkg.neuronframe import load_neuronframe
 from pkg.utils import get_nucleus_point_nm, load_manifest, start_client
-
-colors = sns.color_palette("Dark2").as_hex()
-MERGE_COLOR = colors[0]
-SPLIT_COLOR = colors[1]
 
 # %%
 client = start_client()
@@ -100,7 +96,7 @@ plotter.add_point_labels(
     point_size=0,
     font_size=150,
     shape=None,
-    text_color=MERGE_COLOR,
+    text_color=SPLIT_COLOR,
 )
 
 merge_cylinder = pv.Cylinder(

@@ -47,12 +47,19 @@ def load_info(root_id):
     return row
 
 
-with tqdm_joblib(total=len(manifest)) as progress_bar:
-    rows = Parallel(n_jobs=8)(delayed(load_info)(root_id) for root_id in manifest.index)
+if False:
+    with tqdm_joblib(total=len(manifest)) as progress_bar:
+        rows = Parallel(n_jobs=8)(
+            delayed(load_info)(root_id) for root_id in manifest.index
+        )
 
-summary_info = pd.DataFrame(rows).set_index("root_id")
+    summary_info = pd.DataFrame(rows).set_index("root_id")
 
-summary_info.to_csv(OUT_PATH / "simple_stats" / "summary_info.csv")
+    summary_info.to_csv(OUT_PATH / "simple_stats" / "summary_info.csv")
+else:
+    summary_info = pd.read_csv(
+        OUT_PATH / "simple_stats" / "summary_info.csv", index_col=0
+    )
 
 # %%
 
@@ -80,27 +87,28 @@ sns.histplot(summary_info["n_splits"], ax=ax, label="Splits")
 ax.set_ylabel("Number of edits")
 
 # %%
-print(summary_info["n_merges"].mean())
-summary_info["n_merges"].mean()
-# summary_info['n_merges'].median()
+from pkg.constants import MERGE_COLOR, SPLIT_COLOR
 
-# %%
-# summary_info['n_splits'].median()
-
-# %%
-summary_info["n_splits"].mean()
-
-# %%
+edit_palette = {"Merges": MERGE_COLOR, "Splits": SPLIT_COLOR}
 counts_df = summary_info.melt(
     value_vars=["n_merges", "n_splits"], var_name="edit_type", value_name="count"
 )
 counts_df["edit_type"] = counts_df["edit_type"].str.replace("n_", "").str.capitalize()
 fig, ax = plt.subplots(1, 1, figsize=(7, 5))
-sns.histplot(data=counts_df, x="count", hue="edit_type", ax=ax, element="step", bins=20)
+sns.histplot(
+    data=counts_df,
+    x="count",
+    hue="edit_type",
+    ax=ax,
+    element="step",
+    bins=20,
+    palette=edit_palette,
+)
+
 ax.set_xlabel("Number of edits")
 sns.move_legend(ax, "upper right", title="Edit type")
 
-savefig("edit_count_histogram", fig, folder="simple_stats", doc_save=True)
+savefig("edit_count_histogram", fig, folder="simple_stats", doc_save=True, format="svg")
 
 # %%
 

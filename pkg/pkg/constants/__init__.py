@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import seaborn as sns
 from caveclient import CAVEclient
 
 RESULTS_PATH = Path(__file__).parent.parent.parent.parent
@@ -28,3 +29,7 @@ DATASTACK_NAME = "minnie65_phase3_v1"
 
 client = CAVEclient(DATASTACK_NAME)
 TIMESTAMP = client.materialize.get_timestamp(MATERIALIZATION_VERSION)
+
+colors = sns.color_palette("Dark2").as_hex()
+MERGE_COLOR = colors[0]
+SPLIT_COLOR = colors[1]
