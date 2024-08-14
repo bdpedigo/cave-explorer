@@ -278,3 +278,9 @@ def load_manifest():
     if "nuc_position" in manifest.columns:
         manifest["nuc_position"] = manifest["nuc_position"].apply(evaler)
     return manifest
+
+
+def load_joint_table():
+    url = "https://raw.githubusercontent.com/bdpedigo/cave-sandbox/main/data/joint_cell_table.csv"
+    joint_table = pd.read_csv(url, index_col=0, low_memory=False)
+    return joint_table

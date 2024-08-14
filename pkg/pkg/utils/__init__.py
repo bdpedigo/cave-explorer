@@ -10,6 +10,7 @@ from .wrangle import (
     get_skeleton_nodes_edges,
     integerize_dict_keys,
     load_casey_palette,
+    load_joint_table,
     load_manifest,
     load_mtypes,
     pt_to_xyz,
@@ -32,4 +33,5 @@ __all__ = [
     "load_manifest",
     "send_message",
     "start_client",
+    "load_joint_table",
 ]
