@@ -12,7 +12,7 @@ from networkframe import NetworkFrame
 from statsmodels.stats.weightstats import DescrStatsW
 from tqdm_joblib import tqdm_joblib
 
-from pkg.constants import OUT_PATH
+from pkg.constants import OUT_PATH, TIMESTAMP
 from pkg.neuronframe import load_neuronframe
 from pkg.plot import savefig, set_context
 from pkg.skeleton import extract_meshwork_node_mappings
@@ -23,7 +23,7 @@ manifest = load_manifest()
 client = start_client()
 
 # %%
-manifest.query("in_inhibitory_column & is_current & has_all_sequences", inplace=True)
+manifest.query("in_inhibitory_column", inplace=True)
 
 
 def load_info(root_id):
@@ -47,7 +47,7 @@ def load_info(root_id):
     return row
 
 
-if False:
+if True:
     with tqdm_joblib(total=len(manifest)) as progress_bar:
         rows = Parallel(n_jobs=8)(
             delayed(load_info)(root_id) for root_id in manifest.index
@@ -110,9 +110,15 @@ sns.move_legend(ax, "upper right", title="Edit type")
 
 savefig("edit_count_histogram", fig, folder="simple_stats", doc_save=True, format="svg")
 
+
 # %%
 
-recompute_skeletons = False
+multiaxon_dict = {
+    258362: 2,
+    307059: 2,
+}
+
+recompute_skeletons = True
 
 if recompute_skeletons:
 
@@ -128,7 +134,34 @@ if recompute_skeletons:
             merges = edited_neuron.edits.query("is_merge")
 
             # get skeleton/radius info
-            meshwork = pcg_skel.coord_space_meshwork(root_id, client=client)
+            soma_point = manifest.loc[
+                root_id, ["nuc_x", "nuc_y", "nuc_z"]
+            ].values.astype(float)
+            meshwork = pcg_skel.coord_space_meshwork(
+                root_id,
+                client=client,
+                timestamp=TIMESTAMP,
+                root_point=soma_point,
+                root_point_resolution=[1, 1, 1],
+                collapse_soma=True,
+                require_complete=True,
+                synapses="all",
+                synapse_table=client.info.get_datastack_info().get("synapse_table"),
+            )
+
+            target_id = manifest.loc[root_id, "target_id"]
+            if target_id in multiaxon_dict:
+                n_times = multiaxon_dict[target_id]
+            else:
+                n_times = 1
+            pcg_skel.features.add_is_axon_annotation(
+                meshwork,
+                pre_anno="pre_syn",
+                post_anno="post_syn",
+                threshold_quality=0.6,
+                n_times=n_times,
+            )
+
             pcg_skel.features.add_volumetric_properties(meshwork, client)
             pcg_skel.features.add_segment_properties(meshwork)
             meshwork.anchor_annotations("segment_properties")
@@ -143,6 +176,11 @@ if recompute_skeletons:
             edited_neuron.nodes["radius"] = edited_neuron.nodes.index.map(
                 radius_by_level2
             )
+
+            is_axon_level2_ilocs = meshwork.anno.is_axon["mesh_index_filt"]
+            is_axon_level2_ids = mesh_to_level2_ids.loc[is_axon_level2_ilocs]
+            edited_neuron.nodes["is_axon"] = False
+            edited_neuron.nodes.loc[is_axon_level2_ids, "is_axon"] = True
 
             skeleton_to_level2, level2_to_skeleton = extract_meshwork_node_mappings(
                 meshwork
@@ -159,6 +197,10 @@ if recompute_skeletons:
                     operations.remove(-1)
                 operations_by_skeleton_node[idx] = operations
             # all_modified_nodes.append(modified_nodes)
+
+            is_axon_by_skeleton_node = edited_neuron.nodes.groupby("skeleton_index")[
+                "is_axon"
+            ].all()
 
             skeleton_nodes = pd.DataFrame(
                 meshwork.skeleton.vertices, columns=["x", "y", "z"]
@@ -181,11 +223,16 @@ if recompute_skeletons:
             skeleton_nf.nodes["radius"] = edited_neuron.nodes.groupby("skeleton_index")[
                 "radius"
             ].mean()
+
+            skeleton_nf.nodes["is_axon"] = skeleton_nf.nodes.index.map(
+                is_axon_by_skeleton_node
+            )
+
             return skeleton_nf
         except:
             return None
 
-    root_ids = manifest.index
+    root_ids = manifest.index[:]
     with tqdm_joblib(total=len(root_ids)) as progress_bar:
         all_skeleton_nfs = Parallel(n_jobs=8)(
             delayed(extract_skeleton_nf_for_root)(root_id, client)
