@@ -6,6 +6,21 @@ import matplotlib.pyplot as plt
 import skunk
 
 
+def _label_axes(
+    axs, fontsize: int = 30, label_pos: tuple[float, float] = (0.0, 1.0)
+) -> None:
+    for label, ax in axs.items():
+        ax.text(
+            *label_pos,
+            label + "",
+            ha="left",
+            va="top",
+            transform=ax.transAxes,
+            fontsize=fontsize,
+        )
+        ax.set(xticks=[], yticks=[])
+
+
 class PanelMosaic:
     def __init__(
         self,
@@ -19,37 +34,31 @@ class PanelMosaic:
         self.layout = layout
 
         if gridspec_kw is None:
-            gridspec_kw = dict(hspace=0.0, wspace=0.0)
+            self.gridspec_kw = dict(hspace=0.0, wspace=0.0)
 
-        # ioff/ion is to avoid displaying the matplotlib figure in notebooks, which
-        # will just look like a bunch of blue boxes
-        plt.ioff()
-        self.fig, self.axs = plt.subplot_mosaic(
-            mosaic=self.mosaic,
-            figsize=self.figsize,
-            layout=self.layout,
-            gridspec_kw=gridspec_kw,
-        )
-        plt.ion()
+        self.fig, self.axs = self._set_up_axes()
 
         self.panel_mapping = None
 
-        # self.svg = skunk.pltsvg(self.fig)
+        self.svg = skunk.pltsvg(self.fig)
+
+    def _set_up_axes(self):
+        # ioff/ion is to avoid displaying the matplotlib figure in notebooks, which
+        # will just look like a bunch of blue boxes
+        plt.ioff()
+        fig, axs = plt.subplot_mosaic(
+            mosaic=self.mosaic,
+            figsize=self.figsize,
+            layout=self.layout,
+            gridspec_kw=self.gridspec_kw,
+        )
+        plt.ion()
+        return fig, axs
 
     def label_axes(
         self, fontsize: int = 30, label_pos: tuple[float, float] = (0.0, 1.0)
     ) -> None:
-        axs = self.axs
-        for label, ax in axs.items():
-            ax.text(
-                *label_pos,
-                label + "",
-                ha="left",
-                va="top",
-                transform=ax.transAxes,
-                fontsize=fontsize,
-            )
-            ax.set(xticks=[], yticks=[])
+        _label_axes(self.axs, fontsize=fontsize, label_pos=label_pos)
 
     def format_axes(self, panel_borders: bool = False) -> None:
         for _, ax in self.axs.items():
@@ -106,6 +115,29 @@ class PanelMosaic:
 
     def show(self) -> None:
         skunk.display(self.svg)
+
+    def show_dummies(self, fontsize=20, precision=".2f") -> None:
+        dummy_fig, dummy_axs = self._set_up_axes()
+        _label_axes(dummy_axs)
+        for _, ax in dummy_axs.items():
+            bbox = ax.get_window_extent().transformed(
+                dummy_fig.dpi_scale_trans.inverted()
+            )
+            width, height = bbox.width, bbox.height
+            ax.text(
+                0.5,
+                0.5,
+                f"({width:{precision}}, {height:{precision}})",
+                ha="center",
+                va="center",
+                fontsize=fontsize,
+                transform=ax.transAxes,
+                clip_on=False,
+                zorder=100,
+            )
+            # turn off axis transparency
+            ax.patch.set_alpha(0)
+        skunk.display(skunk.pltsvg(dummy_fig))
 
     def write(self, out_path: Union[str, Path], formats=("svg", "pdf")) -> None:
         if "svg" in formats:

@@ -36,3 +36,8 @@ pm
 
 # %%
 # write_svg(svg, "docs/figures/figure1/figure1")
+pm.show_dummies()
+
+# %%
+ax = pm.axs["A"]
+fig = pm.fig
