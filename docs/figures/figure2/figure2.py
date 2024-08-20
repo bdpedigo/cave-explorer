@@ -1,17 +1,26 @@
 # %%
-from pkg.figures import panel_mosaic, write_svg
+from pkg.figures import panel_mosaic
 
 mosaic = """
-AABBBCCCCC
+AAABBBCCC
+.........
+
 """
 
 panel_mapping = {
-    "A": "docs/images/output_count_diagram.png",
+    "A": "docs/images/connectivity_feature_space.png",
     "B": "docs/images/output_proportion_diagram.png",
-    "C": "docs/images/distances_diagram.png",
+    # "A": "docs/images/output_count_diagram.png",
+    # "C": "docs/images/distances_diagram.png",
 }
-figsize = (10, 2)
-svg = panel_mosaic(
-    mosaic, panel_mapping, constrained_layout=True, panel_borders=False, figsize=figsize
+figsize = (10, 6)
+pm = panel_mosaic(
+    mosaic, panel_mapping, layout="tight", panel_borders=False, figsize=figsize
 )
-write_svg(svg, "docs/figures/figure2/figure2")
+pm.write("docs/figures/figure2/figure2")
+pm
+
+# %%
+pm.show_dummies()
+
+# %%

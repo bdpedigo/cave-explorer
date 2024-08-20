@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Union
+from typing import Any, Union
 
 import cairosvg
 import matplotlib.pyplot as plt
@@ -7,16 +7,22 @@ import skunk
 
 
 def _label_axes(
-    axs, fontsize: int = 30, label_pos: tuple[float, float] = (0.0, 1.0)
+    axs,
+    fontsize: int = 30,
+    label_pos: tuple[float, float] = (0.0, 1.0),
+    horizontalalignment: str = "left",
+    verticalalignment: str = "top",
 ) -> None:
     for label, ax in axs.items():
+        ax.autoscale(False)
         ax.text(
             *label_pos,
             label + "",
-            ha="left",
-            va="top",
+            horizontalalignment="left",
+            verticalalignment="top",
             transform=ax.transAxes,
             fontsize=fontsize,
+            clip_on=False,
         )
         ax.set(xticks=[], yticks=[])
 
@@ -24,7 +30,7 @@ def _label_axes(
 class PanelMosaic:
     def __init__(
         self,
-        mosaic,
+        mosaic: Any,
         figsize=(10, 8),
         layout="tight",
         gridspec_kw=None,
@@ -56,16 +62,59 @@ class PanelMosaic:
         return fig, axs
 
     def label_axes(
-        self, fontsize: int = 30, label_pos: tuple[float, float] = (0.0, 1.0)
+        self,
+        fontsize: int = 30,
+        label_pos: tuple[float, float] = (0.0, 1.0),
+        horizontalalignment: str = "left",
+        verticalalignment: str = "top",
     ) -> None:
-        _label_axes(self.axs, fontsize=fontsize, label_pos=label_pos)
+        """
+        Label the axes of the figure with the panel labels.
+
+        Parameters
+        ----------
+        fontsize :
+            The fontsize of the panel labels.
+        label_pos :
+            The position of the panel labels. This is a tuple of two floats, where the
+            first float is the x position and the second float is the y position.
+            Coordinates are interpreted in axis space, where (0, 0) is the bottom left
+            and (1, 1) is the top right.
+        horizontalalignment :
+            The horizontal alignment of the panel labels.
+        verticalalignment :
+            The vertical alignment of the panel labels.
+        """
+        _label_axes(
+            self.axs,
+            fontsize=fontsize,
+            label_pos=label_pos,
+            horizontalalignment=horizontalalignment,
+            verticalalignment=verticalalignment,
+        )
 
     def format_axes(self, panel_borders: bool = False) -> None:
+        """
+        Format the axes of the figure.
+
+        Parameters
+        ----------
+        panel_borders :
+            Whether to display borders around the panels.
+        """
         for _, ax in self.axs.items():
             if not panel_borders:
                 ax.axis("off")
 
-    def map(self, panel_mapping: dict):
+    def map(self, panel_mapping: dict) -> None:
+        """
+        Map panel images from specified file paths.
+
+        Parameters
+        ----------
+        panel_mapping :
+            A dictionary mapping panel labels to file paths of panel images.
+        """
         self.panel_mapping = panel_mapping
 
         png_panel_mapping = {}
@@ -114,9 +163,24 @@ class PanelMosaic:
         )
 
     def show(self) -> None:
+        """
+        Display the figure.
+
+        This function is useful for displaying the figure in a Jupyter notebook.
+        """
         skunk.display(self.svg)
 
-    def show_dummies(self, fontsize=20, precision=".2f") -> None:
+    def show_dummies(self, fontsize: int = 20, precision: str = ".2f") -> None:
+        """
+        Display the figure with dummy text showing the width and height of each panel.
+
+        Parameters
+        ----------
+        fontsize :
+            The fontsize of the dummy text.
+        precision :
+            The precision of the position displays.
+        """
         dummy_fig, dummy_axs = self._set_up_axes()
         _label_axes(dummy_axs)
         for _, ax in dummy_axs.items():
@@ -139,17 +203,51 @@ class PanelMosaic:
             ax.patch.set_alpha(0)
         skunk.display(skunk.pltsvg(dummy_fig))
 
-    def write(self, out_path: Union[str, Path], formats=("svg", "pdf")) -> None:
+    def write(
+        self, out_path: Union[str, Path], formats: tuple = ("svg", "pdf")
+    ) -> None:
+        """
+        Write the figure to specified file(s).
+
+        Parameters
+        ----------
+        out_path :
+            The path to write the figure to. The file extension will be appended
+            automatically.
+        formats :
+            The file formats to write the figure to. This is a tuple of strings
+            currently supported are "svg" and "pdf".
+        """
         if "svg" in formats:
             self.write_svg(out_path)
         if "pdf" in formats:
             self.write_pdf(out_path)
 
     def write_svg(self, out_path: Union[str, Path]) -> None:
+        """
+        Write the figure to an SVG file.
+
+        Parameters
+        ----------
+        out_path :
+            The path to write the figure to. The file extension will be appended
+            automatically.
+        """
         with open(out_path + ".svg", "w") as f:
             f.write(self.svg)
 
     def write_pdf(self, out_path: Union[str, Path]) -> None:
+        """
+        Write the figure to a PDF file.
+
+        Requires the `cairosvg` package to be installed.
+
+        Parameters
+        ----------
+        out_path :
+            The path to write the figure to. The file extension will be appended
+            automatically.
+        """
         cairosvg.svg2pdf(bytestring=self.svg, write_to=str(out_path) + ".pdf")
 
 

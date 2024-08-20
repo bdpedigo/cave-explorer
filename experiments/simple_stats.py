@@ -101,13 +101,15 @@ counts_df = summary_info.melt(
 counts_df["edit_type"] = (
     counts_df["edit_type"].str.replace("n_filtered_", "").str.capitalize()
 )
-fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+scale = 2
+figsize = (2.58 * scale, 3.08 * scale)
+fig, ax = plt.subplots(1, 1, figsize=figsize)
 sns.histplot(
     data=counts_df,
     x="count",
     hue="edit_type",
     ax=ax,
-    element="step",
+    element="bars",
     bins=20,
     palette=edit_palette,
 )
@@ -684,11 +686,13 @@ ax.set(
 
 # %%
 
+scale = 2
+figsize = (3.87 * scale, 3.08 * scale)
 units = "mm"
 fig, axs = plt.subplots(
     2,
     1,
-    figsize=(6, 6),
+    figsize=figsize,
     gridspec_kw=dict(height_ratios=[2, 5]),
     constrained_layout=True,
     sharex=True,
@@ -744,7 +748,7 @@ ax.text(350, 0.02, "Dendrite", color=DENDRITE_COLOR)
 ax.set(
     xlim=(50, 550),
     xlabel="Radius estimate (nm)",
-    ylabel="Proportion of\narbor",
+    ylabel="Proportion",
 )
 
 n_bins = 21
@@ -831,7 +835,9 @@ counts_by_compartment = pd.concat(
 )
 counts_by_compartment = counts_by_compartment.reset_index()
 
-fig, ax = plt.subplots(1, 1, figsize=(2, 6))
+scale = 2
+figsize = (1.29 * scale, 3.08 * scale)
+fig, ax = plt.subplots(1, 1, figsize=figsize, layout="compressed")
 sns.barplot(
     data=counts_by_compartment,
     x="is_axon",
@@ -843,7 +849,7 @@ sns.barplot(
     palette={"Split": SPLIT_COLOR, "Merge": MERGE_COLOR},
 )
 ax.set_xticks([0, 1])
-ax.set_xticklabels(["Axon", "Dendrite"])
+ax.set_xticklabels(["Axon", "Dendrite"], rotation=0)
 ax.set_ylabel("Number of edits")
 ax.set_xlabel("Compartment")
 ax.get_legend().remove()

@@ -5,8 +5,7 @@ from pkg.figures import panel_mosaic
 
 figsize = (10, 8)
 fontsize = 20
-panel_borders = True
-constrained_layout = False
+panel_borders = False
 mosaic = """
 AABDDD
 AACDDD
@@ -29,15 +28,12 @@ pm = panel_mosaic(
     figsize=figsize,
     fontsize=fontsize,
     panel_borders=panel_borders,
+    layout='compressed'
+    # label_pos=(-0.05, 1.05)
 )
 pm.write("docs/figures/figure1/figure1", formats=("svg", "pdf"))
 pm
 
 
 # %%
-# write_svg(svg, "docs/figures/figure1/figure1")
 pm.show_dummies()
-
-# %%
-ax = pm.axs["A"]
-fig = pm.fig

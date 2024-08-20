@@ -46,6 +46,7 @@ else:
 
 order_by = "time"
 random_seed = 0
+neuron_sequence.edits['not_has_split'] = ~neuron_sequence.edits['has_split']
 if order_by == "time":
     neuron_sequence.edits.sort_values([key, "time"], inplace=True)
 elif order_by == "random":
@@ -69,8 +70,10 @@ while next_operation is not None:
         neuron_sequence.apply_edits(next_operation, only_additions=False)
     i += 1
     pbar.update(1)
+    # break
 pbar.close()
 
+#%%
 if not neuron_sequence.is_completed:
     raise UserWarning("Neuron is not completed.")
 # %%
@@ -82,9 +85,6 @@ neuron_sequence.final_neuron.nodes.index.difference(
 
 for neuron in neuron_sequence.resolved_sequence.values():
     print(len(neuron.pre_synapses))
-# %%
-
-neuron_sequence.current_resolved_neuron.to_skeleton_polydata().plot()
 
 # %%
 # neuron_sequence.edits.sort_values("time", inplace=True)
@@ -97,6 +97,37 @@ neuron_sequence.current_resolved_neuron.to_skeleton_polydata().plot()
 # ):
 #     operation_id = neuron_sequence.edits.index[i]
 #     neuron_sequence.apply_edits(operation_id, warn_on_missing=verbose)
+
+# %%
+skeleton_poly_by_index = {}
+for i, neuron in enumerate(neuron_sequence.resolved_sequence.values()):
+    skeleton_poly = neuron.to_skeleton_polydata()
+    skeleton_poly_by_index[i] = skeleton_poly
+
+import pyvista as pv
+
+pv.set_jupyter_backend("trame")
+plotter = pv.Plotter()
+
+
+actors = []
+
+
+def plot_skeleton_at_index(index):
+    for actor in actors:
+        plotter.remove_actor(actor)
+    index = int(index)
+    actor = plotter.add_mesh(skeleton_poly_by_index[index], color="black", line_width=1.5)
+    actors.append(actor)
+
+
+
+plotter.add_slider_widget(
+    plot_skeleton_at_index, [0, len(skeleton_poly_by_index) - 1], value=0, fmt="%.0f"
+)
+
+plotter.show()
+
 
 # %%
 max_dist = 0
@@ -159,6 +190,7 @@ sns.lineplot(
     y="proportion",
     hue="post_mtype",
     palette=ctype_hues,
+    legend=False,
 )
 
 # %%

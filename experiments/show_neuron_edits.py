@@ -67,6 +67,7 @@ for this_root_id, mesh in meshes.items():
 
 pv.set_jupyter_backend("client")
 
+font_size = 300
 camera_pos = [
     (75046.54147921813, 892734.4784498038, 1975869.7306010728),
     (584010.0, 767487.0, 961926.0),
@@ -94,7 +95,7 @@ plotter.add_point_labels(
     split_cylinder.points[110, :],
     ["B"],
     point_size=0,
-    font_size=150,
+    font_size=font_size,
     shape=None,
     text_color=SPLIT_COLOR,
 )
@@ -113,14 +114,16 @@ plotter.add_point_labels(
     merge_cylinder.points[110, :],
     ["C"],
     point_size=0,
-    font_size=150,
+    font_size=font_size,
     shape=None,
     text_color=MERGE_COLOR,
 )
 
 plotter.camera.zoom(1.5)
 
-plotter.window_size = [3840, 3840]
+scale = 1500
+window_size = (scale * np.array([2.58, 3.08])).astype(int)
+plotter.window_size = window_size
 plotter.camera_position = camera_pos
 
 out_path = Path("docs/result_images/show_neuron_edits")
@@ -137,7 +140,7 @@ center_camera(plotter, split_loc, distance=100_000)
 plotter.enable_depth_of_field()
 plotter.camera.zoom(5)
 
-plotter.window_size = [3840, 3840]
+plotter.window_size = (scale * np.array([1.29, 1.54])).astype(int)
 plotter.save_graphic(out_path / "split_example.svg")
 
 # %%
@@ -151,7 +154,7 @@ center_camera(plotter, merge_loc, distance=100_000)
 plotter.enable_depth_of_field()
 plotter.camera.zoom(5)
 
-plotter.window_size = [3840, 3840]
+plotter.window_size = (scale * np.array([1.29, 1.54])).astype(int)
 plotter.save_graphic(out_path / "merge_example.svg")
 
 # %%
@@ -183,19 +186,20 @@ for root_id in tqdm(root_ids):
 pv.set_jupyter_backend("client")
 
 # shape = (2, 10)
-window_size = [8000, 2000]
+# window_size = [8000, 2000]
 # shape = (4, 5)
 # window_size = [2000, 4000]
 
-shape = (3, 5)
-window_size = [3000, 2500]
+shape = (4, 5)
+# window_size = [3000, 2500]
+window_size = (scale * np.array([3.87, 3.08])).astype(int)
 
 plotter = pv.Plotter(shape=shape, window_size=window_size, border_width=0)
 
 nuc_loc_centroid = manifest.loc[root_ids, ["nuc_x", "nuc_y", "nuc_z"]].values.mean(
     axis=0
 )
-for i, root_id in enumerate(root_ids[:15]):
+for i, root_id in enumerate(root_ids[: shape[0] * shape[1]]):
     skel_poly = skel_polys[root_id]
     point_poly = point_polys[root_id]
 
@@ -204,14 +208,14 @@ for i, root_id in enumerate(root_ids[:15]):
     plotter.add_mesh(
         skel_poly,
         color="black",
-        line_width=1,
+        line_width=1.5,
         opacity=0.6,
         show_scalar_bar=False,
         style="wireframe",
     )
     plotter.add_mesh(
         point_poly,
-        point_size=10,
+        point_size=20,
         render_points_as_spheres=True,
         scalars="is_merge",
         cmap=[SPLIT_COLOR, MERGE_COLOR],
@@ -224,3 +228,5 @@ plotter.remove_bounding_box()
 
 plotter.save_graphic(out_path / "neuron_gallery.svg")
 plotter.save_graphic(out_path / "neuron_gallery.pdf")
+
+# %%
