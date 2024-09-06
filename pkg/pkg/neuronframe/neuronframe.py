@@ -148,7 +148,7 @@ class NeuronFrame(NetworkFrame):
                 "centroid_y": "mean",
                 "centroid_z": "mean",
                 "centroid_distance_to_nuc_um": "min",
-                "datetime": "max",  # using the latest edit in a bunch as the time
+                "datetime": "min",  # using the latest edit in a bunch as the time
             }
         groupby = self.edits.groupby("metaoperation_id")
         groups = groupby.groups

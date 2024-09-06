@@ -1,6 +1,7 @@
 # %%
 
 import caveclient as cc
+import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 from sklearn.metrics import pairwise_distances
@@ -27,168 +28,135 @@ verbose = False
 
 # for root_id in manifest.query("is_sample").index[3:4]:
 root_id = 864691135213953920
-full_neuron = load_neuronframe(root_id, client)
 
-# %%
 prefix = "meta"
-# simple time-ordered case
-neuron_sequence = NeuronFrameSequence(
-    full_neuron,
-    prefix=prefix,
-    edit_label_name=f"{prefix}operation_id",
-    warn_on_missing=verbose,
-)
-
-if prefix == "meta":
-    key = "has_merge"
-else:
-    key = "is_merge"
-
 order_by = "time"
-random_seed = 0
-neuron_sequence.edits["not_has_split"] = ~neuron_sequence.edits["has_split"]
-neuron_sequence.edits["is_all_merge"] = (
-    neuron_sequence.edits["has_merge"] & ~neuron_sequence.edits["has_split"]
-)
-# key = "has_merge"
 key = "not_has_split"
 
-if order_by == "time":
-    neuron_sequence.edits.sort_values([key, "time"], inplace=True)
-elif order_by == "random":
-    rng = np.random.default_rng(random_seed)
-    neuron_sequence.edits["random"] = rng.random(len(neuron_sequence.edits))
-    neuron_sequence.edits.sort_values([key, "random"], inplace=True)
 
+for root_id in manifest.query("is_sample").index:
+    full_neuron = load_neuronframe(root_id, client)
 
-# splits = neuron_sequence.edits.query("~is_merge").index
-# neuron_sequence.apply_edits(splits)
+    neuron_sequence = NeuronFrameSequence(
+        full_neuron,
+        prefix=prefix,
+        edit_label_name=f"{prefix}operation_id",
+        warn_on_missing=verbose,
+    )
 
-i = 0
-next_operation = True
-pbar = tqdm(total=len(neuron_sequence.edits), desc="Applying edits...")
-while next_operation is not None:
-    possible_edit_ids = neuron_sequence.find_incident_edits()
-    if len(possible_edit_ids) == 0:
-        next_operation = None
+    if prefix == "meta":
+        key = "has_merge"
     else:
-        next_operation = possible_edit_ids[0]
-        row = neuron_sequence.edits.loc[next_operation]
-        # if row["has_merge"]:
-        #     print(row)
-        neuron_sequence.apply_edits(next_operation, only_additions=False)
-    i += 1
-    pbar.update(1)
-    # break
-pbar.close()
+        key = "is_merge"
 
-# %%
-if not neuron_sequence.is_completed:
-    raise UserWarning("Neuron is not completed.")
-# %%
-neuron_sequence.final_neuron.nodes.index.difference(
-    neuron_sequence.current_resolved_neuron.nodes.index
-)
+    random_seed = 0
+    neuron_sequence.edits["not_has_split"] = ~neuron_sequence.edits["has_split"]
+    neuron_sequence.edits["is_all_merge"] = (
+        neuron_sequence.edits["has_merge"] & ~neuron_sequence.edits["has_split"]
+    )
+    # key = "has_merge"
 
-# %%
+    if order_by == "time":
+        neuron_sequence.edits.sort_values([key, "time"], inplace=True)
+    elif order_by == "random":
+        rng = np.random.default_rng(random_seed)
+        neuron_sequence.edits["random"] = rng.random(len(neuron_sequence.edits))
+        neuron_sequence.edits.sort_values([key, "random"], inplace=True)
 
-for neuron in neuron_sequence.resolved_sequence.values():
-    print(len(neuron.pre_synapses))
+    # splits = neuron_sequence.edits.query("~is_merge").index
+    # neuron_sequence.apply_edits(splits)
 
-# %%
-# neuron_sequence.edits.sort_values("time", inplace=True)
+    i = 0
+    next_operation = True
+    pbar = tqdm(total=len(neuron_sequence.edits), desc="Applying edits...")
+    while next_operation is not None:
+        possible_edit_ids = neuron_sequence.find_incident_edits()
+        if len(possible_edit_ids) == 0:
+            next_operation = None
+        else:
+            next_operation = possible_edit_ids[0]
+            row = neuron_sequence.edits.loc[next_operation]
+            # if row["has_merge"]:
+            #     print(row)
+            neuron_sequence.apply_edits(next_operation, only_additions=False)
+        i += 1
+        pbar.update(1)
+        # break
+    pbar.close()
 
-# for i in tqdm(
-#     range(len(neuron_sequence.edits)),
-#     leave=False,
-#     desc="Applying edits...",
-#     disable=not verbose,
-# ):
-#     operation_id = neuron_sequence.edits.index[i]
-#     neuron_sequence.apply_edits(operation_id, warn_on_missing=verbose)
+    if not neuron_sequence.is_completed:
+        raise UserWarning("Neuron is not completed.")
 
-manifest.loc[root_id, "target_id"]
+    max_dist = 0
+    for _, neuron in neuron_sequence.resolved_sequence.items():
+        positions = neuron.nodes[["x", "y", "z"]]
+        soma_pos = full_neuron.nodes[["x", "y", "z"]].loc[full_neuron.nucleus_id]
+        positions_values = positions.values
+        soma_positions_values = soma_pos.values.reshape(1, -1)
 
+        distances = np.squeeze(
+            pairwise_distances(positions_values, soma_positions_values)
+        )
+        max_dist = max(max_dist, distances.max())
 
-# %%
-max_dist = 0
-for _, neuron in neuron_sequence.resolved_sequence.items():
-    positions = neuron.nodes[["x", "y", "z"]]
-    soma_pos = full_neuron.nodes[["x", "y", "z"]].loc[full_neuron.nucleus_id]
-    positions_values = positions.values
-    soma_positions_values = soma_pos.values.reshape(1, -1)
+    target_id = manifest.loc[root_id, "target_id"]
+    name = f"all_edits_by_time-target_id={target_id}"
 
-    distances = np.squeeze(pairwise_distances(positions_values, soma_positions_values))
-    max_dist = max(max_dist, distances.max())
+    pre_synapses = neuron_sequence.base_neuron.pre_synapses
+    pre_synapses["post_mtype"] = pre_synapses["post_pt_root_id"].map(
+        mtypes["cell_type"]
+    )
 
-target_id = manifest.loc[root_id, "target_id"]
-name = f"all_edits_by_time-target_id={target_id}"
+    neuron_sequence.sequence_info["pre_synapses"]
 
-pre_synapses = neuron_sequence.base_neuron.pre_synapses
-pre_synapses["post_mtype"] = pre_synapses["post_pt_root_id"].map(mtypes["cell_type"])
+    output_proportions = neuron_sequence.apply_to_synapses_by_sample(
+        compute_target_proportions, which="pre", by="post_mtype"
+    )
+    # neuron_sequence.select_by_bout(
+    by = "is_all_merge"
+    keep = "last"
+    bouts = neuron_sequence.sequence_info[by].fillna(False).cumsum() + 1
+    bouts.iloc[0] = 0
+    bouts.name = "bout"
+    if keep == "first":
+        keep_ind = 0
+    else:
+        keep_ind = -1
+    bout_exemplars = (
+        neuron_sequence.sequence_info.index.to_series()
+        .groupby(bouts, sort=False)
+        .apply(lambda x: x.iloc[keep_ind])
+    ).values
+    # bout_exemplars = pd.Index(bout_exemplars, name='metaoperation_id')
+    # bout_exemplars = neuron_sequence.sequence_info.index
 
-neuron_sequence.sequence_info["pre_synapses"]
+    output_proportions = output_proportions.loc[bout_exemplars]
 
-output_proportions = neuron_sequence.apply_to_synapses_by_sample(
-    compute_target_proportions, which="pre", by="post_mtype"
-)
-# neuron_sequence.select_by_bout(
-by = "is_all_merge"
-keep = "last"
-bouts = neuron_sequence.sequence_info[by].fillna(False).cumsum() + 1
-bouts.iloc[0] = 0
-bouts.name = "bout"
-if keep == "first":
-    keep_ind = 0
-else:
-    keep_ind = -1
-bout_exemplars = (
-    neuron_sequence.sequence_info.index.to_series()
-    .groupby(bouts, sort=False)
-    .apply(lambda x: x.iloc[keep_ind])
-).values
-# bout_exemplars = pd.Index(bout_exemplars, name='metaoperation_id')
-bout_exemplars = neuron_sequence.sequence_info.index
+    cumulative_n_operations_map = neuron_sequence.sequence_info.loc[bout_exemplars][
+        "cumulative_n_operations"
+    ]
 
-output_proportions = output_proportions.loc[bout_exemplars]
+    output_proportions_long = (
+        output_proportions.fillna(0)
+        .reset_index()
+        .melt(value_name="proportion", id_vars=f"{prefix}operation_id")
+    )
 
-cumulative_n_operations_map = neuron_sequence.sequence_info.loc[bout_exemplars][
-    "cumulative_n_operations"
-]
+    output_proportions_long["cumulative_n_operations"] = output_proportions_long[
+        f"{prefix}operation_id"
+    ].map(cumulative_n_operations_map)
 
-output_proportions_long = (
-    output_proportions.fillna(0)
-    .reset_index()
-    .melt(value_name="proportion", id_vars=f"{prefix}operation_id")
-)
-
-output_proportions_long["cumulative_n_operations"] = output_proportions_long[
-    f"{prefix}operation_id"
-].map(cumulative_n_operations_map)
-
-
-sns.lineplot(y=output_proportions["L6short-a"], x=np.arange(len(output_proportions)))
-
-# %%
-output_proportions["L6short-a"].diff().abs().plot()
-
-# %%
-idxmax = output_proportions["L6short-a"].diff().abs().idxmax()
-
-iloc = neuron_sequence.sequence_info.index.get_loc(idxmax)
-before = iloc - 1
-before_id = neuron_sequence.sequence_info.index[before]
-
-# %%
-
-sns.lineplot(
-    data=output_proportions_long,
-    x="cumulative_n_operations",
-    y="proportion",
-    hue="post_mtype",
-    palette=ctype_hues,
-    legend=False,
-)
+    fig, ax = plt.subplots(figsize=(6, 6))
+    sns.lineplot(
+        data=output_proportions_long,
+        x="cumulative_n_operations",
+        y="proportion",
+        hue="post_mtype",
+        palette=ctype_hues,
+        legend=False,
+        ax=ax,
+    )
+    plt.show()
 
 # %%
 bout_exemplars = (
