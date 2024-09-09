@@ -3,6 +3,7 @@
 import caveclient as cc
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import seaborn as sns
 from sklearn.metrics import pairwise_distances
 from tqdm.auto import tqdm
@@ -32,6 +33,34 @@ root_id = 864691135213953920
 prefix = "meta"
 order_by = "time"
 key = "not_has_split"
+
+
+def compute_precision_recall(sequence: pd.DataFrame, which="pre"):
+    synapses: pd.Series = sequence.sequence_info[f"{which}_synapses"]
+    final_synapses = synapses.iloc[-1]
+
+    results = pd.DataFrame(
+        index=synapses.index,
+        columns=[f"{which}_synapse_recall", f"{which}_synapse_precision"],
+    )
+    for idx, synapses in synapses.items():
+        n_intersection = len(np.intersect1d(final_synapses, synapses))
+
+        # recall: the proportion of synapses in the final state that show up in the current
+        if len(final_synapses) == 0:
+            recall = np.nan
+        else:
+            recall = n_intersection / len(final_synapses)
+            results.loc[idx, f"{which}_synapse_recall"] = recall
+
+        # precision: the proportion of synapses in the current state that show up in the final
+        if len(synapses) == 0:
+            precision = np.nan
+        else:
+            precision = n_intersection / len(synapses)
+            results.loc[idx, f"{which}_synapse_precision"] = precision
+
+    return results
 
 
 for root_id in manifest.query("is_sample").index:
