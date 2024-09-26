@@ -18,8 +18,8 @@ def _label_axes(
         ax.text(
             *label_pos,
             label + "",
-            horizontalalignment="left",
-            verticalalignment="top",
+            horizontalalignment=horizontalalignment,
+            verticalalignment=verticalalignment,
             transform=ax.transAxes,
             fontsize=fontsize,
             clip_on=False,
@@ -51,6 +51,7 @@ class PanelMosaic:
     def _set_up_axes(self):
         # ioff/ion is to avoid displaying the matplotlib figure in notebooks, which
         # will just look like a bunch of blue boxes
+        # TODO see if a with statement here would work
         plt.ioff()
         fig, axs = plt.subplot_mosaic(
             mosaic=self.mosaic,

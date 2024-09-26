@@ -3,6 +3,7 @@ from .metrics import (
     annotate_mtypes,
     annotate_pre_synapses,
     compute_counts,
+    compute_precision_recall,
     compute_spatial_target_proportions,
     compute_target_counts,
     compute_target_proportions,
@@ -17,5 +18,6 @@ __all__ = [
     "compute_target_counts",
     "compute_target_proportions",
     "compute_counts",
+    "compute_precision_recall",
     "MotifFinder",
 ]

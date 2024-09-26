@@ -10,7 +10,11 @@ from sklearn.metrics import pairwise_distances
 
 from pkg.constants import OUT_PATH
 from pkg.neuronframe import NeuronFrame, load_neuronframe
-from pkg.sequence import create_merge_and_clean_sequence, create_time_ordered_sequence
+from pkg.sequence import (
+    create_lumped_time_sequence,
+    create_merge_and_clean_sequence,
+    create_time_ordered_sequence,
+)
 from pkg.utils import load_manifest, load_mtypes
 
 cloud_bucket = "allen-minnie-phase3"
@@ -28,10 +32,12 @@ files["order_by"] = files["file"].str.split("=").str[2].str.split("-").str[0]
 files["random_seed"] = files["file"].str.split("=").str[3].str.split("-").str[0]
 
 file_counts = files.groupby("root_id").size()
-has_all = file_counts[file_counts == 12].index
+has_all = file_counts[file_counts == 13].index
 
-files["scheme"] = "historical"
-files.loc[files["order_by"].notna(), "scheme"] = "clean-and-merge"
+# files["scheme"] = "historical"
+# files.loc[files["order_by"].notna(), "scheme"] = "clean-and-merge"
+
+files["scheme"] = files["file"].str.split("-").str[-1].str.split(".").str[0].str[:-9]
 
 files_finished = files.query("root_id in @has_all")
 manifest = load_manifest()
@@ -246,6 +252,8 @@ def process_for_neuron(root_id, rows):
                 neuron, root_id, order_by=order_by, random_seed=random_seed
             )
             sequence = sequence.select_by_bout("has_merge", keep="last")
+        elif scheme == "lumped-time":
+            sequence = create_lumped_time_sequence(neuron, root_id)
         elif scheme == "historical":
             sequence = create_time_ordered_sequence(neuron, root_id)
         else:

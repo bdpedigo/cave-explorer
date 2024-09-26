@@ -2,7 +2,6 @@
 
 import pickle
 
-import caveclient as cc
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -14,13 +13,11 @@ from sklearn.metrics import pairwise_distances_argmin_min
 
 from pkg.constants import MERGE_COLOR, OUT_PATH, SPLIT_COLOR
 from pkg.plot import savefig, set_context
-from pkg.utils import get_nucleus_point_nm, load_manifest, load_mtypes
-
-# %%
+from pkg.utils import get_nucleus_point_nm, load_manifest, load_mtypes, start_client
 
 set_context()
 
-client = cc.CAVEclient("minnie65_phase3_v1")
+client = start_client()
 mtypes = load_mtypes(client)
 
 distance_colors = sns.color_palette("Set1", n_colors=5)
@@ -79,6 +76,8 @@ def compute_diffs_to_final(sequence_df):
 precision_recall_df = pd.concat(meta_features_df["pre_precision_recall"].to_list())[
     ["recall", "precision"]
 ]
+
+
 precision_recall_df["f1"] = (
     2
     * precision_recall_df["precision"]
@@ -86,11 +85,9 @@ precision_recall_df["f1"] = (
     / (precision_recall_df["precision"] + precision_recall_df["recall"])
 )
 
-
 scheme = "historical"
 
 idx = pd.IndexSlice
-
 
 if scheme == "historical":
     precision_recall_df = precision_recall_df.loc[idx[:, ["historical"], :, :]]
@@ -100,41 +97,24 @@ if scheme == "historical":
     precision_recall_df = precision_recall_df.join(
         info, on=["root_id", "order"]
     ).droplevel("scheme")
+    precision_recall_df.index.rename({None: "operation_id"}, inplace=True)
 elif scheme == "clean-and-merge-time":
-    precision_recall_df = precision_recall_df.loc[idx[:, "clean-and-merge", "time", :]]
+    precision_recall_df = precision_recall_df.loc[
+        idx[:, ["clean-and-merge"], ["time"], :]
+    ]
+    info = all_infos.loc[idx[:, "clean-and-merge", "time", :, :]]
+    precision_recall_df = precision_recall_df.droplevel(["random_seed"])
+    info = info.droplevel("random_seed")
+    precision_recall_df = precision_recall_df.join(
+        info, on=["root_id", "order"]
+    ).droplevel(["scheme", "order_by"])
+    precision_recall_df = precision_recall_df.drop("metaoperation_id", axis=1)
+    precision_recall_df.index.rename({None: "metaoperation_id"}, inplace=True)
+    # precision_recall_df.index.rename()
 elif scheme == "clean-and-merge-random":
     precision_recall_df = precision_recall_df.loc[
         idx[:, "clean-and-merge", "random", :]
     ]
-
-
-# %%
-
-fig, ax = plt.subplots(1, 1, figsize=(6, 6))
-
-sns.scatterplot(
-    data=precision_recall_df.reset_index(),
-    x="recall",
-    y="precision",
-    # hue="root_id",
-    s=10,
-    linewidth=0,
-    alpha=0.1,
-    ax=ax,
-)
-# %%
-fig, ax = plt.subplots(1, 1, figsize=(6, 6))
-
-sns.lineplot(
-    data=precision_recall_df.reset_index(),
-    x="recall",
-    y="precision",
-    # hue="root_id",
-    units="root_id",
-    estimator=None,
-    alpha=0.1,
-    ax=ax,
-)
 
 # %%
 import numpy as np
@@ -142,10 +122,11 @@ import numpy as np
 edit_palette = {True: MERGE_COLOR, False: SPLIT_COLOR}
 colors = sns.color_palette("Set1")
 colors = [colors[0], colors[1], colors[3]]
+x = "cumulative_n_operations"
 for i, root_id in enumerate(manifest.query("is_example").index):
     df = precision_recall_df.loc[root_id].copy()
-    df["is_filtered"] = df["is_filtered"].fillna(True)
-    df = df.query("is_filtered")
+    # df["is_filtered"] = df["is_filtered"].fillna(True)
+    # df = df.query("is_filtered")
     df["filtered_order"] = np.arange(df.shape[0])
 
     fig, ax = plt.subplots(
@@ -158,7 +139,7 @@ for i, root_id in enumerate(manifest.query("is_example").index):
     # ax = axs[0]
     sns.lineplot(
         data=df.reset_index(),
-        x="filtered_order",
+        x=x,
         y="precision",
         color=colors[0],
         label="Precision",
@@ -168,7 +149,7 @@ for i, root_id in enumerate(manifest.query("is_example").index):
     )
     sns.lineplot(
         data=df.reset_index(),
-        x="filtered_order",
+        x=x,
         y="recall",
         color=colors[1],
         label="Recall",
@@ -178,7 +159,7 @@ for i, root_id in enumerate(manifest.query("is_example").index):
     )
     sns.lineplot(
         data=df.reset_index(),
-        x="filtered_order",
+        x=x,
         y="f1",
         color=colors[2],
         label="F1",
@@ -213,6 +194,14 @@ for i, root_id in enumerate(manifest.query("is_example").index):
     # ax.spines["left"].set_visible(False)
     target_id = manifest.loc[root_id, "target_id"]
     savefig(f"precision_recall_{target_id}", fig, folder="precision_recall")
+
+# %%
+
+for i, root_id in enumerate(manifest.query("is_example").index):
+    df = precision_recall_df.loc[root_id].copy()
+    df["is_filtered"] = df["is_filtered"].fillna(True)
+    df = df.query("is_filtered")
+    df["filtered_order"] = np.arange(df.shape[0])
 
 
 # %%

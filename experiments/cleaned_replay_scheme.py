@@ -27,8 +27,6 @@ manifest = load_manifest()
 folder = "animations"
 verbose = False
 
-# for root_id in manifest.query("is_sample").index[3:4]:
-root_id = 864691135213953920
 
 prefix = "meta"
 order_by = "time"
@@ -70,6 +68,9 @@ def compute_precision_recall(sequence: pd.DataFrame, which="pre"):
     return results
 
 
+cv = client.info.segmentation_cloudvolume()
+cv.cache.enabled = True
+
 for root_id in manifest.query("is_sample").index:
     full_neuron = load_neuronframe(root_id, client)
     candidate_metaedits = full_neuron.metaedits.query(
@@ -81,13 +82,20 @@ for root_id in manifest.query("is_sample").index:
             second = operation_ids[1]
             first_row = full_neuron.edits.loc[first]
             second_row = full_neuron.edits.loc[second]
-            # if (not first_row["is_merge"]) and (second_row["is_merge"]):
-            #     print("here")
-            print(
-                full_neuron.edits.loc[operation_ids][
-                    ["centroid_x", "centroid_y", "centroid_z"]
-                ]
-            )
+            if (not first_row["is_merge"]) and (second_row["is_merge"]):
+                print(
+                    full_neuron.edits.loc[operation_ids][
+                        ["centroid_x", "centroid_y", "centroid_z"]
+                    ]
+                )
+
+                rows = full_neuron.edits.loc[operation_ids]
+                before_all = first_row["before_root_ids"][0]
+                after_split = first_row["roots"]
+                before_merge = second_row["before_root_ids"]
+                after_all = second_row["roots"][0]
+
+                all_ids = [before_all, *after_split, *before_merge, after_all]
 
     break
     continue
@@ -239,6 +247,86 @@ for root_id in manifest.query("is_sample").index:
         color="purple",
     )
     plt.show()
+
+# %%
+
+import numpy as np
+import pyvista as pv
+from cloudvolume import CloudVolume
+from neurovista import center_camera, to_mesh_polydata
+
+help(CloudVolume)
+# %%
+cv = client.info.segmentation_cloudvolume(cache=True, parallel=6)
+# %%
+meshes = cv.mesh.get(all_ids)
+
+# %%
+
+from neurovista import crop_around_point
+
+center_loc = second_row[["centroid_x", "centroid_y", "centroid_z"]].values
+
+mesh_polys = {}
+for mesh_id, mesh in meshes.items():
+    poly = to_mesh_polydata(mesh.vertices, mesh.faces)
+    poly = crop_around_point(poly, center_loc, 80_000, mode="clip_surface")
+    mesh_polys[mesh_id] = poly
+#%%
+import requests
+
+# requests.adapters.DEFAULT_RETRIES
+# requests.adapters.DEFAULT_POOLBLOCK
+# requests.adapters.DEFAULT_POOLSIZE
+
+#%%
+client.l2cache._max_retries
+
+# %%
+pv.set_jupyter_backend("trame")
+plotter = pv.Plotter(shape=(1, 4))
+
+plotter.subplot(0, 0)
+plotter.add_mesh(
+    mesh_polys[before_all],
+    color="blue",
+    opacity=0.2,
+)
+
+plotter.subplot(0, 1)
+plotter.add_mesh(
+    mesh_polys[after_split[0]],
+    color="green",
+    opacity=0.2,
+)
+plotter.add_mesh(
+    mesh_polys[after_split[1]],
+    color="green",
+    opacity=0.2,
+)
+
+plotter.subplot(0, 2)
+plotter.add_mesh(
+    mesh_polys[before_merge[0]],
+    color="red",
+    opacity=0.2,
+)
+plotter.add_mesh(
+    mesh_polys[before_merge[1]],
+    color="red",
+    opacity=0.2,
+)
+
+plotter.subplot(0, 3)
+plotter.add_mesh(
+    mesh_polys[after_all],
+    color="purple",
+    opacity=0.2,
+)
+center_camera(plotter, center_loc, 50_000)
+plotter.link_views()
+plotter.show()
+
 
 # %%
 bout_exemplars = (

@@ -65,6 +65,60 @@ def create_time_ordered_sequence(
 @lazycloud(
     cloud_bucket="allen-minnie-phase3",
     folder="edit_sequences",
+    file_suffix="lumped_time_sequence.pkl",
+    kwarg_keys=["root_id"],
+    save_format="pickle",
+)
+def _create_lumped_time_sequence_dict(
+    neuron: NeuronFrame,
+    root_id: Optional[int] = None,
+    use_cache: bool = True,
+    cache_verbose: bool = False,
+    only_load: bool = False,
+) -> dict:
+    root_id
+    use_cache
+    cache_verbose
+    only_load
+
+    neuron_sequence = NeuronFrameSequence(
+        neuron, prefix="meta", edit_label_name="metaoperation_id"
+    )
+    neuron_sequence.edits.sort_values("time", inplace=True)
+
+    for i in tqdm(range(len(neuron_sequence.edits)), disable=True):
+        operation_id = neuron_sequence.edits.index[i]
+        neuron_sequence.apply_edits(operation_id)
+
+    if not neuron_sequence.is_completed:
+        raise UserWarning("Neuron is not completed.")
+
+    return neuron_sequence.to_dict()
+
+
+def create_lumped_time_sequence(
+    neuron: NeuronFrame,
+    root_id: Optional[int] = None,
+    use_cache: bool = True,
+    cache_verbose: bool = False,
+    only_load: bool = False,
+) -> NeuronFrameSequence:
+    info = _create_lumped_time_sequence_dict(
+        neuron,
+        root_id=root_id,
+        use_cache=use_cache,
+        cache_verbose=cache_verbose,
+        only_load=only_load,
+    )
+    if info is None:
+        return None
+    else:
+        return NeuronFrameSequence.from_dict_and_neuron(info, neuron)
+
+
+@lazycloud(
+    cloud_bucket="allen-minnie-phase3",
+    folder="edit_sequences",
     file_suffix="merge_and_clean_sequence.pkl",
     kwarg_keys=["root_id", "order_by", "random_seed"],
     save_format="pickle",

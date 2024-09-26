@@ -118,7 +118,7 @@ class NeuronFrameSequence:
         ],
         label: Optional[Hashable] = None,
         warn_on_reuse: bool = False,
-        warn_on_missing: bool = True,
+        warn_on_missing: bool = False,
         replace: bool = False,
         only_additions: bool = False,
     ) -> None:
@@ -154,6 +154,8 @@ class NeuronFrameSequence:
             unresolved_neuron = self.base_neuron.set_edits(
                 self.applied_edit_ids, inplace=False, prefix=self.prefix
             )
+
+        self.unresolved_sequence[label] = unresolved_neuron
 
         resolved_neuron = resolve_neuron(
             unresolved_neuron, self.base_neuron, warn_on_missing=warn_on_missing
@@ -432,7 +434,7 @@ class NeuronFrameSequence:
     #     for
 
 
-def resolve_neuron(unresolved_neuron, base_neuron, warn_on_missing=True):
+def resolve_neuron(unresolved_neuron, base_neuron, warn_on_missing=False):
     if base_neuron.nucleus_id in unresolved_neuron.nodes.index:
         resolved_neuron = unresolved_neuron.select_nucleus_component(inplace=False)
     else:
