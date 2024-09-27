@@ -74,24 +74,28 @@ def compute_diffs_to_final(sequence_df):
 
 # %%
 precision_recall_df = pd.concat(meta_features_df["pre_precision_recall"].to_list())[
-    ["recall", "precision"]
+    ["pre_synapse_recall", "pre_synapse_precision"]
 ]
 
 
 precision_recall_df["f1"] = (
     2
-    * precision_recall_df["precision"]
-    * precision_recall_df["recall"]
-    / (precision_recall_df["precision"] + precision_recall_df["recall"])
+    * precision_recall_df["pre_synapse_precision"]
+    * precision_recall_df["pre_synapse_recall"]
+    / (
+        precision_recall_df["pre_synapse_precision"]
+        + precision_recall_df["pre_synapse_recall"]
+    ).replace(0, 1)
 )
 
-scheme = "historical"
+# scheme = "historical"
+scheme = "lumped-time"
 
 idx = pd.IndexSlice
 
-if scheme == "historical":
-    precision_recall_df = precision_recall_df.loc[idx[:, ["historical"], :, :]]
-    info = all_infos.loc[idx[:, "historical", :, :, :]]
+if scheme == "historical" or scheme == "lumped-time":
+    precision_recall_df = precision_recall_df.loc[idx[:, [scheme], :, :]]
+    info = all_infos.loc[idx[:, scheme, :, :, :]]
     precision_recall_df = precision_recall_df.droplevel(["order_by", "random_seed"])
     info = info.droplevel(["order_by", "random_seed"])
     precision_recall_df = precision_recall_df.join(
@@ -117,7 +121,6 @@ elif scheme == "clean-and-merge-random":
     ]
 
 # %%
-import numpy as np
 
 edit_palette = {True: MERGE_COLOR, False: SPLIT_COLOR}
 colors = sns.color_palette("Set1")
@@ -127,7 +130,8 @@ for i, root_id in enumerate(manifest.query("is_example").index):
     df = precision_recall_df.loc[root_id].copy()
     # df["is_filtered"] = df["is_filtered"].fillna(True)
     # df = df.query("is_filtered")
-    df["filtered_order"] = np.arange(df.shape[0])
+    # df["filtered_order"] = np.arange(df.shape[0])
+    df["x"] = df["n_operations"].cumsum()
 
     fig, ax = plt.subplots(
         1,
@@ -140,7 +144,7 @@ for i, root_id in enumerate(manifest.query("is_example").index):
     sns.lineplot(
         data=df.reset_index(),
         x=x,
-        y="precision",
+        y="pre_synapse_precision",
         color=colors[0],
         label="Precision",
         linestyle=":",
@@ -150,7 +154,7 @@ for i, root_id in enumerate(manifest.query("is_example").index):
     sns.lineplot(
         data=df.reset_index(),
         x=x,
-        y="recall",
+        y="pre_synapse_recall",
         color=colors[1],
         label="Recall",
         linestyle="--",
@@ -175,25 +179,47 @@ for i, root_id in enumerate(manifest.query("is_example").index):
 
     # ax = axs[1]
     # ax = axs[0]
-    is_merge = df["is_merge"].values[1:].astype(bool)
-    for i in range(len(is_merge)):
-        indicator = is_merge[i]
-        ax.fill_between(
-            [i, i + 1],
-            0,
-            1.01,
-            color=edit_palette[indicator],
-            alpha=0.2,
-            linewidth=0,
-            # hatch="." if indicator else "",
-            # where=is_merge[i],
-        )
+    # is_merge = df["has_merge"].values[1:].astype(bool)
+    # for i in range(len(is_merge)):
+    #     indicator = is_merge[i]
+    #     ax.fill_between(
+    #         [i, i + 1],
+    #         0,
+    #         1.01,
+    #         color=edit_palette[indicator],
+    #         alpha=0.2,
+    #         linewidth=0,
+    #         # hatch="." if indicator else "",
+    #         # where=is_merge[i],
+    #     )
+    counter = 0
+    for i, edit_row in df.iterrows():
+        operation_id = i[0]
+        order = i[1]
+        if order == 0:
+            continue
+        is_merges = edit_row["is_merges"]
+        for is_merge in is_merges:
+            ax.fill_between(
+                [counter, counter + 1],
+                0,
+                1.01,
+                color=edit_palette[is_merge],
+                alpha=0.2,
+                linewidth=0,
+            )
+            counter += 1
 
     # ax = axs[1]
     # ax.set(yticks=[], xlabel="State")
     # ax.spines["left"].set_visible(False)
     target_id = manifest.loc[root_id, "target_id"]
-    savefig(f"precision_recall_{target_id}", fig, folder="precision_recall")
+    savefig(
+        f"precision_recall_target={target_id}_scheme={scheme}",
+        fig,
+        folder="precision_recall",
+    )
+    break
 
 # %%
 

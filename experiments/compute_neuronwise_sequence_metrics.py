@@ -32,16 +32,21 @@ files["order_by"] = files["file"].str.split("=").str[2].str.split("-").str[0]
 files["random_seed"] = files["file"].str.split("=").str[3].str.split("-").str[0]
 
 file_counts = files.groupby("root_id").size()
-has_all = file_counts[file_counts == 13].index
+has_all = file_counts[file_counts >= 12].index
 
 # files["scheme"] = "historical"
 # files.loc[files["order_by"].notna(), "scheme"] = "clean-and-merge"
 
 files["scheme"] = files["file"].str.split("-").str[-1].str.split(".").str[0].str[:-9]
+files['scheme'] = files['scheme'].str.replace('_', '-')
+files['scheme'] = files['scheme'].str.replace('merge-and-clean', 'clean-and-merge')
+files['scheme'] = files['scheme'].str.replace('time-ordered', 'historical')
 
 files_finished = files.query("root_id in @has_all")
 manifest = load_manifest()
 manifest = manifest.query("in_inhibitory_column")
+
+print(len(np.intersect1d(files_finished["root_id"].unique(), manifest.index)))
 
 # %%
 
@@ -187,6 +192,26 @@ def compute_precision_recall(sequence: pd.DataFrame, which="pre"):
     return results
 
 
+def compute_synapses_in_final(sequence: pd.DataFrame, which="pre"):
+    synapses: pd.Series = sequence.sequence_info[f"{which}_synapses"]
+    final_synapses = synapses.iloc[-1]
+
+    results = pd.Series(
+        index=synapses.index,
+        name=f"{which}_synapses_in_final",
+    )
+    for idx, synapses in synapses.items():
+        n_intersection = len(np.intersect1d(final_synapses, synapses))
+        results.loc[idx] = n_intersection
+    return results.to_frame()
+
+
+def compute_partners(synapses_df: pd.DataFrame, by=None):
+    result = synapses_df["post_pt_root_id"].unique()
+    result = pd.Series(index=result, data=1)
+    return result
+
+
 # %%
 
 from pkg.utils import start_client
@@ -197,31 +222,24 @@ mtypes = load_mtypes(client)
 
 # %%
 
-root_id = 864691134886016762
-neuron = load_neuronframe(root_id, client)
-annotate_pre_synapses(neuron, mtypes)
-annotate_mtypes(neuron, mtypes)
+# root_id = 864691134886016762
+# neuron = load_neuronframe(root_id, client)
+# annotate_pre_synapses(neuron, mtypes)
+# annotate_mtypes(neuron, mtypes)
 
 
 # %%
-def compute_partners(synapses_df: pd.DataFrame, by=None):
-    result = synapses_df["post_pt_root_id"].unique()
-    result = pd.Series(index=result, data=1)
-    return result
-    # result = result / result.sum()
-    # return result
 
-
-sequence = create_time_ordered_sequence(neuron, root_id)
-partner_sequence = sequence.apply_to_synapses_by_sample(compute_partners, which="pre")
+# sequence = create_time_ordered_sequence(neuron, root_id)
+# partner_sequence = sequence.apply_to_synapses_by_sample(compute_partners, which="pre")
 
 
 # %%
-X = partner_sequence.fillna(0).values
+# X = partner_sequence.fillna(0).values
 
-from scipy.spatial.distance import cdist
+# from scipy.spatial.distance import cdist
 
-distances = cdist(X, X[-1, :].reshape(1, -1), metric="hamming")
+# distances = cdist(X, X[-1, :].reshape(1, -1), metric="hamming")
 
 # %%
 
@@ -262,24 +280,28 @@ def process_for_neuron(root_id, rows):
         sequence_key = (root_id, scheme, order_by, random_seed)
 
         sequence_feature_dfs = {}
+        # counts of outputs
         counts_by_mtype = sequence.apply_to_synapses_by_sample(
             compute_target_counts, which="pre", by="post_mtype"
         )
         counts_by_mtype = apply_metadata(counts_by_mtype, sequence_key)
         sequence_feature_dfs["counts_by_mtype"] = counts_by_mtype
 
+        # proportion of outputs by mtype
         props_by_mtype = sequence.apply_to_synapses_by_sample(
             compute_target_proportions, which="pre", by="post_mtype"
         )
         props_by_mtype = apply_metadata(props_by_mtype, sequence_key)
         sequence_feature_dfs["props_by_mtype"] = props_by_mtype
 
+        # spatial props
         spatial_props = sequence.apply_to_synapses_by_sample(
             compute_spatial_target_proportions, which="pre", mtypes=mtypes
         )
         spatial_props = apply_metadata(spatial_props, sequence_key)
         sequence_feature_dfs["spatial_props"] = spatial_props
 
+        # spatial props by mtype
         spatial_props_by_mtype = sequence.apply_to_synapses_by_sample(
             compute_spatial_target_proportions,
             which="pre",
@@ -289,20 +311,27 @@ def process_for_neuron(root_id, rows):
         spatial_props_by_mtype = apply_metadata(spatial_props_by_mtype, sequence_key)
         sequence_feature_dfs["spatial_props_by_mtype"] = spatial_props_by_mtype
 
+        # partners
         partners = sequence.apply_to_synapses_by_sample(compute_partners, which="pre")
         partners = partners.fillna(0)
         partners = apply_metadata(partners, sequence_key)
-
         sequence_feature_dfs["partners"] = partners
 
+        # precision recall
         pre_precision_recall = compute_precision_recall(sequence, which="pre")
         pre_precision_recall = apply_metadata(pre_precision_recall, sequence_key)
-
         post_precision_recall = compute_precision_recall(sequence, which="post")
         post_precision_recall = apply_metadata(post_precision_recall, sequence_key)
-
         sequence_feature_dfs["pre_precision_recall"] = pre_precision_recall
         sequence_feature_dfs["post_precision_recall"] = post_precision_recall
+
+        # synapses in final
+        pre_synapses_in_final = compute_synapses_in_final(sequence, which="pre")
+        pre_synapses_in_final = apply_metadata(pre_synapses_in_final, sequence_key)
+        post_synapses_in_final = compute_synapses_in_final(sequence, which="post")
+        post_synapses_in_final = apply_metadata(post_synapses_in_final, sequence_key)
+        sequence_feature_dfs["pre_synapses_in_final"] = pre_synapses_in_final
+        sequence_feature_dfs["post_synapses_in_final"] = post_synapses_in_final
 
         neuron_sequence_features[sequence_key] = sequence_feature_dfs
 
@@ -327,9 +356,12 @@ inputs = [
     )
 ]
 
-results = Parallel(n_jobs=8, verbose=10)(
-    delayed(process_for_neuron)(*input) for input in inputs
-)
+from tqdm_joblib import tqdm_joblib
+
+with tqdm_joblib(total=len(inputs)) as pbar:
+    results = Parallel(n_jobs=8)(
+        delayed(process_for_neuron)(*input) for input in inputs
+    )
 
 all_sequence_features = {}
 all_infos = []
@@ -346,14 +378,12 @@ all_infos_df = pd.concat(all_infos)
 meta_features_df = pd.DataFrame(all_sequence_features).T
 meta_features_df.index.names = ["root_id", "scheme", "order_by", "random_seed"]
 
+#%%
+save = True
 if save:
     with open(OUT_PATH / "sequence_metrics" / "all_infos.pkl", "wb") as f:
         pickle.dump(all_infos_df, f)
     with open(OUT_PATH / "sequence_metrics" / "meta_features_df.pkl", "wb") as f:
         pickle.dump(meta_features_df, f)
 
-
 # %%
-
-
-compute_precision_recall(sequence)
