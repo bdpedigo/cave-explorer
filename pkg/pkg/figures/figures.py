@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 import cairosvg
 import matplotlib.pyplot as plt
@@ -259,14 +259,15 @@ def panel_mosaic(
     fontsize: int = 30,
     panel_borders: bool = False,
     layout: str = "tight",
-    label_pos: tuple = (0, 1),
+    label_pos: Optional[tuple] = (0, 1),
 ) -> str:
     pm = PanelMosaic(
         mosaic=mosaic,
         figsize=figsize,
         layout=layout,
     )
-    pm.label_axes(fontsize=fontsize, label_pos=label_pos)
+    if label_pos is not None:
+        pm.label_axes(fontsize=fontsize, label_pos=label_pos)
     pm.format_axes(panel_borders=panel_borders)
     pm.map(panel_mapping)
     return pm

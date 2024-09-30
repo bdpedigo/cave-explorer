@@ -122,6 +122,8 @@ elif scheme == "clean-and-merge-random":
 
 # %%
 
+set_context(font_scale=2)
+
 edit_palette = {True: MERGE_COLOR, False: SPLIT_COLOR}
 colors = sns.color_palette("Set1")
 colors = [colors[0], colors[1], colors[3]]
@@ -143,7 +145,7 @@ for i, root_id in enumerate(manifest.query("is_example").index):
     # ax = axs[0]
     sns.lineplot(
         data=df.reset_index(),
-        x=x,
+        x="x",
         y="pre_synapse_precision",
         color=colors[0],
         label="Precision",
@@ -153,7 +155,7 @@ for i, root_id in enumerate(manifest.query("is_example").index):
     )
     sns.lineplot(
         data=df.reset_index(),
-        x=x,
+        x="x",
         y="pre_synapse_recall",
         color=colors[1],
         label="Recall",
@@ -163,7 +165,7 @@ for i, root_id in enumerate(manifest.query("is_example").index):
     )
     sns.lineplot(
         data=df.reset_index(),
-        x=x,
+        x="x",
         y="f1",
         color=colors[2],
         label="F1",
@@ -219,7 +221,83 @@ for i, root_id in enumerate(manifest.query("is_example").index):
         fig,
         folder="precision_recall",
     )
-    break
+    savefig(
+        f"precision_recall_target={target_id}_scheme={scheme}",
+        fig,
+        folder="precision_recall",
+        doc_save=True,
+        format="svg",
+    )
+
+# %%
+
+fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+sns.lineplot(
+    data=precision_recall_df.reset_index(),
+    x="cumulative_n_operations",
+    y="pre_synapse_precision",
+    estimator=None,
+    units="root_id",
+    alpha=0.2,
+)
+
+
+fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+sns.lineplot(
+    data=precision_recall_df.reset_index(),
+    x="cumulative_n_operations",
+    y="pre_synapse_recall",
+    estimator=None,
+    units="root_id",
+    alpha=0.2,
+)
+
+
+fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+sns.lineplot(
+    data=precision_recall_df.reset_index(),
+    x="cumulative_n_operations",
+    y="f1",
+    estimator=None,
+    units="root_id",
+    alpha=0.2,
+)
+
+
+# %%
+precision_recall_df["p_operations"] = precision_recall_df[
+    "cumulative_n_operations"
+] / precision_recall_df.groupby("root_id")["cumulative_n_operations"].transform("max")
+
+fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+sns.lineplot(
+    data=precision_recall_df.reset_index(),
+    x="p_operations",
+    y="pre_synapse_precision",
+    estimator=None,
+    units="root_id",
+    alpha=0.2,
+)
+
+fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+sns.lineplot(
+    data=precision_recall_df.reset_index(),
+    x="p_operations",
+    y="pre_synapse_recall",
+    estimator=None,
+    units="root_id",
+    alpha=0.2,
+)
+
+fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+sns.lineplot(
+    data=precision_recall_df.reset_index(),
+    x="p_operations",
+    y="f1",
+    estimator=None,
+    units="root_id",
+    alpha=0.2,
+)
 
 # %%
 
