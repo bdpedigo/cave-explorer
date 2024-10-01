@@ -88,6 +88,7 @@ precision_recall_df["f1"] = (
     ).replace(0, 1)
 )
 
+
 # scheme = "historical"
 scheme = "lumped-time"
 
@@ -120,7 +121,6 @@ elif scheme == "clean-and-merge-random":
         idx[:, "clean-and-merge", "random", :]
     ]
 
-# %%
 
 set_context(font_scale=2)
 
@@ -173,7 +173,7 @@ for i, root_id in enumerate(manifest.query("is_example").index):
         ax=ax,
     )
     ax.legend()
-    ax.set(ylabel="Score", xlabel="State", ylim=(0, 1.01), xlim=(-0.2, len(df)))
+    ax.set(ylabel="Score", xlabel="State", ylim=(0, 1.01), xlim=(-0.2, df["x"].max()))
 
     # turn off xticks for this axis, but have to change the length of the ticks
     # since the xaxis is shared
@@ -200,7 +200,11 @@ for i, root_id in enumerate(manifest.query("is_example").index):
         order = i[1]
         if order == 0:
             continue
-        is_merges = edit_row["is_merges"]
+        if scheme == "historical":
+            is_merges = [edit_row["is_merge"]]
+        else:
+            is_merges = edit_row["is_merges"]
+
         for is_merge in is_merges:
             ax.fill_between(
                 [counter, counter + 1],
@@ -229,8 +233,80 @@ for i, root_id in enumerate(manifest.query("is_example").index):
         format="svg",
     )
 
+
+fig, axs = plt.subplots(4, 5, figsize=(20, 16), sharey=True, layout="constrained")
+for i, root_id in enumerate(manifest.query("is_example").index):
+    ax = axs.flat[i]
+
+    df = precision_recall_df.loc[root_id].copy()
+
+    df["x"] = df["n_operations"].cumsum()
+
+    sns.lineplot(
+        data=df.reset_index(),
+        x="x",
+        y="pre_synapse_precision",
+        color=colors[0],
+        label="Precision",
+        linestyle=":",
+        linewidth=2,
+        ax=ax,
+    )
+    sns.lineplot(
+        data=df.reset_index(),
+        x="x",
+        y="pre_synapse_recall",
+        color=colors[1],
+        label="Recall",
+        linestyle="--",
+        linewidth=2,
+        ax=ax,
+    )
+    sns.lineplot(
+        data=df.reset_index(),
+        x="x",
+        y="f1",
+        color=colors[2],
+        label="F1",
+        linewidth=3,
+        ax=ax,
+    )
+    if i == 0:
+        ax.legend()
+    else:
+        ax.get_legend().remove()
+    ax.set(ylabel="Score", xlabel="State", ylim=(0, 1.01), xlim=(-0.2, df["x"].max()))
+
+    counter = 0
+    for i, edit_row in df.iterrows():
+        operation_id = i[0]
+        order = i[1]
+        if order == 0:
+            continue
+        if scheme == "historical":
+            is_merges = [edit_row["is_merge"]]
+        else:
+            is_merges = edit_row["is_merges"]
+        for is_merge in is_merges:
+            ax.fill_between(
+                [counter, counter + 1],
+                0,
+                1.01,
+                color=edit_palette[is_merge],
+                alpha=0.2,
+                linewidth=0,
+            )
+            counter += 1
+
+savefig(
+    f"precision_recall_gallery_scheme={scheme}",
+    fig,
+    folder="precision_recall",
+)
+
 # %%
 
+set_context(font_scale=2)
 fig, ax = plt.subplots(1, 1, figsize=(6, 6))
 sns.lineplot(
     data=precision_recall_df.reset_index(),
@@ -239,8 +315,10 @@ sns.lineplot(
     estimator=None,
     units="root_id",
     alpha=0.2,
+    color="black",
 )
-
+ax.set(ylabel="Precision", xlabel="Number of operations")
+savefig(f"precision_vs_operations_scheme={scheme}", fig)
 
 fig, ax = plt.subplots(1, 1, figsize=(6, 6))
 sns.lineplot(
@@ -250,8 +328,10 @@ sns.lineplot(
     estimator=None,
     units="root_id",
     alpha=0.2,
+    color="black",
 )
-
+ax.set(ylabel="Recall", xlabel="Number of operations")
+savefig(f"recall_vs_operations_scheme={scheme}", fig)
 
 fig, ax = plt.subplots(1, 1, figsize=(6, 6))
 sns.lineplot(
@@ -261,7 +341,10 @@ sns.lineplot(
     estimator=None,
     units="root_id",
     alpha=0.2,
+    color="black",
 )
+ax.set(ylabel="F1", xlabel="Number of operations")
+savefig(f"f1_vs_operations_scheme={scheme}", fig)
 
 
 # %%
@@ -277,7 +360,10 @@ sns.lineplot(
     estimator=None,
     units="root_id",
     alpha=0.2,
+    color="black",
 )
+ax.set(ylabel="Precision", xlabel="Proportion of operations")
+savefig(f"precision_vs_p_operations_scheme={scheme}", fig)
 
 fig, ax = plt.subplots(1, 1, figsize=(6, 6))
 sns.lineplot(
@@ -287,7 +373,11 @@ sns.lineplot(
     estimator=None,
     units="root_id",
     alpha=0.2,
+    color="black",
 )
+ax.set(ylabel="Recall", xlabel="Proportion of operations")
+savefig(f"recall_vs_p_operations_scheme={scheme}", fig)
+
 
 fig, ax = plt.subplots(1, 1, figsize=(6, 6))
 sns.lineplot(
@@ -297,7 +387,11 @@ sns.lineplot(
     estimator=None,
     units="root_id",
     alpha=0.2,
+    color="black",
 )
+ax.set(ylabel="F1", xlabel="Proportion of operations")
+savefig(f"f1_vs_p_operations_scheme={scheme}", fig)
+
 
 # %%
 

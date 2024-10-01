@@ -1,15 +1,15 @@
 import json
-import time
 from typing import Union
 
+import caveclient as cc
 import networkx as nx
 import numpy as np
 import pandas as pd
-from requests import HTTPError
-from tqdm import tqdm
-
-import caveclient as cc
+from joblib import Parallel, delayed
 from networkframe import NetworkFrame
+from requests import HTTPError
+from tqdm.auto import tqdm
+from tqdm_joblib import tqdm_joblib
 
 from ..io import lazycloud
 from ..morphology import (
@@ -223,12 +223,7 @@ def get_network_edits(
     change_log["is_filtered"] = False
     change_log.loc[filtered_change_log.index, "is_filtered"] = True
 
-    networkdeltas_by_operation = {}
-    for operation_id in tqdm(
-        change_log.index,
-        desc="Finding network changes for each edit",
-        disable=not verbose,
-    ):
+    def _get_info_for_operation(operation_id):
         row = change_log.loc[operation_id]
 
         before_root_ids = row["before_root_ids"]
@@ -276,9 +271,17 @@ def get_network_edits(
             "n_modified_edges": len(added_edges) + len(removed_edges),
         }
 
-        networkdeltas_by_operation[operation_id] = NetworkDelta(
+        return NetworkDelta(
             removed_nodes, added_nodes, removed_edges, added_edges, metadata=metadata
         )
+
+    with tqdm_joblib(total=len(change_log.index)) as progress_bar:
+        networkdeltas_by_operation = Parallel(n_jobs=-1)(
+            delayed(_get_info_for_operation)(operation_id)
+            for operation_id in change_log.index
+        )
+
+    networkdeltas_by_operation = dict(zip(change_log.index, networkdeltas_by_operation))
 
     return networkdeltas_by_operation
 
@@ -417,27 +420,31 @@ def get_initial_node_ids(root_id, client):
 def get_initial_network(root_id, client, positions=False, verbose=True):
     original_node_ids = get_initial_node_ids(root_id, client)
 
-    all_nodes = []
-    all_edges = []
-    had_error = False
-    for leaf_id in tqdm(
-        original_node_ids,
-        desc="Finding L2 graphs for original segmentation objects",
-        disable=not verbose,
-    ):
+    def _get_info_for_node(leaf_id):
         try:
             nodes, edges = get_level2_nodes_edges(leaf_id, client, positions=positions)
-            all_nodes.append(nodes)
-            all_edges.append(edges)
+            return nodes, edges
         except HTTPError:
             if isinstance(positions, bool) and positions:
                 raise ValueError(
                     f"HTTPError: no level 2 graph found for node ID: {leaf_id}"
                 )
             else:
-                had_error = True
-    if had_error:
-        print("HTTPError on at least one leaf node, continuing...")
+                return None, None
+
+    with tqdm_joblib(total=len(original_node_ids)) as progress_bar:
+        outs = Parallel(n_jobs=-1)(
+            delayed(_get_info_for_node)(leaf_id) for leaf_id in original_node_ids
+        )
+    all_nodes = []
+    all_edges = []
+    for out in outs:
+        nodes, edges = out
+        if nodes is not None:
+            all_nodes.append(nodes)
+            all_edges.append(edges)
+        else:
+            print("HTTPError on at least one leaf node, continuing...")
 
     all_nodes = pd.concat(all_nodes, axis=0)
     all_edges = pd.concat(all_edges, axis=0, ignore_index=True)

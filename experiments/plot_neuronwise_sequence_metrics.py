@@ -124,7 +124,7 @@ XLABEL = "# operations"
 
 
 fig, axs = plt.subplots(
-    3, 3, figsize=(16, 12), constrained_layout=True, sharey="row", sharex=False
+    3, 4, figsize=(16, 12), constrained_layout=True, sharey="row", sharex=False
 )
 
 
@@ -142,6 +142,7 @@ name_map = {
 }
 scheme_map = {
     "historical": "Historical",
+    "lumped-time": "Lumped-time",
     "clean-and-merge-time": "Clean-and-merge\nordered by time",
     "clean-and-merge-random": "Clean-and-merge\nordered randomly",
 }
@@ -150,10 +151,12 @@ for i, feature in enumerate(
     ["props_by_mtype", "spatial_props", "spatial_props_by_mtype"]
 ):
     for j, scheme in enumerate(
-        ["historical", "clean-and-merge-time", "clean-and-merge-random"]
+        ["historical", "lumped-time", "clean-and-merge-time", "clean-and-merge-random"]
     ):
         if scheme == "historical":
             historical_diff_df = meta_diff_df.loc[idx[:, "historical", :, :]]
+        elif scheme == "lumped-time":
+            historical_diff_df = meta_diff_df.loc[idx[:, "lumped-time", :, :]]
         elif scheme == "clean-and-merge-time":
             historical_diff_df = meta_diff_df.loc[idx[:, "clean-and-merge", "time", :]]
         elif scheme == "clean-and-merge-random":
@@ -218,34 +221,36 @@ example_root_ids = manifest.query("is_sample").index
 # plotting the historical ordering for example cells
 
 feature = "props_by_mtype"
-scheme = "historical"
-for root_id in example_root_ids:
-    historical_df: pd.DataFrame
-    historical_df = meta_features_df.loc[idx[root_id, scheme, :, :]][feature].iloc[0]
-    fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-    historical_df_long = (
-        historical_df.melt(ignore_index=False, value_name="probability")
-        .reset_index()
-        .fillna(0)
-    )
-    sns.lineplot(
-        data=historical_df_long,
-        x="order",
-        y="probability",
-        hue="post_mtype",
-        ax=ax,
-        legend=False,
-        palette=ctype_hues,
-    )
-    ax.set(ylabel="Proportion of outputs", xlabel=XLABEL)
-    savefig(
-        f"{scheme}-ordering-{feature}-root_id={root_id}",
-        fig,
-        folder="sequence_output_metrics",
-        doc_save=True,
-        group=f"{scheme}-ordering-{feature}",
-        caption=root_id,
-    )
+for scheme in ["historical", "lumped-time"]:
+    for root_id in example_root_ids:
+        historical_df: pd.DataFrame
+        historical_df = meta_features_df.loc[idx[root_id, scheme, :, :]][feature].iloc[
+            0
+        ]
+        fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+        historical_df_long = (
+            historical_df.melt(ignore_index=False, value_name="probability")
+            .reset_index()
+            .fillna(0)
+        )
+        sns.lineplot(
+            data=historical_df_long,
+            x="order",
+            y="probability",
+            hue="post_mtype",
+            ax=ax,
+            legend=False,
+            palette=ctype_hues,
+        )
+        ax.set(ylabel="Proportion of outputs", xlabel=XLABEL)
+        savefig(
+            f"{scheme}-ordering-{feature}-root_id={root_id}",
+            fig,
+            folder="sequence_output_metrics",
+            doc_save=True,
+            group=f"{scheme}-ordering-{feature}",
+            caption=root_id,
+        )
 
 
 # %%
@@ -254,34 +259,42 @@ for root_id in example_root_ids:
 
 feature = "props_by_mtype"
 scheme = "historical"
-for root_id in example_root_ids:
-    historical_diff_df: pd.DataFrame
-    historical_diff_df = meta_diff_df.loc[idx[root_id, scheme, :, :]][feature].iloc[0]
-    historical_diff_df = historical_diff_df.droplevel(
-        ["root_id", "scheme", "order_by", "random_seed", "operation_id"]
-    ).reset_index(drop=False)
-    fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-    for metric in ["euclidean", "cityblock", "jensenshannon", "cosine"]:
-        sns.lineplot(
-            data=historical_diff_df,
-            x="order",
-            y=metric,
-            ax=ax,
-            label=metric,
-            color=distance_palette[metric],
-            linewidth=2,
-        )
-        ax.set(ylabel="Distance to final", xlabel=XLABEL)
-        ax.legend
+for scheme in ["historical", "lumped-time"]:
+    for root_id in example_root_ids:
+        historical_diff_df: pd.DataFrame
+        historical_diff_df = meta_diff_df.loc[idx[root_id, scheme, :, :]][feature].iloc[
+            0
+        ]
+        if scheme == "historical":
+            historical_diff_df = historical_diff_df.droplevel(
+                ["root_id", "scheme", "order_by", "random_seed", "operation_id"]
+            ).reset_index(drop=False)
+        else:
+            historical_diff_df = historical_diff_df.droplevel(
+                ["root_id", "scheme", "order_by", "random_seed", "metaoperation_id"]
+            ).reset_index(drop=False)
+        fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+        for metric in ["euclidean", "cityblock", "jensenshannon", "cosine"]:
+            sns.lineplot(
+                data=historical_diff_df,
+                x="order",
+                y=metric,
+                ax=ax,
+                label=metric,
+                color=distance_palette[metric],
+                linewidth=2,
+            )
+            ax.set(ylabel="Distance to final", xlabel=XLABEL)
+            ax.legend
 
-    savefig(
-        f"{scheme}-ordering-{feature}-distance-root_id={root_id}",
-        fig,
-        folder="sequence_output_metrics",
-        doc_save=True,
-        group=f"{scheme}-ordering-{feature}-distance",
-        caption=root_id,
-    )
+        savefig(
+            f"{scheme}-ordering-{feature}-distance-root_id={root_id}",
+            fig,
+            folder="sequence_output_metrics",
+            doc_save=True,
+            group=f"{scheme}-ordering-{feature}-distance",
+            caption=root_id,
+        )
 
 # %%
 
@@ -934,7 +947,7 @@ sns.lineplot(
     zorder=10,
 )
 
-#%%
+# %%
 diff_df
 
 
