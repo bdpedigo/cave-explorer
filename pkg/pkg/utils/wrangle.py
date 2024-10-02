@@ -5,7 +5,6 @@ from time import sleep
 import numpy as np
 import pandas as pd
 from caveclient import CAVEclient
-from requests import HTTPError
 from sklearn.metrics import pairwise_distances_argmin
 
 from pkg.constants import DATA_PATH, MTYPES_TABLE, NUCLEUS_TABLE, OUT_PATH
