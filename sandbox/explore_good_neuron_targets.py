@@ -4,13 +4,14 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from hyppo.ksample import KSample
+from matplotlib.patches import Rectangle
 from scipy.cluster.hierarchy import fcluster, linkage
 from scipy.spatial.distance import squareform
 from scipy.stats import gaussian_kde
 from standard_transform import minnie_transform_nm
 from tqdm.auto import tqdm
 
-from pkg.utils import start_client
+from pkg.utils import load_casey_palette, start_client
 
 transformer = minnie_transform_nm()
 
@@ -44,6 +45,223 @@ nuc_table.rename(
 nuc_table[["x", "y", "z"]] = transformer.apply(nuc_table[["x", "y", "z"]])
 
 nuc_table
+
+# %%
+mega_table = pd.read_csv(
+    "/Users/ben.pedigo/code/skedits/skedits-app/skedits/data/joint_cell_table.csv",
+    low_memory=False,
+).set_index("target_id")
+
+# %%
+from pathlib import Path
+
+import pandas as pd
+
+soma_data_path = Path(
+    "/Users/ben.pedigo/code/skedits/skedits-app/skedits/data/microns_SomaData_AllCells_v661.csv"
+)
+
+feature_df = pd.read_csv(soma_data_path, index_col=0, engine="python")
+feature_df = feature_df.drop(
+    columns=[
+        "cortical_column_labels",
+        "predicted_class",
+        "predicted_subclass",
+        "umap_embedding_x",
+        "umap_embedding_y",
+        "is_column",
+    ]
+).set_index(["nucleus_id"])
+
+# %%
+hand_labeled = mega_table[
+    mega_table["cell_type_source"].isin(
+        [
+            "aibs_metamodel_celltypes_v661_corrections",
+            "allen_v1_column_types_slanted_ref",
+            "aibs_column_nonneuronal_ref",
+        ]
+    )
+]
+# %%
+X = feature_df.copy().drop(columns=["soma_id"])
+# y = X.join(mega_table["cell_type"], on="nucleus_id")["cell_type"]
+y = X.join(hand_labeled["cell_type"], on="nucleus_id")["cell_type"]
+
+from sklearn.preprocessing import QuantileTransformer
+
+qt = QuantileTransformer(output_distribution="normal")
+
+X_trans = qt.fit_transform(X)
+
+from sklearn.decomposition import PCA
+
+n_components = 5
+pca = PCA(n_components=n_components)
+
+X_pca = pca.fit_transform(X_trans)
+
+X_pca = pd.DataFrame(
+    X_pca, index=X.index, columns=[f"PC{i}" for i in range(1, n_components + 1)]
+)
+
+import colorcet as cc
+import seaborn as sns
+
+palette = dict(zip(y.unique(), cc.glasbey_light))
+
+fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+sns.scatterplot(
+    data=X_pca,
+    x="PC1",
+    y="PC2",
+    hue=y,
+    s=10,
+    linewidth=0,
+    alpha=0.8,
+    palette=palette,
+    ax=ax,
+)
+
+
+# %%
+sns.pairplot(
+    X_pca.join(y),
+    hue="cell_type",
+    markers=".",
+    plot_kws={"alpha": 0.7},
+    palette=palette,
+)
+
+# %%
+y.dropna().value_counts()
+
+# %%
+
+# X = feature_df.copy().drop(columns=["soma_id"])
+
+# df = pd.read_pickle('../data/inhibitory_perisomatic_feats_v661.pkl')
+
+data_path = "/Users/ben.pedigo/code/skedits/skedits-app/skedits/data/inhibitory_normalized_perisomatic_features.npy"
+inhibitory_cells = np.load(data_path)
+
+# %%
+data_path = "/Users/ben.pedigo/code/skedits/skedits-app/skedits/data/inhibitory_perisomatic_feats_v661.pkl"
+df = pd.read_pickle(data_path)
+
+# %%
+X_df = df.set_index("nucleus_id").drop(
+    columns=[
+        "soma_id",
+        "soma_point",
+        "cortical_column_labels",
+        "inhib_umap_embedding_x",
+        "inhib_umap_embedding_y",
+    ]
+)
+
+from sklearn.neighbors import NearestNeighbors
+from sklearn.preprocessing import StandardScaler
+
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X_df.values)
+n_query = 100
+nn = NearestNeighbors(n_neighbors=n_query)
+nn.fit(X_scaled)
+
+chand_nuc_id = 485719
+
+X_df.loc[chand_nuc_id]
+
+query_x = X_df.loc[chand_nuc_id]
+query_x = scaler.transform(query_x.values.reshape(1, -1))
+
+dists, neighbor_indices = nn.kneighbors(query_x)
+
+# %%
+query_nuc_ids = df.iloc[np.squeeze(neighbor_indices)]["nucleus_id"].values
+
+nuc_table = nuc_table.reset_index().set_index("id")
+query_root_ids = nuc_table.loc[nuc_table.index.intersection(query_nuc_ids)][
+    "pt_root_id"
+]
+
+
+# nuc_table = nuc_table.reset_index().set_index("id")
+# query_root_ids = nuc_table.loc[nuc_table.index.intersection(query_nuc_ids)][
+#     "pt_root_id"
+# ]
+
+# %%
+data_path = Path(
+    "/Users/ben.pedigo/code/skedits/skedits-app/skedits/data/state_prediction_info/inhibitory_features.csv"
+)
+inhib_features = pd.read_csv(data_path, index_col=0)
+inhib_features.loc[query_root_ids]
+
+# %%
+import pickle
+
+from pkg.constants import OUT_PATH
+
+model_path = OUT_PATH / "train_state_prediction"
+
+with open(model_path / "state_prediction_model.pkl", "rb") as f:
+    model = pickle.load(f)
+
+X = inhib_features.loc[query_root_ids]
+X["n_pre_synapses"] = X["n_pre_synapses"].replace(0, 1)
+X["n_post_synapses"] = X["n_post_synapses"].replace(0, 1)
+X["n_pre_synapses"] = np.log10(X["n_pre_synapses"])
+X["n_post_synapses"] = np.log10(X["n_post_synapses"])
+X["n_nodes"] = np.log10(X["n_nodes"].astype(float))
+
+posteriors = model.predict_proba(X[["n_pre_synapses", "n_post_synapses", "n_nodes"]])[
+    :, 1
+]
+
+posterior_ratios = model.decision_function(
+    X[["n_pre_synapses", "n_post_synapses", "n_nodes"]]
+)
+
+# %%
+posterior_ratios = pd.Series(index=query_root_ids, data=posterior_ratios)
+posterior_ratios[posterior_ratios > 0].index
+
+
+# %%
+chandelier_root = 864691136924072932
+
+# X.loc[chandelier_root]
+# feature_df.set_index('soma_id').loc[chandelier_root]
+chandelier_nuc_id = nuc_table.loc[chandelier_root]["id"]
+
+query_x = X.loc[chandelier_nuc_id]
+
+
+dists, neighbor_indices = nn.kneighbors([query_x])
+
+query_nuc_ids = X.index[neighbor_indices[0]]
+
+# %%
+good_nuc_ids = nuc_table.loc[good_neurons, "id"].values
+
+# %%
+
+nuc_table = nuc_table.reset_index().set_index("id")
+query_root_ids = nuc_table.loc[nuc_table.index.intersection(query_nuc_ids)][
+    "pt_root_id"
+]
+
+# %%
+data_path = Path(
+    "/Users/ben.pedigo/code/skedits/skedits-app/skedits/data/state_prediction_info/inhibitory_features.csv"
+)
+inhib_features = pd.read_csv(data_path, index_col=0)
+inhib_features.loc[query_root_ids]
+
+# %%
+
 
 # %%
 # this is a putative chandelier that is also in my table
@@ -172,7 +390,8 @@ fig, axs = plt.subplots(
     sharey=True,
     gridspec_kw={"wspace": 0.0, "hspace": 0.0},
 )
-index = good_neurons[:100]
+# index = good_neurons[:100]
+index = np.random.choice(good_neurons, 100, replace=False)
 root_spherical_offsets = {}
 for i, root_id in enumerate(tqdm(index)):
     pre_synapses = get_pre_synapses(root_id)
@@ -297,14 +516,10 @@ plt.savefig(
 cell_table = client.materialize.query_table("aibs_metamodel_mtypes_v661_v2").set_index(
     "pt_root_id"
 )
+pred_cell_types = cell_table.loc[index[reordered_indices]]["cell_type"]
 
 # %%
 
-from matplotlib.patches import Rectangle
-from pkg.utils import load_casey_palette
-
-
-pred_cell_types = cell_table.loc[index[reordered_indices]]["cell_type"]
 casey_palette = load_casey_palette()
 
 fig, axs = plt.subplots(
@@ -318,8 +533,6 @@ fig, axs = plt.subplots(
     gridspec_kw={"wspace": 0.0, "hspace": 0.0},
 )
 for i, root_id in enumerate(tqdm(index[reordered_indices])):
-    # rs = pre_synapses["nuc_r"]
-    # phis = pre_synapses["nuc_phi"]
     rs, phis = root_spherical_offsets[root_id]
 
     mask = rs < 120
@@ -331,7 +544,6 @@ for i, root_id in enumerate(tqdm(index[reordered_indices])):
     plot_spherical_offsets(rs, phis, ax=ax)
     ax.set_xticks([])
     ax.set_yticks([])
-    # ax.scatter(0, 0, s=100, c=colors[labels[root_id]], alpha=1)
     rect = Rectangle(
         (0.05, 0.05),
         0.2,
@@ -356,18 +568,8 @@ for i, root_id in enumerate(tqdm(index[reordered_indices])):
     )
     ax.add_patch(rect)
 
-    # break
-
-    # root_spherical_offsets[root_id] = (rs, phis)
-
 plt.savefig(
     "100_inhib_spherical_targeting_clustered_unblinded.png",
     dpi=500,
     bbox_inches="tight",
 )
-# plt.savefig('100_inhib_spherical_targeting_clustered.pdf', bbox_inches='tight')
-
-# %%
-
-
-# %%
